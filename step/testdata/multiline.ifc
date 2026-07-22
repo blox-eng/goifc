@@ -1,0 +1,15 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('','',(''),(''),'','','');
+FILE_SCHEMA(('IFC2X3'));
+ENDSEC;
+DATA;
+#1= IFCCARTESIANPOINT(
+  (0.,
+   0.,
+   0.));
+/* a stray exporter comment */
+#2= IFCDIRECTION((1.,0.,0.));
+ENDSEC;
+END-ISO-10303-21;

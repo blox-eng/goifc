@@ -1,0 +1,12 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
+FILE_NAME('x.ifc','2026-07-08T18:04:14',(''),(''),'','ARCHICAD','');
+FILE_SCHEMA(('IFC2X3'));
+ENDSEC;
+DATA;
+#1= IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);
+#2= IFCWALL('0abc',$,'Wall',$,$,#3,$,'tag');
+#3= IFCLOCALPLACEMENT($,#4);
+ENDSEC;
+END-ISO-10303-21;
