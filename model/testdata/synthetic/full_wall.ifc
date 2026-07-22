@@ -1,0 +1,50 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('full_wall','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+
+/* spatial structure */
+#5=IFCBUILDINGSTOREY('0GUIDstorey000000000005',$,'Level 1',$,$,$,$,$,$,$);
+
+/* wall placement: located at (10,0,0), then locally translated (0,0,3) */
+#10=IFCCARTESIANPOINT((10.,0.,0.));
+#11=IFCAXIS2PLACEMENT3D(#10,$,$);
+#12=IFCLOCALPLACEMENT($,#11);
+#13=IFCCARTESIANPOINT((0.,0.,3.));
+#14=IFCAXIS2PLACEMENT3D(#13,$,$);
+#15=IFCLOCALPLACEMENT(#12,#14);
+
+#20=IFCWALL('0GUIDwall0000000000020',$,'W-FULL',$,$,#15,$,$,$);
+
+/* wall Qto */
+#30=IFCQUANTITYAREA('NetSideArea',$,$,12.5,$);
+#31=IFCQUANTITYVOLUME('NetVolume',$,$,3.0,$);
+#32=IFCQUANTITYLENGTH('Length',$,$,5.0,$);
+#33=IFCQUANTITYLENGTH('Width',$,$,0.3,$);
+#34=IFCQUANTITYLENGTH('Height',$,$,2.5,$);
+#35=IFCELEMENTQUANTITY('0GUIDqty00000000000035',$,'BaseQuantities',$,$,(#30,#31,#32,#33,#34));
+#36=IFCRELDEFINESBYPROPERTIES('0GUIDrel00000000000036',$,$,$,(#20),#35);
+
+/* wall Pset_WallCommon: IsExternal .T. */
+#40=IFCPROPERTYSINGLEVALUE('IsExternal',$,IFCBOOLEAN(.T.),$);
+#41=IFCPROPERTYSINGLEVALUE('LoadBearing',$,IFCBOOLEAN(.T.),$);
+#42=IFCPROPERTYSET('0GUIDpset0000000000042',$,'Pset_WallCommon',$,(#40,#41));
+#43=IFCRELDEFINESBYPROPERTIES('0GUIDrel00000000000043',$,$,$,(#20),#42);
+
+/* wall material */
+#45=IFCMATERIAL('Concrete C25/30');
+#46=IFCRELASSOCIATESMATERIAL('0GUIDrel00000000000046',$,$,$,(#20),#45);
+
+/* wall contained in storey */
+#50=IFCRELCONTAINEDINSPATIALSTRUCTURE('0GUIDrel00000000000050',$,$,$,(#20),#5);
+
+/* door: no Qto, contained in same storey */
+#60=IFCDOOR('0GUIDdoor0000000000060',$,'D-1',$,$,$,$,$,$);
+#61=IFCRELCONTAINEDINSPATIALSTRUCTURE('0GUIDrel00000000000061',$,$,$,(#60),#5);
+ENDSEC;
+END-ISO-10303-21;

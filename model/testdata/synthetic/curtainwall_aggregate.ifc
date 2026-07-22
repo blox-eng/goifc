@@ -1,0 +1,17 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('curtainwall_aggregate','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+
+#10=IFCCURTAINWALL('0GUIDcwall000000000010',$,'CW-1',$,$,$,$,$,$);
+#20=IFCPLATE('0GUIDplate000000000020',$,'PL-1',$,$,$,$,$,$);
+
+/* plate aggregated into curtain wall (RelatingObject=#10 at attr4, RelatedObjects=(#20) at attr5) */
+#30=IFCRELAGGREGATES('0GUIDrel00000000000030',$,$,$,#10,(#20));
+ENDSEC;
+END-ISO-10303-21;
