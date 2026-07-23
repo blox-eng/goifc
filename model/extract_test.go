@@ -1,7 +1,6 @@
 package model
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -86,19 +85,8 @@ func TestExtractFullWall(t *testing.T) {
 	if door.ParentIndex != nil {
 		t.Errorf("door.ParentIndex = %v want nil (container is a storey, not an emitted element)", *door.ParentIndex)
 	}
-
-	if len(res.Warnings) == 0 {
-		t.Fatalf("expected warnings for door with no Qto, got none")
-	}
-	found := false
-	for _, w := range res.Warnings {
-		if strings.Contains(w, door.GlobalID) {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("warnings %v do not mention door GUID %q", res.Warnings, door.GlobalID)
-	}
+	// No-Qto is signaled by QuantitySource="none" (asserted above), not a
+	// per-element warning — #2210 wired the geometry tier that back-fills these.
 }
 
 // TestExtractPartialQtoZeroedOnNone proves the `q = Quantities{}` guard in
@@ -132,15 +120,8 @@ func TestExtractPartialQtoZeroedOnNone(t *testing.T) {
 	if beam.Qto != (Quantities{}) {
 		t.Errorf("beam.Qto = %+v want zero value", beam.Qto)
 	}
-
-	found := false
-	for _, w := range res.Warnings {
-		if strings.Contains(w, beam.GlobalID) {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("warnings %v do not mention beam GUID %q", res.Warnings, beam.GlobalID)
+	if beam.QuantitySource != QuantitySourceNone {
+		t.Errorf("beam.QuantitySource = %q want none", beam.QuantitySource)
 	}
 }
 

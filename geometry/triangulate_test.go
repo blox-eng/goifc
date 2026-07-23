@@ -76,3 +76,68 @@ func TestTriangulate_ConcaveL(t *testing.T) {
 		}
 	}
 }
+
+// faceTrisAgreeWithNormal returns true iff every triangle triangulateFace emits
+// is wound so its geometric normal points the SAME way as the loop's Newell
+// normal (positive dot). This is the outward-consistency invariant brep meshes
+// need; the pre-fix projection is sign-blind and fails it for negative-facing faces.
+func faceTrisAgreeWithNormal(t *testing.T, loop []v3) bool {
+	t.Helper()
+	// Newell normal of the loop (same computation triangulateFace uses).
+	var n v3
+	for i := range loop {
+		j := (i + 1) % len(loop)
+		n[0] += (loop[i][1] - loop[j][1]) * (loop[i][2] + loop[j][2])
+		n[1] += (loop[i][2] - loop[j][2]) * (loop[i][0] + loop[j][0])
+		n[2] += (loop[i][0] - loop[j][0]) * (loop[i][1] + loop[j][1])
+	}
+	tris := triangulateFace(loop)
+	if len(tris) < 3 {
+		t.Fatalf("triangulateFace returned %d indices, want >=3", len(tris))
+	}
+	for i := 0; i+2 < len(tris); i += 3 {
+		a, b, c := loop[tris[i]], loop[tris[i+1]], loop[tris[i+2]]
+		e1 := v3{b[0] - a[0], b[1] - a[1], b[2] - a[2]}
+		e2 := v3{c[0] - a[0], c[1] - a[1], c[2] - a[2]}
+		if dotv(crossv(e1, e2), n) < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// A +Z-facing square (CCW seen from +Z) and its mirror -Z-facing square (CCW
+// seen from -Z) must BOTH triangulate to outward-agreeing winding. Pre-fix, the
+// -Z case comes back inward.
+func TestTriangulateFace_WindingMatchesNormalBothSigns(t *testing.T) {
+	up := []v3{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}} // Newell normal +Z
+	if !faceTrisAgreeWithNormal(t, up) {
+		t.Error("+Z face: triangles disagree with Newell normal")
+	}
+	down := []v3{{0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}} // reversed → Newell normal -Z
+	if !faceTrisAgreeWithNormal(t, down) {
+		t.Error("-Z face: triangles disagree with Newell normal (the sign-blind projection bug)")
+	}
+	// Sanity: the two loops really do have opposite-Z Newell normals.
+	nz := func(loop []v3) float64 {
+		var z float64
+		for i := range loop {
+			j := (i + 1) % len(loop)
+			z += (loop[i][0] - loop[j][0]) * (loop[i][1] + loop[j][1])
+		}
+		return z
+	}
+	if !(nz(up) > 0 && nz(down) < 0) {
+		t.Fatalf("test setup wrong: nz(up)=%v nz(down)=%v", nz(up), nz(down))
+	}
+	_ = math.Abs
+}
+
+// A face whose dominant normal axis is X and points negative must also agree.
+func TestTriangulateFace_NegativeXFace(t *testing.T) {
+	// Square in the x=0 plane, wound so Newell normal points -X.
+	loop := []v3{{0, 0, 0}, {0, 0, 1}, {0, 1, 1}, {0, 1, 0}}
+	if !faceTrisAgreeWithNormal(t, loop) {
+		t.Error("-X face: triangles disagree with Newell normal")
+	}
+}

@@ -85,7 +85,27 @@ func triangulateFace(loop []v3) []uint32 {
 			poly[i] = [2]float64{p[0], p[1]}
 		}
 	}
-	return triangulatePolygon(poly)
+	tris := triangulatePolygon(poly)
+	// triangulatePolygon winds its output CCW in the PROJECTED 2D plane. The
+	// projection above drops the dominant axis without regard to the SIGN of that
+	// axis's normal component, so a face whose true outward normal points along
+	// the NEGATIVE dominant axis comes back wound inward. Orient the emitted
+	// triangles to agree with the Newell face normal (brep.go already orients the
+	// loop so that normal faces outward).
+	if len(tris) >= 3 {
+		n := v3{nx, ny, nz}
+		// tris[0..2] is always a strictly-convex ear (triangulatePolygon skips reflex
+		// vertices via cross2D <= 0), so its normal-sign test is reliable here.
+		a, b, c := loop[tris[0]], loop[tris[1]], loop[tris[2]]
+		e1 := v3{b[0] - a[0], b[1] - a[1], b[2] - a[2]}
+		e2 := v3{c[0] - a[0], c[1] - a[1], c[2] - a[2]}
+		if dotv(crossv(e1, e2), n) < 0 {
+			for i := 0; i+2 < len(tris); i += 3 {
+				tris[i+1], tris[i+2] = tris[i+2], tris[i+1]
+			}
+		}
+	}
+	return tris
 }
 
 // ensureCCW returns poly wound counter-clockwise, reversing it when it is

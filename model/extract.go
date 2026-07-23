@@ -98,11 +98,14 @@ func Extract(f *step.File) (*Result, error) {
 		m[12], m[13], m[14] = m[12]*scale, m[13]*scale, m[14]*scale
 
 		q, hasQto := QtoQuantities(f, e, scale)
-		src := "qto"
+		src := QuantitySourceQto
 		if !hasQto {
-			q = Quantities{} // no silent partial: source="none" always pairs with a fully-empty Qto
-			src = "none"
-			res.Warnings = append(res.Warnings, e.Type()+" "+strVal(e, attrGlobalID)+": no Qto area (geometry tier deferred to child 4)")
+			// No silent partial: source="none" always pairs with a fully-empty
+			// Qto. The geometry tier back-fills these post-Build via
+			// ApplyDerivedQuantities (a "none" element with a mesh becomes
+			// "geometry"); no per-element warning here — the source tag is the signal.
+			q = Quantities{}
+			src = QuantitySourceNone
 		}
 
 		var material string
