@@ -342,3 +342,84 @@ func TestMeshVolume_InconsistentWindingRejected(t *testing.T) {
 		t.Error("meshVolume must reject an inconsistently-wound mesh")
 	}
 }
+
+// buildSceneOne parses, extracts, and builds a single-element synthetic fixture,
+// returning both the Scene (for Scene-level queries like DerivedQuantities) and
+// its sole Element. buildOne is the Element-only twin used where the Scene isn't
+// needed.
+func buildSceneOne(t *testing.T, path string) (*Scene, Element) {
+	t.Helper()
+	f, err := step.ParseFile(path)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	r, err := model.Extract(f)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if len(s.Elements) != 1 {
+		t.Fatalf("want 1 element, got %d", len(s.Elements))
+	}
+	return s, s.Elements[0]
+}
+
+// closeAbs asserts a *float64 equals a hand-verified literal within eps.
+func closeAbs(t *testing.T, name string, got *float64, want, eps float64) {
+	t.Helper()
+	if got == nil {
+		t.Errorf("%s = nil, want %g", name, want)
+		return
+	}
+	if math.Abs(*got-want) > eps {
+		t.Errorf("%s = %g, want %g", name, *got, want)
+	}
+}
+
+// TestDerivedQuantities_KnownBox_Absolute is an ABSOLUTE golden (child 5, #2211).
+// TestDerivedQuantities_KnownBox asserts the derived dims equal the element's own
+// computed AABB — a consistency check that stays green even if the AABB is wrongly
+// SCALED (both sides move together). This pins the derived dims to hand-verified
+// LITERALS instead: known_box.ifc is exactly a 1x1x1 m box at world origin
+// (10,20,5), so every horizontal dim is 1.0 m. The mm twin proves the world mesh
+// is meters and derived quantities do not double-scale the millimeter input.
+func TestDerivedQuantities_KnownBox_Absolute(t *testing.T) {
+	for _, path := range []string{
+		"testdata/synthetic/known_box.ifc",
+		"testdata/synthetic/known_box_mm.ifc",
+	} {
+		t.Run(path, func(t *testing.T) {
+			s, e := buildSceneOne(t, path)
+			q, ok := s.DerivedQuantities()[e.GlobalID]
+			if !ok {
+				t.Fatalf("no derived quantities for %s", e.GlobalID)
+			}
+			// 1x1x1 m box: every extent is exactly 1.0 m, footprint area 1.0 m^2.
+			closeAbs(t, "Height", q.Height, 1.0, 1e-6)
+			closeAbs(t, "Length", q.Length, 1.0, 1e-6)
+			closeAbs(t, "Width", q.Width, 1.0, 1e-6)
+			closeAbs(t, "Area", q.Area, 1.0, 1e-6)
+		})
+	}
+}
+
+// TestDerivedQuantities_ClosedBoxVolume is an ABSOLUTE golden (child 5, #2211) for
+// tier-2 volume. known_box.ifc is a 2-face open shell (its volume is correctly
+// nil), so no committed fixture pinned closed-shell volume to a literal. closed_box.ifc
+// is a watertight 6-face unit cube at world (10,20,5); its gross mesh volume must
+// be exactly 1.0 m^3. Guards the divergence-theorem sum + unit scaling of volume
+// against hand truth, independent of the Python oracle.
+func TestDerivedQuantities_ClosedBoxVolume(t *testing.T) {
+	s, e := buildSceneOne(t, "testdata/synthetic/closed_box.ifc")
+	if e.Source == SourceOBB {
+		t.Fatalf("closed_box fell back to OBB (source=%v); expected a tessellated brep", e.Source)
+	}
+	q, ok := s.DerivedQuantities()[e.GlobalID]
+	if !ok {
+		t.Fatalf("no derived quantities for %s", e.GlobalID)
+	}
+	closeAbs(t, "Volume", q.Volume, 1.0, 1e-6)
+}
