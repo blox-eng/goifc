@@ -36,16 +36,25 @@ func (s *Scene) DerivedQuantities() map[string]model.Quantities {
 		if width > length {
 			length, width = width, length
 		}
-		area := length * width
+		// Area + perimeter come from the MESH (ifcopenshell parity, #2213): area =
+		// get_max_side_area (largest elevational face, e.g. a wall's face, NOT the
+		// thin plan footprint); perimeter = get_footprint_perimeter. Length/Width/
+		// Height stay world-AABB extents. For brep-passthrough elements the proxy
+		// mesh IS the real mesh, so these match the Python baseline exactly; extrude/
+		// OBB proxies approximate.
+		mArea, _, mPerim := meshQuantities(e.Verts, e.Tris, e.Placement)
 		q := model.Quantities{
-			Height: pos(dz),
-			Length: pos(length),
-			Width:  pos(width),
-			Area:   pos(area),
+			Height:    pos(dz),
+			Length:    pos(length),
+			Width:     pos(width),
+			Area:      pos(mArea),
+			Perimeter: pos(mPerim),
 		}
 		// Volume only from a true tessellation. An OBB fallback is the element's
 		// bounding box, not a solid — emitting its "volume" over-reports hollow
-		// elements by up to ~70x (benchmarked vs ifcopenshell).
+		// elements by up to ~70x (benchmarked vs ifcopenshell). Kept manifold-gated
+		// (stricter than ifcopenshell get_volume, which is unpredictable on
+		// non-manifold meshes) to avoid emitting garbage volumes.
 		if e.Source != SourceOBB {
 			if v, ok := meshVolume(e.Verts, e.Tris); ok {
 				q.Volume = pos(v)

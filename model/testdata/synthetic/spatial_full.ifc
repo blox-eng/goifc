@@ -1,0 +1,41 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('spatial_full','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+
+/* spatial chain: Project -> Site -> Building -> Storey (IfcRelAggregates) */
+#5=IFCPROJECT('0GUIDproject00000000005',$,'Proj',$,$,$,$,$,#2);
+#6=IFCSITE('0GUIDsite00000000000006',$,'Site A',$,$,$,$,$,.ELEMENT.,$,$,$,$,$);
+#7=IFCBUILDING('0GUIDbuilding0000000007',$,'Building A',$,$,$,$,$,.ELEMENT.,$,$,$);
+#8=IFCBUILDINGSTOREY('0GUIDstorey000000000008',$,'Level 1',$,$,$,$,$,.ELEMENT.,0.);
+#20=IFCRELAGGREGATES('0GUIDra0000000000000020',$,$,$,#5,(#6));
+#21=IFCRELAGGREGATES('0GUIDra0000000000000021',$,$,$,#6,(#7));
+#22=IFCRELAGGREGATES('0GUIDra0000000000000022',$,$,$,#7,(#8));
+
+/* IfcSpace aggregated into storey, WITH authored Qto (tests C3 spatial Qto) */
+#30=IFCSPACE('0GUIDspace00000000000030',$,'Room 101',$,$,$,$,$,.ELEMENT.,.INTERNAL.,$);
+#31=IFCRELAGGREGATES('0GUIDra0000000000000031',$,$,$,#8,(#30));
+#32=IFCQUANTITYAREA('GrossArea',$,$,25.0,$);
+#33=IFCELEMENTQUANTITY('0GUIDq00000000000000033',$,'Qto_SpaceBaseQuantities',$,$,(#32));
+#34=IFCRELDEFINESBYPROPERTIES('0GUIDrd0000000000000034',$,$,$,(#30),#33);
+
+/* wall contained in storey (parent_index -> storey) */
+#40=IFCWALL('0GUIDwall0000000000040',$,'W-1',$,$,$,$,$,$);
+#41=IFCRELCONTAINEDINSPATIALSTRUCTURE('0GUIDrc0000000000000041',$,$,$,(#40),#8);
+
+/* door with NO aggregate/contained rel -> parent_index null (fills-element is NOT in _parent_map) */
+#50=IFCDOOR('0GUIDdoor0000000000050',$,'D-1',$,$,$,$,$,$,$,$);
+
+/* physical-under-physical with INVERTED ids: assembly #90 aggregates beam #60.
+   sortByID orders beam(60) before assembly(90); a correct topo emits assembly FIRST (tests C2). */
+#60=IFCBEAM('0GUIDbeam0000000000060',$,'B-1',$,$,$,$,$,$);
+#90=IFCELEMENTASSEMBLY('0GUIDasm00000000000090',$,'ASM-1',$,$,$,$,$,$,$);
+#91=IFCRELCONTAINEDINSPATIALSTRUCTURE('0GUIDrc0000000000000091',$,$,$,(#90),#8);
+#92=IFCRELAGGREGATES('0GUIDra0000000000000092',$,$,$,#90,(#60));
+ENDSEC;
+END-ISO-10303-21;

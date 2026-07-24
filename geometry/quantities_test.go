@@ -73,9 +73,13 @@ func TestDerivedQuantities_KnownBox(t *testing.T) {
 	if q.Width == nil || math.Abs(*q.Width-wantW) > 1e-9 {
 		t.Errorf("Width = %v, want %v", deref(q.Width), wantW)
 	}
-	if q.Area == nil || math.Abs(*q.Area-wantL*wantW) > 1e-6 {
-		t.Errorf("Area = %v, want %v", deref(q.Area), wantL*wantW)
+	// Area is mesh-derived (max-side-area) now, not the AABB footprint. known_box is
+	// a 2-face open shell; assert it is present and positive (its exact value is not
+	// a clean golden — see TestDerivedQuantities_ClosedBox_Absolute for that).
+	if q.Area == nil || *q.Area <= 0 {
+		t.Errorf("Area = %v, want present and positive (mesh max-side-area)", deref(q.Area))
 	}
+	_ = wantW
 	// Volume is present only for a closed shell; known_box is a 2-face open shell,
 	// so Volume may be nil — but if present it must be a sane, in-box positive.
 	if q.Volume != nil && (*q.Volume <= 0 || *q.Volume > dx*dy*dz*1.0001) {
@@ -232,11 +236,12 @@ func deref(p *float64) float64 {
 func TestDerivedQuantities_DegenerateMeshEmitsNoZero(t *testing.T) {
 	// Flat element: nonzero X/Y extent, ZERO Z extent (Height must be nil).
 	flat := Scene{Elements: []Element{{
-		GlobalID: "FLAT",
-		Verts:    []float32{0, 0, 0, 2, 0, 0, 0, 3, 0}, // all z=0
-		Tris:     []uint32{0, 1, 2},
-		BBoxMin:  [3]float64{0, 0, 0},
-		BBoxMax:  [3]float64{2, 3, 0}, // dz = 0
+		GlobalID:  "FLAT",
+		Verts:     []float32{0, 0, 0, 2, 0, 0, 0, 3, 0}, // all z=0
+		Tris:      []uint32{0, 1, 2},
+		Placement: model.Identity(), // mesh-derived area lifts local verts to world
+		BBoxMin:   [3]float64{0, 0, 0},
+		BBoxMax:   [3]float64{2, 3, 0}, // dz = 0
 	}}}
 	q, ok := flat.DerivedQuantities()["FLAT"]
 	if !ok {
@@ -397,22 +402,24 @@ func TestDerivedQuantities_KnownBox_Absolute(t *testing.T) {
 			if !ok {
 				t.Fatalf("no derived quantities for %s", e.GlobalID)
 			}
-			// 1x1x1 m box: every extent is exactly 1.0 m, footprint area 1.0 m^2.
+			// 1x1x1 m box: every world-AABB extent is exactly 1.0 m. (Area/perimeter
+			// are mesh-derived now and known_box is a 2-face open shell, so its
+			// mesh quantities aren't a clean golden — those are pinned on the
+			// watertight closed_box in TestDerivedQuantities_ClosedBox_Absolute.)
 			closeAbs(t, "Height", q.Height, 1.0, 1e-6)
 			closeAbs(t, "Length", q.Length, 1.0, 1e-6)
 			closeAbs(t, "Width", q.Width, 1.0, 1e-6)
-			closeAbs(t, "Area", q.Area, 1.0, 1e-6)
 		})
 	}
 }
 
-// TestDerivedQuantities_ClosedBoxVolume is an ABSOLUTE golden (child 5, #2211) for
-// tier-2 volume. known_box.ifc is a 2-face open shell (its volume is correctly
-// nil), so no committed fixture pinned closed-shell volume to a literal. closed_box.ifc
-// is a watertight 6-face unit cube at world (10,20,5); its gross mesh volume must
-// be exactly 1.0 m^3. Guards the divergence-theorem sum + unit scaling of volume
-// against hand truth, independent of the Python oracle.
-func TestDerivedQuantities_ClosedBoxVolume(t *testing.T) {
+// TestDerivedQuantities_ClosedBox_Absolute is the ABSOLUTE mesh-quantity golden
+// (child 5 #2211 + #2213). closed_box.ifc is a watertight 6-face unit cube at
+// world (10,20,5), so ALL mesh-derived tier-2 quantities are hand-verifiable and
+// must match the ifcopenshell definitions exactly, independent of the Python
+// oracle: gross mesh volume 1.0 m^3 (divergence-theorem sum), max-side-area 1.0 m^2
+// (each unit face), footprint perimeter 4.0 m (the bottom 1x1 square outline).
+func TestDerivedQuantities_ClosedBox_Absolute(t *testing.T) {
 	s, e := buildSceneOne(t, "testdata/synthetic/closed_box.ifc")
 	if e.Source == SourceOBB {
 		t.Fatalf("closed_box fell back to OBB (source=%v); expected a tessellated brep", e.Source)
@@ -422,4 +429,6 @@ func TestDerivedQuantities_ClosedBoxVolume(t *testing.T) {
 		t.Fatalf("no derived quantities for %s", e.GlobalID)
 	}
 	closeAbs(t, "Volume", q.Volume, 1.0, 1e-6)
+	closeAbs(t, "Area", q.Area, 1.0, 1e-6)
+	closeAbs(t, "Perimeter", q.Perimeter, 4.0, 1e-6)
 }
