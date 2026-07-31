@@ -16,6 +16,15 @@ func applyMat(m model.Mat4, p v3) v3 {
 	}
 }
 
+// worldPoints lifts an X,Y,Z-triple vertex slice to world space via placement.
+func worldPoints(verts []float32, placement model.Mat4) []v3 {
+	w := make([]v3, len(verts)/3)
+	for i := range w {
+		w[i] = applyMat(placement, v3{float64(verts[3*i]), float64(verts[3*i+1]), float64(verts[3*i+2])})
+	}
+	return w
+}
+
 // reverseV3 reverses a point slice in place (used to flip a face loop's winding).
 func reverseV3(p []v3) {
 	for i, j := 0, len(p)-1; i < j; i, j = i+1, j-1 {

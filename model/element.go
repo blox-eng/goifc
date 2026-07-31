@@ -230,6 +230,47 @@ func getVoidedElement(f *step.File, inst *step.Instance) *step.Instance {
 	return nil
 }
 
+// OpeningsOf returns the IfcOpeningElement instances that void host
+// (the inverse of getVoidedElement): every IfcRelVoidsElement whose
+// RelatingBuildingElement is host, yielding its RelatedOpeningElement.
+func OpeningsOf(f *step.File, host *step.Instance) []*step.Instance {
+	var out []*step.Instance
+	for _, rel := range f.Inverse(host) {
+		if !rel.IsA("IfcRelVoidsElement") {
+			continue
+		}
+		if voided, ok := rel.Ref(attrRel4); ok && voided.ID() == host.ID() { // RelatingBuildingElement
+			if opening, ok := rel.Ref(attrRel5); ok { // RelatedOpeningElement
+				out = append(out, opening)
+			}
+		}
+	}
+	return out
+}
+
+// OrphanFillOpenings returns every IfcOpeningElement that is FILLED (referenced
+// as the RelatingOpeningElement of an IfcRelFillsElement) yet voids NO host
+// (no IfcRelVoidsElement names it as RelatedOpeningElement). Such a
+// filled-but-void-less opening is a benign IFC inconsistency worth one
+// aggregated warning. Keeping this rel-walk in the model package lets the
+// geometry engine stay free of IfcRelFills/IfcRelVoids traversal. Each opening
+// is returned once; nil when there are none.
+func OrphanFillOpenings(f *step.File) []*step.Instance {
+	var out []*step.Instance
+	seen := map[int]bool{}
+	for _, rel := range f.ByType("IfcRelFillsElement") {
+		opening, ok := rel.Ref(attrRel4) // RelatingOpeningElement
+		if !ok || opening == nil || seen[opening.ID()] {
+			continue
+		}
+		if getVoidedElement(f, opening) == nil { // filled but voids no host
+			seen[opening.ID()] = true
+			out = append(out, opening)
+		}
+	}
+	return out
+}
+
 // getParent ports ifcopenshell.util.element.get_parent: the first of
 // aggregate/nest/filled-void/voided-element parent, in that order.
 func getParent(f *step.File, inst *step.Instance) *step.Instance {

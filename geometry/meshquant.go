@@ -21,10 +21,7 @@ func meshQuantities(verts []float32, tris []uint32, placement model.Mat4) (area,
 	if len(tris) < 3 || len(verts) < 9 {
 		return 0, 0, 0
 	}
-	w := make([]v3, len(verts)/3)
-	for i := range w {
-		w[i] = applyMat(placement, v3{float64(verts[3*i]), float64(verts[3*i+1]), float64(verts[3*i+2])})
-	}
+	w := worldPoints(verts, placement)
 	return maxSideArea(w, tris), meshVolumeWorld(w, tris), footprintPerimeter(w, tris)
 }
 
@@ -53,7 +50,32 @@ func sideArea(w []v3, tris []uint32, axis int) float64 {
 }
 
 func maxSideArea(w []v3, tris []uint32) float64 {
-	return math.Max(sideArea(w, tris, 0), math.Max(sideArea(w, tris, 1), sideArea(w, tris, 2)))
+	area, _ := maxSideAreaAxis(w, tris)
+	return area
+}
+
+// maxSideAreaAxis is maxSideArea extended to also report which projection won,
+// for callers (e.g. net-area opening subtraction, #2213) that need to measure
+// openings on the same plane as their host's max-side pick.
+//
+// axis is the DROPPED coordinate index of the winning projection — i.e. the
+// same axis index sideArea was called with, since sideArea(axis) sums the
+// faces whose normal points toward +axis, which is exactly the plane
+// perpendicular to axis (the plane you'd project onto by dropping that
+// coordinate): 0 = YZ plane (X dropped), 1 = XZ plane (Y dropped), 2 = XY
+// plane (Z dropped).
+//
+// Ties are broken by lowest axis index, deterministically, so a host and its
+// openings — measured separately — always agree on the winning plane.
+func maxSideAreaAxis(w []v3, tris []uint32) (area float64, axis int) {
+	areas := [3]float64{sideArea(w, tris, 0), sideArea(w, tris, 1), sideArea(w, tris, 2)}
+	area, axis = areas[0], 0
+	for i := 1; i < 3; i++ {
+		if areas[i] > area {
+			area, axis = areas[i], i
+		}
+	}
+	return area, axis
 }
 
 // meshVolumeWorld is ifcopenshell get_volume: |Σ signed tetrahedra|, computed
