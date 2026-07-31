@@ -22,6 +22,9 @@ type ImportNode struct {
 	OriginMin      [3]float64 // world-AABB min (transform.origin); zero if no geometry
 	BBoxMin        [3]float64
 	BBoxMax        [3]float64
+	Material       string   // model.Element.Material; "" when none
+	IsExternal     *bool    // *Common.IsExternal tri-state; nil when unknown
+	NetArea        *float64 // trusted net area (m²) from Scene.NetAreas; nil when absent/untrusted
 }
 
 // ImportModel is the assembled import contract: the parents-first node tree plus
@@ -76,6 +79,11 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 		aabb[ge.GlobalID] = ge
 	}
 
+	// Net-area reconciliation, keyed by GlobalID. Call ONCE per Scene (it
+	// appends an orphan-fill warning to s.Warnings). Hosts without voids are
+	// absent from the map; untrusted hosts carry a nil Net.
+	nets := a.Scene.NetAreas(f, a.Result)
+
 	nodes := make([]ImportNode, len(ordered))
 	for i, id := range ordered {
 		e := byID[id]
@@ -92,11 +100,16 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 			ParentIndex:    pi,
 			Qto:            e.Qto,
 			QuantitySource: e.QuantitySource,
+			Material:       e.Material,
+			IsExternal:     e.IsExternal,
 		}
 		if ge, ok := aabb[e.GlobalID]; ok && len(ge.Verts) > 0 {
 			n.OriginMin = ge.BBoxMin
 			n.BBoxMin = ge.BBoxMin
 			n.BBoxMax = ge.BBoxMax
+		}
+		if na, ok := nets[e.GlobalID]; ok {
+			n.NetArea = na.Net // already nil when untrusted
 		}
 		nodes[i] = n
 	}
