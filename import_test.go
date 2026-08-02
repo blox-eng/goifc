@@ -2,8 +2,11 @@ package ifc
 
 import (
 	"os"
+	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/blox-eng/common/ifc/geometry"
 	"github.com/blox-eng/common/ifc/step"
 )
 
@@ -133,4 +136,63 @@ func TestBuildImport_KB645_Invariants(t *testing.T) {
 		t.Errorf("kb645 import nodes = %d, want > 1922 (1922 physical + spatial)", len(m.Nodes))
 	}
 	t.Logf("kb645 import nodes=%d spatial=%d", len(m.Nodes), spatial)
+}
+
+// TestBuildImport_MultiStoreyPlans is the capstone: a REAL parsed multi-storey
+// IFC file (STEP parse -> BuildImport -> StoreyPlans), not synthetic hand-set
+// nodes. It exercises the full producer, including the case-insensitive storey
+// detection that a real parse (uppercased IFCBUILDINGSTOREY) requires.
+func TestBuildImport_MultiStoreyPlans(t *testing.T) {
+	f := parseFixture(t, "testdata/two_storey_spanning.ifc")
+	m, err := BuildImport(f)
+	if err != nil {
+		t.Fatalf("BuildImport: %v", err)
+	}
+	if len(m.StoreyPlans) != 2 {
+		t.Fatalf("want 2 storey plans from a 2-storey building, got %d", len(m.StoreyPlans))
+	}
+	// Ordered by floorZ: Ground (0) then Level 1 (2.8).
+	ground, level1 := m.StoreyPlans[0], m.StoreyPlans[1]
+
+	role := func(sp StoreyPlan, gidSubstr string) (geometry.LoopRole, bool) {
+		for _, e := range sp.Entities {
+			// match by IFC class since GlobalIDs are opaque; one element per class here
+			if strings.EqualFold(e.IFCClass, gidSubstr) && len(e.Loops) > 0 {
+				return e.Loops[0].Role, true
+			}
+		}
+		return "", false
+	}
+
+	// Ground floor: column CUT, wall CUT, no slab.
+	if r, ok := role(ground, "IfcColumn"); !ok || r != geometry.LoopCut {
+		t.Fatalf("ground: column should be cut, got %q ok=%v", r, ok)
+	}
+	if r, ok := role(ground, "IfcWall"); !ok || r != geometry.LoopCut {
+		t.Fatalf("ground: wall should be cut, got %q ok=%v", r, ok)
+	}
+	if _, ok := role(ground, "IfcSlab"); ok {
+		t.Fatalf("ground plan must not include the Level-1 slab")
+	}
+
+	// Level 1: the SPANNING COLUMN appears (CUT); wall absent; slab BELOW.
+	if r, ok := role(level1, "IfcColumn"); !ok || r != geometry.LoopCut {
+		t.Fatalf("level1: spanning column should be cut on the upper floor, got %q ok=%v", r, ok)
+	}
+	if _, ok := role(level1, "IfcWall"); ok {
+		t.Fatalf("level1 plan must not include the ground-floor wall")
+	}
+	if r, ok := role(level1, "IfcSlab"); !ok || r != geometry.LoopBelow {
+		t.Fatalf("level1: slab should be below-context, got %q ok=%v", r, ok)
+	}
+}
+
+func TestBuildImport_MultiStoreyPlansDeterministic(t *testing.T) {
+	f := parseFixture(t, "testdata/two_storey_spanning.ifc")
+	m1, _ := BuildImport(f)
+	f2 := parseFixture(t, "testdata/two_storey_spanning.ifc")
+	m2, _ := BuildImport(f2)
+	if !reflect.DeepEqual(m1.StoreyPlans, m2.StoreyPlans) {
+		t.Fatal("StoreyPlans not byte-identical across re-import (determinism / #1344 drift protection)")
+	}
 }

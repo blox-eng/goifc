@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // TestSpatialNodes_FullChain: the import contract (import_emit.py) emits the
 // spatial containers Site/Building/Storey/Space as nodes — but NOT IfcProject
@@ -37,5 +40,29 @@ func TestSpatialNodes_FullChain(t *testing.T) {
 	// C3: authored Qto flows through SpatialNodes (IfcSpace GrossArea = 25.0).
 	if space := byName["Room 101"]; space.Qto.Area == nil || *space.Qto.Area != 25.0 {
 		t.Errorf("Room 101 Qto.Area = %v want 25.0 (spatial Qto)", space.Qto.Area)
+	}
+}
+
+func TestStoreyElevationsMeters(t *testing.T) {
+	const spf = `ISO-10303-21;
+HEADER;
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+#10=IFCBUILDINGSTOREY('2Storey0000000000000A',$,'Level 0',$,$,$,$,$,.ELEMENT.,0.);
+#11=IFCBUILDINGSTOREY('2Storey0000000000000B',$,'Level 1',$,$,$,$,$,.ELEMENT.,3000.);
+ENDSEC;
+END-ISO-10303-21;`
+	elevs := StoreyElevations(parseString(t, spf))
+	if len(elevs) != 2 {
+		t.Fatalf("want 2 storeys, got %d: %+v", len(elevs), elevs)
+	}
+	if got := elevs["2Storey0000000000000A"]; math.Abs(got-0.0) > 1e-9 {
+		t.Fatalf("storey A: want 0.0 m, got %v", got)
+	}
+	if got := elevs["2Storey0000000000000B"]; math.Abs(got-3.0) > 1e-9 { // 3000 mm × 0.001
+		t.Fatalf("storey B: want 3.0 m, got %v", got)
 	}
 }

@@ -30,8 +30,9 @@ type ImportNode struct {
 // ImportModel is the assembled import contract: the parents-first node tree plus
 // the proxy-geometry Scene the physical nodes' meshes are baked from (Scene.WriteGLB).
 type ImportModel struct {
-	Nodes []ImportNode
-	Scene *geometry.Scene
+	Nodes       []ImportNode
+	Scene       *geometry.Scene
+	StoreyPlans []StoreyPlan
 }
 
 // BuildImport turns a parsed STEP file into the flow import contract, reproducing
@@ -114,7 +115,8 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 		nodes[i] = n
 	}
 
-	return &ImportModel{Nodes: nodes, Scene: a.Scene}, nil
+	storeyPlans := buildStoreyPlans(nodes, aabb, model.StoreyElevations(f))
+	return &ImportModel{Nodes: nodes, Scene: a.Scene, StoreyPlans: storeyPlans}, nil
 }
 
 // forwardParentMap builds child-ExpressID → parent-ExpressID from the two

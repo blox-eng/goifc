@@ -53,3 +53,34 @@ func SpatialNodes(f *step.File) []Element {
 	}
 	return nodes
 }
+
+// StoreyElevations maps each IfcBuildingStorey GlobalID to its Elevation in
+// meters (raw attr 9 × UnitScale). Storeys with no numeric Elevation are
+// omitted. Used for ordering storey plans in the UI; NOT for cut-plane
+// placement (that is min-world-Z + 1.2 m in the plan assembler).
+func StoreyElevations(f *step.File) map[string]float64 {
+	scale := UnitScale(f)
+	const attrElevation = 9 // IfcBuildingStorey.Elevation
+	out := map[string]float64{}
+	for _, s := range f.ByType("IfcBuildingStorey") {
+		gid := strVal(s, attrGlobalID)
+		if gid == "" {
+			continue
+		}
+		v, ok := s.Get(attrElevation)
+		if !ok {
+			continue
+		}
+		var raw float64
+		switch v.Kind {
+		case step.KindFloat:
+			raw = v.F
+		case step.KindInt:
+			raw = float64(v.I)
+		default:
+			continue // unset ($) / non-numeric → omit
+		}
+		out[gid] = raw * scale
+	}
+	return out
+}
