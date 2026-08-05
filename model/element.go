@@ -76,6 +76,25 @@ func GetType(f *step.File, inst *step.Instance) *step.Instance {
 	return nil
 }
 
+// TypeIdentity returns the identity of inst's IfcTypeObject: its GlobalId, its
+// Name, and its entity class. All three are empty when inst carries no
+// IfcRelDefinesByType — an element with no type, which must leave
+// objects.object_type_id null rather than match on anything else.
+//
+// The class comes from step.Instance.Type() verbatim, so it is UPPERCASE as the
+// file spells it (IFCWALLTYPE). Callers compare case-insensitively.
+//
+// NOTE: do not filter on the class ending in "Type". IFC2X3 spells door and
+// window types IfcDoorStyle / IfcWindowStyle — kb645 carries 6 IFCDOORSTYLE
+// types that any suffix check would silently drop.
+func TypeIdentity(f *step.File, inst *step.Instance) (globalID, name, class string) {
+	typ := GetType(f, inst)
+	if typ == nil {
+		return "", "", ""
+	}
+	return strVal(typ, attrGlobalID), strVal(typ, attrName), typ.Type()
+}
+
 // typePropertySets reads typ's HasPropertySets (a list of IfcPropertySet or
 // IfcElementQuantity, keyed directly — not via a Rel) and returns the subset
 // matching qtosOnly, keyed by set Name. Mirrors the type-level half of

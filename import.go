@@ -25,6 +25,14 @@ type ImportNode struct {
 	Material       string   // model.Element.Material; "" when none
 	IsExternal     *bool    // *Common.IsExternal tri-state; nil when unknown
 	NetArea        *float64 // trusted net area (m²) from Scene.NetAreas; nil when absent/untrusted
+
+	// TypeGlobalID / TypeName / TypeClass identify the element's IfcTypeObject
+	// (#2395a). Empty when the element carries no IfcRelDefinesByType. Measured
+	// on kb645: 1,388 of 1,389 candidate occurrences carry one, including
+	// 526/526 walls.
+	TypeGlobalID string
+	TypeName     string
+	TypeClass    string
 }
 
 // ImportModel is the assembled import contract: the parents-first node tree plus
@@ -103,6 +111,9 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 			QuantitySource: e.QuantitySource,
 			Material:       e.Material,
 			IsExternal:     e.IsExternal,
+		}
+		if inst, ok := f.ByID(id); ok {
+			n.TypeGlobalID, n.TypeName, n.TypeClass = model.TypeIdentity(f, inst)
 		}
 		if ge, ok := aabb[e.GlobalID]; ok && len(ge.Verts) > 0 {
 			n.OriginMin = ge.BBoxMin
