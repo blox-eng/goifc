@@ -196,3 +196,106 @@ func TestBuildImport_MultiStoreyPlansDeterministic(t *testing.T) {
 		t.Fatal("StoreyPlans not byte-identical across re-import (determinism / #1344 drift protection)")
 	}
 }
+
+// BuildImport must surface the type's build-up once per distinct IfcTypeObject,
+// keyed by the type GlobalId ResolveObjectTypes already keys on. Per-occurrence
+// duplication would multiply this by 1,388 on kb645 against a 2 MB payload cap.
+func TestBuildImportTypeLayers(t *testing.T) {
+	b, err := os.ReadFile("model/testdata/synthetic/wall_layerset_attrs.ifc")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	f, err := step.ParseBytes(b)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	m, err := BuildImport(f)
+	if err != nil {
+		t.Fatalf("BuildImport: %v", err)
+	}
+
+	if len(m.TypeLayers) != 1 {
+		t.Fatalf("len(TypeLayers) = %d, want 1", len(m.TypeLayers))
+	}
+	set, ok := m.TypeLayers["0GUIDwtyp0000000000010"]
+	if !ok {
+		t.Fatalf("TypeLayers missing the wall type GlobalId; got keys %v", keysOf(m.TypeLayers))
+	}
+	if len(set.Layers) != 3 {
+		t.Fatalf("len(Layers) = %d, want 3", len(set.Layers))
+	}
+	if set.Layers[0].MaterialName != "Reinforced concrete" {
+		t.Errorf("Layers[0].MaterialName = %q, want %q", set.Layers[0].MaterialName, "Reinforced concrete")
+	}
+	if set.Layers[0].ThicknessMm == nil || *set.Layers[0].ThicknessMm != 250 {
+		t.Errorf("Layers[0].ThicknessMm = %v, want 250", set.Layers[0].ThicknessMm)
+	}
+	// The occurrence's usage supplies the axis even though the type itself carries
+	// only a bare layer set.
+	if set.Direction != "AXIS2" {
+		t.Errorf("Direction = %q, want %q", set.Direction, "AXIS2")
+	}
+}
+
+func keysOf(m map[string]TypeLayerSet) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// A model whose types carry no layer set must produce an empty (not nil-deref'd)
+// map, and must not pay a repeated inverse walk per occurrence.
+func TestBuildImportTypeLayersAbsent(t *testing.T) {
+	b, err := os.ReadFile("model/testdata/synthetic/wall_layerset.ifc")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	f, err := step.ParseBytes(b)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	m, err := BuildImport(f)
+	if err != nil {
+		t.Fatalf("BuildImport: %v", err)
+	}
+
+	if len(m.TypeLayers) != 0 {
+		t.Errorf("len(TypeLayers) = %d, want 0 (that fixture has no IfcTypeObject)", len(m.TypeLayers))
+	}
+}
+
+// A type that resolves but carries no build-up must be PRESENT with zero layers.
+// Absence means "no such type" and tells a re-import to leave that type's rows
+// alone; an empty entry means "this type has no layers any more" and is the only
+// way a build-up that shrank all the way to zero is visible downstream.
+func TestBuildImportTypeLayersEmptyWhenTypeHasNone(t *testing.T) {
+	b, err := os.ReadFile("model/testdata/synthetic/wall_type_no_layers.ifc")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	f, err := step.ParseBytes(b)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	m, err := BuildImport(f)
+	if err != nil {
+		t.Fatalf("BuildImport: %v", err)
+	}
+
+	set, ok := m.TypeLayers["0GUIDwtyp0000000000012"]
+	if !ok {
+		t.Fatalf("TypeLayers omitted a resolved type that has no layers; got keys %v", keysOf(m.TypeLayers))
+	}
+	if len(set.Layers) != 0 {
+		t.Errorf("len(Layers) = %d, want 0", len(set.Layers))
+	}
+	// Two occurrences of the same type still produce exactly one entry.
+	if len(m.TypeLayers) != 1 {
+		t.Errorf("len(TypeLayers) = %d, want 1; got keys %v", len(m.TypeLayers), keysOf(m.TypeLayers))
+	}
+}

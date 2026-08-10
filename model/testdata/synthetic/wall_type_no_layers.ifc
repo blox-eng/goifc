@@ -1,0 +1,19 @@
+ISO-10303-21;
+HEADER;
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+#3=IFCPROJECT('0GUIDproj0000000000012',$,'P',$,$,$,$,$,#2);
+/* A wall type with NO IfcRelAssociatesMaterial at all: the build-up was
+   removed in the authoring tool. The type still resolves, so TypeLayers must
+   carry it with an EMPTY layer list - "read it, it has none" - rather than
+   omitting it, which is indistinguishable from "no such type". */
+#40=IFCWALLTYPE('0GUIDwtyp0000000000012',$,'EW-02',$,$,$,$,$,$,.STANDARD.);
+#50=IFCWALL('0GUIDwall0000000000012',$,'W1',$,$,$,$,$,$);
+#51=IFCRELDEFINESBYTYPE('0GUIDrdef0000000000012',$,$,$,(#50),#40);
+#52=IFCWALL('0GUIDwall0000000000013',$,'W2',$,$,$,$,$,$);
+#53=IFCRELDEFINESBYTYPE('0GUIDrdef0000000000013',$,$,$,(#52),#40);
+ENDSEC;
+END-ISO-10303-21;

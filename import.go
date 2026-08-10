@@ -35,12 +35,33 @@ type ImportNode struct {
 	TypeClass    string
 }
 
+// TypeLayerSet is one IfcTypeObject's assembly build-up, in declared EXPRESS
+// LIST order. Direction/Sense are the raw IFC labels from
+// IfcMaterialLayerSetUsage (AXIS1/AXIS2/AXIS3, POSITIVE/NEGATIVE); mapping them
+// onto a product vocabulary belongs to the consumer.
+type TypeLayerSet struct {
+	Layers    []model.MaterialLayer
+	Direction string
+	Sense     string
+}
+
 // ImportModel is the assembled import contract: the parents-first node tree plus
 // the proxy-geometry Scene the physical nodes' meshes are baked from (Scene.WriteGLB).
 type ImportModel struct {
 	Nodes       []ImportNode
 	Scene       *geometry.Scene
 	StoreyPlans []StoreyPlan
+	// TypeLayers is the build-up per distinct IfcTypeObject, keyed by the type's
+	// GlobalId — the same key ImportNode.TypeGlobalID carries. Keyed by TYPE, not
+	// by occurrence: a real model has ~70 types and ~1,400 typed occurrences, and
+	// this whole struct is adapted into a Temporal payload with a 2 MB cap.
+	//
+	// A type that resolved but carries no ordered build-up is PRESENT with an
+	// empty Layers slice — that is a positive claim ("this type has no layers"),
+	// distinct from absence ("no such type in this model"), and consumers
+	// reconciling previously-imported layers need the difference: the first must
+	// retire every stale row, the second must touch nothing.
+	TypeLayers map[string]TypeLayerSet
 }
 
 // BuildImport turns a parsed STEP file into the flow import contract, reproducing
@@ -93,6 +114,26 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 	// absent from the map; untrusted hosts carry a nil Net.
 	nets := a.Scene.NetAreas(f, a.Result)
 
+	// One TYPE-level resolution per distinct IfcTypeObject. model.GetType and the
+	// layer set hanging off the type are occurrence-independent — every
+	// occurrence would read the same answer — so `typeProbed` caches a MISS as
+	// safely as a hit.
+	//
+	// The occurrence-level fallback is NOT occurrence-independent: only some
+	// occurrences of a type may carry an IfcMaterialLayerSetUsage. So it re-runs
+	// per occurrence until one yields layers. That costs a lookup in step.File's
+	// precomputed inverse map, not a walk — far too cheap to be worth caching a
+	// miss, which would let one unlucky occurrence declare the type empty.
+	//
+	// A resolved type with NO layers still gets an entry, empty. "Read it, it has
+	// no build-up" and "never saw this type" are different facts: the first is a
+	// build-up that shrank to nothing and must still be reconciled downstream,
+	// the second is nothing at all. Dropping the empty entry made the 1->0 shrink
+	// invisible — the type disappeared from the map, so its stale rows were never
+	// listed, never counted, never retracted.
+	typeLayers := make(map[string]TypeLayerSet)
+	typeProbed := make(map[string]bool)
+
 	nodes := make([]ImportNode, len(ordered))
 	for i, id := range ordered {
 		e := byID[id]
@@ -114,6 +155,41 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 		}
 		if inst, ok := f.ByID(id); ok {
 			n.TypeGlobalID, n.TypeName, n.TypeClass = model.TypeIdentity(f, inst)
+			if gid := n.TypeGlobalID; gid != "" {
+				// The type usually carries the bare IfcMaterialLayerSet; the
+				// occurrence carries the IfcMaterialLayerSetUsage that names the
+				// axis. Read the type first for the layers, then the occurrence
+				// for what the type cannot supply.
+				if !typeProbed[gid] {
+					typeProbed[gid] = true
+					if typ := model.GetType(f, inst); typ != nil {
+						set := model.MaterialLayers(f, typ, a.Result.UnitScale)
+						typeLayers[gid] = TypeLayerSet{
+							Layers:    set.Layers,
+							Direction: set.Direction,
+							Sense:     set.Sense,
+						}
+					}
+				}
+				if cur, ok := typeLayers[gid]; ok {
+					if len(cur.Layers) == 0 {
+						// The type names no build-up. It may hang off this occurrence's
+						// usage instead — and off a later occurrence if not this one.
+						if usage := model.MaterialLayers(f, inst, a.Result.UnitScale); len(usage.Layers) > 0 {
+							typeLayers[gid] = TypeLayerSet{
+								Layers:    usage.Layers,
+								Direction: usage.Direction,
+								Sense:     usage.Sense,
+							}
+						}
+					} else if cur.Direction == "" {
+						if usage := model.MaterialLayers(f, inst, a.Result.UnitScale); usage.Direction != "" {
+							cur.Direction, cur.Sense = usage.Direction, usage.Sense
+							typeLayers[gid] = cur
+						}
+					}
+				}
+			}
 		}
 		if ge, ok := aabb[e.GlobalID]; ok && len(ge.Verts) > 0 {
 			n.OriginMin = ge.BBoxMin
@@ -127,7 +203,7 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 	}
 
 	storeyPlans := buildStoreyPlans(nodes, aabb, model.StoreyElevations(f))
-	return &ImportModel{Nodes: nodes, Scene: a.Scene, StoreyPlans: storeyPlans}, nil
+	return &ImportModel{Nodes: nodes, Scene: a.Scene, StoreyPlans: storeyPlans, TypeLayers: typeLayers}, nil
 }
 
 // forwardParentMap builds child-ExpressID → parent-ExpressID from the two
