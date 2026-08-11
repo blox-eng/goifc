@@ -2,12 +2,11 @@ package ifc_test
 
 import (
 	"bytes"
-	"os"
 	"testing"
 
-	"github.com/blox-eng/common/ifc"
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 // boxIFC is a tiny self-contained IFC4 document with one IfcBuildingElementProxy
@@ -110,57 +109,5 @@ func TestAssemble_SyntheticChainsAllStages(t *testing.T) {
 func TestAssemble_NilFile(t *testing.T) {
 	if _, err := ifc.Assemble(nil); err == nil {
 		t.Fatal("Assemble(nil) = nil error, want error")
-	}
-}
-
-// TestAssemble_RealFile_kb645 is the end-to-end integration gate on the real
-// corpus: Assemble must return a non-empty, correctly-tiered model with a
-// populated geometry tier and zero fabricated 0.0. Skips gracefully when the
-// gitignored corpus is absent so CI stays green without it.
-func TestAssemble_RealFile_kb645(t *testing.T) {
-	const path = "testdata/real/kb645.ifc"
-	if _, err := os.Stat(path); err != nil {
-		t.Skip("kb645.ifc absent")
-	}
-	f, err := step.ParseFile(path)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	a, err := ifc.Assemble(f)
-	if err != nil {
-		t.Fatalf("assemble: %v", err)
-	}
-	if len(a.Result.Elements) == 0 {
-		t.Fatal("assembled output is empty")
-	}
-	// The bundle-parity invariant on a real scene — the unique value this seam
-	// adds over geometry's tier test, which never sees the assembled bundle.
-	if len(a.Scene.Elements) != len(a.Result.Elements) {
-		t.Errorf("Scene/Result element count mismatch: %d vs %d", len(a.Scene.Elements), len(a.Result.Elements))
-	}
-
-	var qto, geom, none int
-	for i := range a.Result.Elements {
-		e := &a.Result.Elements[i]
-		switch e.QuantitySource {
-		case model.QuantitySourceQto:
-			qto++
-		case model.QuantitySourceGeometry:
-			geom++
-			if e.Qto.IsEmpty() {
-				t.Errorf("%s source=geometry but Qto empty — phantom upgrade", e.GlobalID)
-			}
-		case model.QuantitySourceNone:
-			none++
-			if !e.Qto.IsEmpty() {
-				t.Errorf("%s source=none but Qto not empty — no-phantom-0.0 violated", e.GlobalID)
-			}
-		default:
-			t.Errorf("%s unknown quantity_source %q", e.GlobalID, e.QuantitySource)
-		}
-	}
-	t.Logf("kb645 tiers: qto=%d geometry=%d none=%d (total=%d)", qto, geom, none, len(a.Result.Elements))
-	if geom == 0 {
-		t.Error("no elements got the geometry tier — the four stages are not chained")
 	}
 }

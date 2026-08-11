@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/geometry"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/geometry"
+	"github.com/blox-eng/goifc/step"
 )
 
 func parseFixture(t *testing.T, path string) *step.File {
@@ -97,45 +97,6 @@ func TestBuildImport_Tree(t *testing.T) {
 	if m.Scene == nil {
 		t.Error("Scene is nil (needed for GLB)")
 	}
-}
-
-// TestBuildImport_KB645_Invariants validates C1/C2 on the real corpus: every
-// node is parents-first (no forward parent_index, no self-parent) and the
-// spatial containers are present. Self-skips when the gitignored kb645 is absent.
-func TestBuildImport_KB645_Invariants(t *testing.T) {
-	const path = "step/testdata/real/kb645.ifc"
-	if _, err := os.Stat(path); err != nil {
-		t.Skip("no kb645.ifc corpus; skipping")
-	}
-	f := parseFixture(t, path)
-	m, err := BuildImport(f)
-	if err != nil {
-		t.Fatalf("BuildImport: %v", err)
-	}
-
-	spatial := 0
-	for i, n := range m.Nodes {
-		if n.ParentIndex != nil {
-			if *n.ParentIndex == i {
-				t.Fatalf("node %d (%s %s) is its own parent (C1 self-parent)", i, n.IFCClass, n.GlobalID)
-			}
-			if *n.ParentIndex > i {
-				t.Fatalf("node %d (%s) parent_index %d is forward — not parents-first (C2)", i, n.Name, *n.ParentIndex)
-			}
-		}
-		switch n.IFCClass {
-		case "IFCSITE", "IFCBUILDING", "IFCBUILDINGSTOREY", "IFCSPACE":
-			spatial++
-		}
-	}
-	if spatial == 0 {
-		t.Error("no spatial container nodes emitted for kb645 (expected site/building/storeys)")
-	}
-	// physical set unchanged from the parity baseline (1922) + at least one spatial node.
-	if len(m.Nodes) <= 1922 {
-		t.Errorf("kb645 import nodes = %d, want > 1922 (1922 physical + spatial)", len(m.Nodes))
-	}
-	t.Logf("kb645 import nodes=%d spatial=%d", len(m.Nodes), spatial)
 }
 
 // TestBuildImport_MultiStoreyPlans is the capstone: a REAL parsed multi-storey

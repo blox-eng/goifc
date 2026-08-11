@@ -3,7 +3,7 @@ package model
 import (
 	"math"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // LocalPlacement returns the world transform of inst's ObjectPlacement, composing

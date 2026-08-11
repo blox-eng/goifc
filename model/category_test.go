@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // firstInstance returns the single instance of a one-instance fixture file.

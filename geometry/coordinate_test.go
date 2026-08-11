@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 func buildOne(t *testing.T, path string) Element {

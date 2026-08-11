@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/blox-eng/common/ifc/geometry"
+	"github.com/blox-eng/goifc/geometry"
 )
 
 // StoreyEntity is one element's plan geometry on a storey: its footprint loops

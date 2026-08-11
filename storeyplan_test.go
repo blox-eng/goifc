@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/geometry"
-	"github.com/blox-eng/common/ifc/model"
+	"github.com/blox-eng/goifc/geometry"
+	"github.com/blox-eng/goifc/model"
 )
 
 func boxElem(gid string, min, max [3]float64) geometry.Element {

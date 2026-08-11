@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/blox-eng/common/ifc"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc"
+	"github.com/blox-eng/goifc/step"
 )
 
 // ExampleAssemble shows the end-to-end entry: raw IFC bytes -> parse -> Assemble

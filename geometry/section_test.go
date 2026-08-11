@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/model"
+	"github.com/blox-eng/goifc/model"
 )
 
 // elemBox builds an Element from an axis-aligned box with identity placement

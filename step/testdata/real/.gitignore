@@ -1,3 +1,0 @@
-# Real-world IFC fixtures are large and/or proprietary client data — never commit them.
-# Tests that use these skip when the file is absent (so CI stays green without them).
-*.ifc

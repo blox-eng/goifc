@@ -1,6 +1,6 @@
 package geometry
 
-import "github.com/blox-eng/common/ifc/step"
+import "github.com/blox-eng/goifc/step"
 
 // IfcProduct.Representation, IfcProductDefinitionShape.Representations,
 // IfcShapeRepresentation.Items — see plan Global Constraints for the full index map.

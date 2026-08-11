@@ -3,7 +3,7 @@ package model
 import (
 	"strings"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // predefinedType returns the PredefinedType enum label (dots already stripped

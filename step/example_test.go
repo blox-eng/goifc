@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // A tiny self-contained STEP/SPF document used by the examples.

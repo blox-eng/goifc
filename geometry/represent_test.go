@@ -3,8 +3,8 @@ package geometry
 import (
 	"testing"
 
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 func TestRepresentationItems_Extrusion(t *testing.T) {

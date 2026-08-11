@@ -3,9 +3,9 @@ package ifc
 import (
 	"fmt"
 
-	"github.com/blox-eng/common/ifc/geometry"
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/geometry"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 // Assembled is the end-to-end output of [Assemble]: the quantity-back-filled

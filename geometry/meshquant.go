@@ -3,7 +3,7 @@ package geometry
 import (
 	"math"
 
-	"github.com/blox-eng/common/ifc/model"
+	"github.com/blox-eng/goifc/model"
 )
 
 // meshQuantities computes tier-2 quantities from an element's WORLD-space proxy

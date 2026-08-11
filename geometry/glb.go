@@ -4,7 +4,7 @@ import (
 	"io"
 	"math"
 
-	"github.com/blox-eng/common/ifc/model"
+	"github.com/blox-eng/goifc/model"
 	"github.com/qmuntal/gltf"
 	"github.com/qmuntal/gltf/modeler"
 )

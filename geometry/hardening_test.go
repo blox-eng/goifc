@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // TestCollectPoints_ExtrudeLadderTerminates proves the collectPoints ->

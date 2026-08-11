@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // nodeByGID returns the built node with the given GlobalID.

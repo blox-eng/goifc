@@ -1,6 +1,6 @@
 package model
 
-import "github.com/blox-eng/common/ifc/step"
+import "github.com/blox-eng/goifc/step"
 
 // spatialClasses is the set of spatial-container classes emitted as import-tree
 // nodes, matching import_emit.py's _SPATIAL. IfcProject is intentionally

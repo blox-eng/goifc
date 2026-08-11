@@ -1,6 +1,6 @@
 package model
 
-import "github.com/blox-eng/common/ifc/step"
+import "github.com/blox-eng/goifc/step"
 
 // IfcSIUnit: [Dimensions, UnitType, Prefix, Name]
 const (

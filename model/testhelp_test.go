@@ -5,15 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
-
-func skipIfMissing(t *testing.T, path string) {
-	t.Helper()
-	if _, err := os.Stat(path); err != nil {
-		t.Skipf("fixture %s absent (gitignored real IFC); skipping", path)
-	}
-}
 
 func parseString(t *testing.T, spf string) *step.File {
 	t.Helper()

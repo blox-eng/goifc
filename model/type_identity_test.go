@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // TestTypeIdentity reads the type a typed element points at. The fixture

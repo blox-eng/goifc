@@ -3,7 +3,7 @@ package geometry
 import (
 	"math"
 
-	"github.com/blox-eng/common/ifc/model"
+	"github.com/blox-eng/goifc/model"
 )
 
 // DerivedQuantities computes tier-2 (geometry-derived, GROSS) quantities per

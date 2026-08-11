@@ -1,6 +1,6 @@
 package model
 
-import "github.com/blox-eng/common/ifc/step"
+import "github.com/blox-eng/goifc/step"
 
 // Psets ports ifcopenshell.util.element.get_psets(should_inherit=True): property
 // sets attached to inst via IfcRelDefinesByProperties, merged with property sets

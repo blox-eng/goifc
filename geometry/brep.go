@@ -1,6 +1,6 @@
 package geometry
 
-import "github.com/blox-eng/common/ifc/step"
+import "github.com/blox-eng/goifc/step"
 
 const (
 	attrBrepOuter        = 0 // IfcFacetedBrep.Outer

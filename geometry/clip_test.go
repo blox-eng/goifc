@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // TestClipTrianglesByBoundedPlane_MaterialSideRemoved regression-tests the

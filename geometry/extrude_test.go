@@ -3,8 +3,8 @@ package geometry
 import (
 	"testing"
 
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 // full_wall.ifc: a rectangle-profile wall extruded to a known height.

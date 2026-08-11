@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 // A closed box has an exact, sign-fold-invariant volume.
@@ -84,98 +84,6 @@ func TestDerivedQuantities_KnownBox(t *testing.T) {
 	// so Volume may be nil — but if present it must be a sane, in-box positive.
 	if q.Volume != nil && (*q.Volume <= 0 || *q.Volume > dx*dy*dz*1.0001) {
 		t.Errorf("Volume = %v out of (0, bbox=%v]", *q.Volume, dx*dy*dz)
-	}
-}
-
-// TestQuantityTiering_RealFiles is the end-to-end tier check on real models
-// (Extract -> Build -> ApplyDerivedQuantities). Skips when the gitignored source
-// files are absent, so CI stays green without them.
-func TestQuantityTiering_RealFiles(t *testing.T) {
-	for _, name := range []string{"office_a", "kb645"} {
-		path := "testdata/real/" + name + ".ifc"
-		if _, err := os.Stat(path); err != nil {
-			t.Skip(name + " absent")
-		}
-		t.Run(name, func(t *testing.T) {
-			f, err := step.ParseFile(path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			r, err := model.Extract(f)
-			if err != nil {
-				t.Fatal(err)
-			}
-			s, err := Build(f, r)
-			if err != nil {
-				t.Fatal(err)
-			}
-			derived := s.DerivedQuantities()
-			r.ApplyDerivedQuantities(derived)
-
-			meshed := map[string]bool{}
-			for i := range s.Elements {
-				if len(s.Elements[i].Tris) > 0 {
-					meshed[s.Elements[i].GlobalID] = true
-				}
-			}
-
-			var qto, geom, none int
-			for i := range r.Elements {
-				e := &r.Elements[i]
-				switch e.QuantitySource {
-				case model.QuantitySourceQto:
-					qto++
-				case model.QuantitySourceGeometry:
-					geom++
-					if e.Qto.IsEmpty() {
-						t.Errorf("%s source=geometry but Qto is empty — phantom upgrade", e.GlobalID)
-					}
-				case model.QuantitySourceNone:
-					none++
-					if !e.Qto.IsEmpty() {
-						t.Errorf("%s source=none but Qto not empty — no-phantom-0.0 violated", e.GlobalID)
-					}
-					// A meshed element may legitimately stay "none" ONLY if its
-					// derived entry is empty (a fully-degenerate/zero-extent mesh).
-					// A meshed element WITH real derived quantities must have been
-					// upgraded — if not, the geometry tier missed it.
-					if meshed[e.GlobalID] {
-						if dq, ok := derived[e.GlobalID]; ok && !dq.IsEmpty() {
-							t.Errorf("%s has a non-empty derived entry but stayed source=none — geometry tier missed it", e.GlobalID)
-						}
-					}
-				default:
-					t.Errorf("%s unknown quantity_source %q", e.GlobalID, e.QuantitySource)
-				}
-			}
-			t.Logf("%s tiers: qto=%d geometry=%d none=%d (total=%d)", name, qto, geom, none, len(r.Elements))
-			if geom == 0 {
-				t.Errorf("no elements got the geometry tier — expected many (few real models ship full Qto)")
-			}
-
-			// Evidence (not a hard gate): where an element carries BOTH authored
-			// Qto.Volume and a valid geometry-derived volume, the gross derived
-			// value should be in the ballpark of the net authored one.
-			var pairs, inBand int
-			for i := range r.Elements {
-				e := &r.Elements[i]
-				if e.QuantitySource != model.QuantitySourceQto || e.Qto.Volume == nil {
-					continue
-				}
-				dq, ok := derived[e.GlobalID]
-				if !ok || dq.Volume == nil || *dq.Volume <= 0 {
-					continue
-				}
-				pairs++
-				ratio := *dq.Volume / *e.Qto.Volume
-				if ratio >= 0.5 && ratio <= 5.0 {
-					inBand++
-				}
-			}
-			if pairs > 0 {
-				t.Logf("%s: geometry-gross vs authored-net volume within 0.5x-5x on %d/%d elements", name, inBand, pairs)
-			}
-		})
 	}
 }
 

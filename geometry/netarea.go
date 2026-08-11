@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 // NetArea is one host element's gross→net elevational reconciliation.

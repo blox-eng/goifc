@@ -3,8 +3,8 @@ package geometry
 import (
 	"math"
 
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 func identityMat() model.Mat4 { return model.Identity() }

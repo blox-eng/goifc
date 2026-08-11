@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/model"
+	"github.com/blox-eng/goifc/model"
 )
 
 // unitCube returns a watertight, outward-wound unit cube [0,1]^3 as float32 verts

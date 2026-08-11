@@ -1,7 +1,7 @@
 package model
 
 import (
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // IfcQuantity{Area,Volume,Length,...}: [Name,Description,Unit,<Value>,Formula] → value idx 3.

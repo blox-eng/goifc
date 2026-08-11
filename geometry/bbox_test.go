@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // TestCollectPoints_DepthBound proves collectPoints' walk terminates on a

@@ -1,8 +1,8 @@
 package geometry
 
 import (
-	"github.com/blox-eng/common/ifc/model"
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/model"
+	"github.com/blox-eng/goifc/step"
 )
 
 // GeomSource records which tessellation path produced an element's mesh:

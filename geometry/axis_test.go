@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/blox-eng/common/ifc/step"
+	"github.com/blox-eng/goifc/step"
 )
 
 // Regression for a review finding: axisPlacement2D read RefDirection via the
