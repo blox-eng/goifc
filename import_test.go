@@ -160,7 +160,7 @@ func TestBuildImport_MultiStoreyPlansDeterministic(t *testing.T) {
 
 // BuildImport must surface the type's build-up once per distinct IfcTypeObject,
 // keyed by the type GlobalId ResolveObjectTypes already keys on. Per-occurrence
-// duplication would multiply this by 1,388 on kb645 against a 2 MB payload cap.
+// duplication would multiply this against a 2 MB payload cap on real files.
 func TestBuildImportTypeLayers(t *testing.T) {
 	b, err := os.ReadFile("model/testdata/synthetic/wall_layerset_attrs.ifc")
 	if err != nil {

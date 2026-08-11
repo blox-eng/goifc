@@ -9,8 +9,8 @@ var spatialClasses = []string{"IfcSite", "IfcBuilding", "IfcBuildingStorey", "If
 
 // SpatialNodes returns the spatial-container elements (Site/Building/Storey/
 // Space) as semantic Elements, in deterministic id order. model.Extract omits
-// these — it is physical-only, to match the #2211 parity oracle
-// (semantic_oracle.py's by_type("IfcElement")) — so the #2213 cutover recovers
+// these — it is physical-only, to match the parity oracle
+// (semantic_oracle.py's by_type("IfcElement")) — so SpatialNodes recovers
 // them here to reproduce the Python import contract's site→storey→element tree.
 //
 // These carry identity, name, and AUTHORED (tier-1) Qto — import_emit.py runs

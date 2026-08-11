@@ -55,7 +55,7 @@ func maxSideArea(w []v3, tris []uint32) float64 {
 }
 
 // maxSideAreaAxis is maxSideArea extended to also report which projection won,
-// for callers (e.g. net-area opening subtraction, #2213) that need to measure
+// for callers (e.g. net-area opening subtraction) that need to measure
 // openings on the same plane as their host's max-side pick.
 //
 // axis is the DROPPED coordinate index of the winning projection — i.e. the

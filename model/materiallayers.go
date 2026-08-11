@@ -21,7 +21,7 @@ const attrMaterialName = 0
 
 // MaterialLayer is one IfcMaterialLayer with its per-layer attributes preserved.
 // materialLeaves (element.go) walks the same list but flattens each layer to its
-// IfcMaterial, which is exactly the information loss #2519 exists to stop.
+// IfcMaterial, which is exactly the information loss MaterialLayer exists to stop.
 //
 // Every field is absent-safe: a nil pointer or an empty string means the
 // attribute was $ (unset) or, for IsVentilated, .U. (EXPRESS LOGICAL unknown).
@@ -29,8 +29,8 @@ const attrMaterialName = 0
 // phantom "solid" reads as measured fact downstream.
 //
 // IfcMaterialLayer.Priority (0-100, joint/corner interpenetration) is read by
-// nothing here on purpose: #2387 dropped it, and it is named there so import is
-// not silently losing it.
+// nothing here on purpose — it is named here so callers know it exists rather
+// than silently losing it.
 type MaterialLayer struct {
 	// MaterialName is IfcMaterial.Name verbatim; "" when the layer's Material is
 	// unset. NOT a catalog key — base.materials is priced and has no external_id.

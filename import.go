@@ -26,10 +26,8 @@ type ImportNode struct {
 	IsExternal     *bool    // *Common.IsExternal tri-state; nil when unknown
 	NetArea        *float64 // trusted net area (m²) from Scene.NetAreas; nil when absent/untrusted
 
-	// TypeGlobalID / TypeName / TypeClass identify the element's IfcTypeObject
-	// (#2395a). Empty when the element carries no IfcRelDefinesByType. Measured
-	// on kb645: 1,388 of 1,389 candidate occurrences carry one, including
-	// 526/526 walls.
+	// TypeGlobalID / TypeName / TypeClass identify the element's IfcTypeObject.
+	// Empty when the element carries no IfcRelDefinesByType — most elements do.
 	TypeGlobalID string
 	TypeName     string
 	TypeClass    string

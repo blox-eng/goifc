@@ -107,12 +107,12 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 // downward-facing (−Z normal) faces, stitched into closed world-XY rings.
 // World XY, Y-up (no flip). Reuses stitchParityRings.
 //
-// LIMITATION (#2432 v1 light context): true below-context is the projected-
-// polygon UNION of all downward patches. This parity-boundary approach is a
-// lighter approximation — for a non-convex/furniture solid whose downward faces
-// sit at different heights, overlapping projected patches may leave internal
-// boundary edges rather than one filled silhouette. Acceptable because "below"
-// is drawn as light context only; a full 2D polygon-union library is DEFERRED.
+// LIMITATION: true below-context is the projected-polygon UNION of all
+// downward patches. This parity-boundary approach is a lighter approximation —
+// for a non-convex/furniture solid whose downward faces sit at different
+// heights, overlapping projected patches may leave internal boundary edges
+// rather than one filled silhouette. Acceptable because "below" is drawn as
+// light context only; a full 2D polygon-union library is a possible follow-up.
 func belowRings(w []v3, tris []uint32) [][][2]float64 {
 	nv := uint32(len(w))
 

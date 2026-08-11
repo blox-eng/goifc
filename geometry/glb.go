@@ -29,10 +29,9 @@ func (s *Scene) WriteGLB(w io.Writer) error {
 			continue
 		}
 		// Weld coincident vertices: the brep mesher emits a fresh vertex block per
-		// IfcFace (no cross-face sharing), which bloats the GLB ~4x on real files
-		// (kb645: 2.39M → 592K verts). Welding by quantized local position restores
-		// vertex sharing — Go-native, no meshopt/gltfpack dependency (the epic's
-		// "tiny meshes, no optimizer" thesis holds once verts are actually shared).
+		// IfcFace (no cross-face sharing), which bloats the GLB several-fold on real
+		// files. Welding by quantized local position restores vertex sharing —
+		// Go-native, no meshopt/gltfpack dependency needed.
 		positions, indices := weldMesh(e.Verts, e.Tris)
 		posAcc := modeler.WritePosition(doc, positions)
 		idxAcc := modeler.WriteIndices(doc, indices)

@@ -140,7 +140,7 @@ func deref(p *float64) float64 {
 }
 
 // A meshed element whose world-AABB collapses on an axis must NOT emit a
-// fabricated 0.0 for that axis — the #2159 phantom-zero, one tier down.
+// fabricated 0.0 for that axis, one tier down.
 func TestDerivedQuantities_DegenerateMeshEmitsNoZero(t *testing.T) {
 	// Flat element: nonzero X/Y extent, ZERO Z extent (Height must be nil).
 	flat := Scene{Elements: []Element{{
@@ -292,7 +292,7 @@ func closeAbs(t *testing.T, name string, got *float64, want, eps float64) {
 	}
 }
 
-// TestDerivedQuantities_KnownBox_Absolute is an ABSOLUTE golden (child 5, #2211).
+// TestDerivedQuantities_KnownBox_Absolute is an ABSOLUTE golden.
 // TestDerivedQuantities_KnownBox asserts the derived dims equal the element's own
 // computed AABB — a consistency check that stays green even if the AABB is wrongly
 // SCALED (both sides move together). This pins the derived dims to hand-verified
@@ -321,8 +321,8 @@ func TestDerivedQuantities_KnownBox_Absolute(t *testing.T) {
 	}
 }
 
-// TestDerivedQuantities_ClosedBox_Absolute is the ABSOLUTE mesh-quantity golden
-// (child 5 #2211 + #2213). closed_box.ifc is a watertight 6-face unit cube at
+// TestDerivedQuantities_ClosedBox_Absolute is the ABSOLUTE mesh-quantity golden.
+// closed_box.ifc is a watertight 6-face unit cube at
 // world (10,20,5), so ALL mesh-derived tier-2 quantities are hand-verifiable and
 // must match the ifcopenshell definitions exactly, independent of the Python
 // oracle: gross mesh volume 1.0 m^3 (divergence-theorem sum), max-side-area 1.0 m^2

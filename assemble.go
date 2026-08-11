@@ -24,9 +24,8 @@ type Assembled struct {
 //	Scene.DerivedQuantities tier-2 GROSS quantities from the meshes
 //	Result.ApplyDerivedQuantities back-fills them onto un-authored elements
 //
-// It is the single production entry point for the engine: before it the four
-// stages were unchained manual calls with zero prod callers, so every consumer
-// risked reinventing the chain (the ④b seam).
+// It is the single production entry point for the engine: it chains the four
+// stages so callers never have to reinvent the chain.
 //
 // Quantity tiering follows model.ApplyDerivedQuantities: authored Qto (tier-1,
 // NET) always wins; where absent, the GROSS geometry-derived quantities back-fill

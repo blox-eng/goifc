@@ -23,8 +23,8 @@ func TestQtoQuantitiesTier1(t *testing.T) {
 	}
 }
 
-// TestQtoQuantitiesTier1_UnitScaling is an ABSOLUTE golden (child 5, #2211): it
-// pins the length/area/volume unit exponents against hand-verified truth,
+// TestQtoQuantitiesTier1_UnitScaling is an ABSOLUTE golden: it pins the
+// length/area/volume unit exponents against hand-verified truth,
 // independent of the Python oracle. wall_qto.ifc authors NetSideArea=12.5,
 // NetVolume=3.0, Length=5.0 in file units; a millimeter file (scale=0.001) must
 // scale length by scale, area by scale^2, volume by scale^3. A wrong exponent

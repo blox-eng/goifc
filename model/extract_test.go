@@ -86,7 +86,7 @@ func TestExtractFullWall(t *testing.T) {
 		t.Errorf("door.ParentIndex = %v want nil (container is a storey, not an emitted element)", *door.ParentIndex)
 	}
 	// No-Qto is signaled by QuantitySource="none" (asserted above), not a
-	// per-element warning — #2210 wired the geometry tier that back-fills these.
+	// per-element warning — the geometry tier back-fills these.
 }
 
 // TestExtractPartialQtoZeroedOnNone proves the `q = Quantities{}` guard in

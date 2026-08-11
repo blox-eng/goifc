@@ -8,8 +8,8 @@ import (
 // TestSpatialNodes_FullChain: the import contract (import_emit.py) emits the
 // spatial containers Site/Building/Storey/Space as nodes — but NOT IfcProject
 // (_SPATIAL = Site,Building,Storey,Space) — so the object tree nests elements
-// under their storey. model.Extract omits these (physical-only, for the #2211
-// parity oracle), so SpatialNodes recovers them for the #2213 cutover.
+// under their storey. model.Extract omits these (physical-only, for the
+// parity oracle), so SpatialNodes recovers them.
 func TestSpatialNodes_FullChain(t *testing.T) {
 	f := parseString(t, mustRead(t, "testdata/synthetic/spatial_full.ifc"))
 	nodes := SpatialNodes(f)

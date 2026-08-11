@@ -11,11 +11,10 @@
 //	}
 //	a.Scene.WriteGLB(w) // proxy geometry for a viewer
 //
-// FOLLOW-UP (parked — do NOT fix in ④b; regression anchor for a later child):
-// the geometry-derived Volume tier is GROSS. For walls with openings the extrude
-// path reports the SOLID (un-subtracted) volume, so those elements over-report
-// by the entire remaining >20% volume band vs ifcopenshell's NET figure (go is
-// GROSS, os is NET). The quantity_source="geometry" tag already flags these as
-// bounding estimates, so no consumer mistakes one for an authored net Qto —
-// netting openings out of the extrude volume is deliberately out of scope here.
+// KNOWN LIMITATION: the geometry-derived Volume tier is GROSS. For walls with
+// openings the extrude path reports the SOLID (un-subtracted) volume, so those
+// elements over-report versus ifcopenshell's NET figure. The
+// quantity_source="geometry" tag already flags these as bounding estimates, so
+// no consumer mistakes one for an authored net Qto — netting openings out of
+// the extrude volume is deliberately out of scope here.
 package ifc

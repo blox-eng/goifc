@@ -36,7 +36,7 @@ func (s *Scene) DerivedQuantities() map[string]model.Quantities {
 		if width > length {
 			length, width = width, length
 		}
-		// Area + perimeter come from the MESH (ifcopenshell parity, #2213): area =
+		// Area + perimeter come from the MESH (ifcopenshell parity): area =
 		// get_max_side_area (largest elevational face, e.g. a wall's face, NOT the
 		// thin plan footprint); perimeter = get_footprint_perimeter. Length/Width/
 		// Height stay world-AABB extents. For brep-passthrough elements the proxy
@@ -70,7 +70,7 @@ func (s *Scene) DerivedQuantities() map[string]model.Quantities {
 
 // pos returns &v for a positive extent, or nil when v <= 0. A zero-extent
 // dimension is ABSENT, never a fabricated 0.0 — this is what upholds the
-// model's nil-means-absent contract at the geometry tier (the #2159 guard).
+// model's nil-means-absent contract at the geometry tier.
 func pos(v float64) *float64 {
 	if v <= 0 {
 		return nil

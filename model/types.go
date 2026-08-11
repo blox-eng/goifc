@@ -40,10 +40,11 @@ type Quantities struct {
 	Area, Volume, Length, Width, Height, Perimeter *float64
 }
 
-// Element is one semantic IFC element (the child-2 contract; geometry is child 3).
+// Element is one semantic IFC element; proxy geometry is built separately by
+// the geometry package.
 type Element struct {
 	GlobalID string
-	// ExpressID is the STEP instance id (#id); child 3 geometry looks the
+	// ExpressID is the STEP instance id (#id); the geometry package looks the
 	// instance back up via step.File.ByID.
 	ExpressID      int
 	IFCClass       string
@@ -55,14 +56,14 @@ type Element struct {
 	IsExternal     *bool
 	Psets          map[string]map[string]any
 	// Qto holds tier-1 Qto scalars (L/W/H frequently nil — only Area gates
-	// hasQto/QuantitySource=="qto"). Child 3's OBB fallback should derive
-	// dimensions from the geometry bbox, not rely on these being populated.
+	// hasQto/QuantitySource=="qto"). The geometry package's OBB fallback should
+	// derive dimensions from the geometry bbox, not rely on these being populated.
 	Qto            Quantities
-	QuantitySource string // "qto" | "none"  (child 4 adds "geometry")
+	QuantitySource string // "qto" | "none" | "geometry"
 	// Placement is the ObjectPlacement WORLD transform ONLY, with its
 	// translation ALREADY scaled to meters (see Result.UnitScale). It does NOT
 	// include an IfcMappedItem's mapping transform or a representation item's
-	// local Position — child 3 must compose those itself from the
+	// local Position — the geometry package must compose those itself from the
 	// representation (fetched via ExpressID -> step.File.ByID), and must NOT
 	// re-scale this translation.
 	Placement   Mat4
@@ -75,7 +76,8 @@ type Result struct {
 	Elements []Element
 	// UnitScale converts RAW file-unit length values to meters. Element.Placement
 	// translations are already scaled by this; representation-item coordinates
-	// fetched via Element.ExpressID are NOT — child 3 must scale those itself.
+	// fetched via Element.ExpressID are NOT — the geometry package must scale
+	// those itself.
 	UnitScale float64
 	Warnings  []string
 }

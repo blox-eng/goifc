@@ -85,8 +85,8 @@ func GetType(f *step.File, inst *step.Instance) *step.Instance {
 // file spells it (IFCWALLTYPE). Callers compare case-insensitively.
 //
 // NOTE: do not filter on the class ending in "Type". IFC2X3 spells door and
-// window types IfcDoorStyle / IfcWindowStyle — kb645 carries 6 IFCDOORSTYLE
-// types that any suffix check would silently drop.
+// window types IfcDoorStyle / IfcWindowStyle, which a suffix check would
+// silently drop.
 func TypeIdentity(f *step.File, inst *step.Instance) (globalID, name, class string) {
 	typ := GetType(f, inst)
 	if typ == nil {

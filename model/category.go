@@ -223,8 +223,8 @@ var structuralPrefixes = []string{
 	"IFCWALL", "IFCSLAB", "IFCCOLUMN", "IFCBEAM", "IFCROOF", "IFCSTAIR", "IFCRAMP",
 }
 
-// isStructural reports whether class becomes a priced base object (#2202
-// emit rule, blocker 4). Spatial containers are handled separately in Extract.
+// isStructural reports whether class becomes a priced base object. Spatial
+// containers are handled separately in Extract.
 func isStructural(class string) bool {
 	c := strings.ToUpper(class)
 	for _, p := range structuralPrefixes {

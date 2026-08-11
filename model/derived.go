@@ -16,11 +16,11 @@ const (
 // geometry.Scene.DerivedQuantities, which lives in the geometry package so this
 // one stays free of a geometry import / cycle).
 //
-// Tiering guarantees, matching #2210's acceptance:
+// Tiering guarantees:
 //   - "qto" elements are never touched — authored NET quantities always outrank
 //     geometry-derived GROSS ones (prefer-net-over-gross).
 //   - an element whose derived entry is missing or empty stays "none" — a missing
-//     quantity is never coerced to a phantom 0.0 (the #2159 bug).
+//     quantity is never coerced to a phantom 0.0.
 //   - only elements upgraded here flip to source="geometry".
 func (r *Result) ApplyDerivedQuantities(derived map[string]Quantities) {
 	for i := range r.Elements {
