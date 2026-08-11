@@ -59,10 +59,11 @@ body:
       label: Steps to Reproduce
       description: Providing clear, step-by-step instructions helps us reproduce and fix the issue faster. If we can't reproduce it, we can't fix it.
       placeholder: |
-        1. Parse example.ifc with step.Parse(f)
-        2. Call model.Walls() on the resulting model
-        3. Observe the volume for wall W-104 returned as 0 instead of ~2.4 m3
-        4. (or) Observe a panic in geometry.ComputeVolume — see stack trace below
+        1. f, _ := step.ParseFile("example.ifc")
+        2. a, _ := ifc.Assemble(f)
+        3. Element "W-104" (a.Result.Elements[i]) reports QuantitySource "none"
+           where I expected "qto", and Qto.Volume is nil
+        4. (or) ifc.Assemble panics on this file — see stack trace below
     validations:
       required: true
 
