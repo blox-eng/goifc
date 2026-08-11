@@ -43,24 +43,35 @@ body:
       required: true
 
   - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: The goifc module version (or commit SHA) and your `go version` output.
+      placeholder: |
+        goifc v0.3.1 (or commit 1a2b3c4)
+        go version go1.25.4 linux/amd64
+    validations:
+      required: true
+
+  - type: textarea
     id: reproduction-steps
     attributes:
       label: Steps to Reproduce
       description: Providing clear, step-by-step instructions helps us reproduce and fix the issue faster. If we can't reproduce it, we can't fix it.
       placeholder: |
-        1. Conjourne this '...'
-        2. Read this scroll '...'
-        3. Cast this spell '...'
-        4. See the chanting spell dust settling '...'
+        1. Parse example.ifc with step.Parse(f)
+        2. Call model.Walls() on the resulting model
+        3. Observe the volume for wall W-104 returned as 0 instead of ~2.4 m3
+        4. (or) Observe a panic in geometry.ComputeVolume — see stack trace below
     validations:
       required: true
 
   - type: textarea
-    id: logs-screenshots
+    id: logs-output
     attributes:
-      label: Logs & Screenshots
-      description: Include relevant logs, errors, screenshots, or anything that might help us identify the bug.
-      placeholder: 'Attach logs from the browser console or error messages.'
+      label: Logs & Stack Trace
+      description: Include the full panic stack trace, relevant `go test` output, and/or a minimal IFC file or code snippet that reproduces the issue.
+      placeholder: 'Paste the panic stack trace or go test -v output here, or attach a minimal .ifc file that reproduces the issue.'
     validations:
       required: true
 
