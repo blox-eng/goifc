@@ -68,12 +68,12 @@ func (p *parser) internType(raw []byte) string {
 func (p *parser) parseDocument() error {
 	for {
 		tok := p.s.Next()
-		switch {
-		case tok.Kind == TokEOF:
+		switch tok.Kind {
+		case TokEOF:
 			return nil
-		case tok.Kind == TokSemi:
+		case TokSemi:
 			continue // stray section terminator (e.g. after ISO-10303-21, ENDSEC)
-		case tok.Kind == TokKeyword:
+		case TokKeyword:
 			kw := strings.ToUpper(string(tok.Text))
 			switch kw {
 			case "ISO-10303-21", "ENDSEC", "HEADER":
@@ -90,7 +90,7 @@ func (p *parser) parseDocument() error {
 					return err
 				}
 			}
-		case tok.Kind == TokRef:
+		case TokRef:
 			if err := p.parseInstance(tok); err != nil {
 				return err
 			}

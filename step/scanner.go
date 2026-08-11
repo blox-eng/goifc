@@ -166,7 +166,7 @@ func (s *Scanner) skipTrivia() {
 		}
 		if c == '/' && s.pos+1 < len(s.src) && s.src[s.pos+1] == '*' {
 			s.pos += 2
-			for s.pos+1 < len(s.src) && !(s.src[s.pos] == '*' && s.src[s.pos+1] == '/') {
+			for s.pos+1 < len(s.src) && (s.src[s.pos] != '*' || s.src[s.pos+1] != '/') {
 				s.pos++
 			}
 			if s.pos+1 < len(s.src) {

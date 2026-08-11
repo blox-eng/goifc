@@ -143,5 +143,5 @@ func pointInTri(p, a, b, c [2]float64) bool {
 	d3 := cross2D(p, c, a)
 	hasNeg := d1 < 0 || d2 < 0 || d3 < 0
 	hasPos := d1 > 0 || d2 > 0 || d3 > 0
-	return !(hasNeg && hasPos)
+	return !hasNeg || !hasPos
 }
