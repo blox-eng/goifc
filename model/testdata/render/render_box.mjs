@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// render_box.mjs — Gate-0 visual proof harness for #2208.
+// render_box.mjs — visual proof harness for the tokenize->semantic->GLB pipeline.
 //
 // Loads a .glb (produced by internal/boxglb.WriteBox) into a headless
 // three.js scene via Playwright, orbits a camera around the mesh's bounding
 // box, and screenshots the result to a PNG. THROWAWAY — this only exists to
-// visually confirm the Gate-0 tokenize→semantic→GLB→render pipeline shape;
-// it is not the real geometry viewer (see common/ifc/geometry, #2209).
+// visually confirm the tokenize→semantic→GLB→render pipeline shape;
+// it is not the real geometry viewer.
 //
 // Usage: node render_box.mjs <in.glb> <out.png>
 //
