@@ -5,14 +5,12 @@ ifcopenshell's parser + `entity_instance` model into idiomatic Go. Parses a `.if
 file in-process into a navigable entity graph with **forward and inverse**
 references. No CAD kernel, no Python, no EXPRESS schema.
 
-Part of the Go-native IFC engine (epic #2206), child 1 (#2207).
-
 ## Scope: pure SPF, not the schema
 
 A STEP file is purely positional — `#5=IFCWALL('guid',#6,'name',...)` stores
 attributes by position, never by name. This package exposes exactly what the raw
 stream yields; naming and type-hierarchy features are a separate schema layer
-(child 2) built on top.
+built on top.
 
 | In scope (pure SPF, no schema) | Out of scope (needs the EXPRESS schema) |
 |---|---|
@@ -63,7 +61,7 @@ ParseBytes(src)
           -> dangling ref = non-fatal warning (ifcopenshell SYN 28 parity)
 ```
 
-## Measured — kb645.ifc (28 MB IFC2X3 ArchiCAD export)
+## Measured — a 28 MB IFC2X3 ArchiCAD export
 
 | Metric | Value |
 |---|---|
@@ -75,7 +73,7 @@ ParseBytes(src)
 | **Peak heap** | **~306 MB** |
 | Allocations | ~500 MB / 3.7 M allocs per parse |
 
-**Memory driver (for #2206 child 6 worker bounding):** peak is dominated by the
+**Memory driver:** peak is dominated by the
 ~3.7 M `Value` structs (**72 B each ≈ 266 MB**, after field-order packing from 80 B),
 not string data — so string interning would not move peak. At ~30% of a 1 GB budget
 there's ample headroom; a columnar/arena `Value` rework is deferred behind this
@@ -86,4 +84,4 @@ count.
 ## Not in this package
 
 Semantic model (`IFCElement[]`), geometry, quantities, and the EXPRESS schema layer
-are later children of #2206. This package stops at the navigable graph.
+are built on top of this package. This package stops at the navigable graph.
