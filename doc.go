@@ -1,4 +1,4 @@
-// Package ifc is the top-level entry to the common/ifc Go-native engine. It
+// Package ifc is the top-level entry to the goifc Go-native IFC engine. It
 // wires the per-stage packages — step (STEP/EXPRESS parse) -> model (semantic
 // extraction) -> geometry (proxy tessellation + derived quantities) — into a
 // single [Assemble] call that turns a parsed STEP file into quantity-back-filled

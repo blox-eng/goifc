@@ -9,15 +9,15 @@ import (
 )
 
 // Assembled is the end-to-end output of [Assemble]: the quantity-back-filled
-// semantic Result — the []model.Element seam that ⑤ golden-diffs and ⑦ (flow
-// cutover) consumes — paired with the proxy-geometry Scene it was derived from,
+// semantic Result — the []model.Element that downstream consumers golden-diff
+// and import — paired with the proxy-geometry Scene it was derived from,
 // for WriteGLB and mesh Stats. Elements in the two share identity via GlobalID.
 type Assembled struct {
 	Result *model.Result
 	Scene  *geometry.Scene
 }
 
-// Assemble runs the full common/ifc pipeline over a parsed STEP file, in order:
+// Assemble runs the full ifc pipeline over a parsed STEP file, in order:
 //
 //	model.Extract          semantic elements ([]model.Element)
 //	geometry.Build         proxy geometry per element

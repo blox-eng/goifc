@@ -9,8 +9,9 @@ import (
 )
 
 // StoreyEntity is one element's plan geometry on a storey: its footprint loops
-// (world XY meters, Y-up), tagged by IFC class, keyed by GlobalID. flow resolves
-// GlobalID -> Blox object_id when baking the storey's Drawing.
+// (world XY meters, Y-up), tagged by IFC class, keyed by GlobalID. Consumers
+// typically resolve GlobalID to their own domain object id when rendering
+// the storey's floor plan.
 type StoreyEntity struct {
 	GlobalID string
 	IFCClass string

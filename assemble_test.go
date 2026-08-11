@@ -55,7 +55,7 @@ END-ISO-10303-21;`
 // TestAssemble_SyntheticChainsAllStages is the CI-safe wiring guard: it proves
 // Assemble runs all four stages and that a meshed element with no authored Qto
 // is back-filled to quantity_source="geometry" (never a phantom 0.0), and that
-// the returned Scene is GLB-writable — the two seams ⑤/⑦ depend on.
+// the returned Scene is GLB-writable.
 func TestAssemble_SyntheticChainsAllStages(t *testing.T) {
 	f, err := step.ParseBytes([]byte(boxIFC))
 	if err != nil {
@@ -72,10 +72,9 @@ func TestAssemble_SyntheticChainsAllStages(t *testing.T) {
 		t.Fatalf("Result.Elements = %d, want 1", len(a.Result.Elements))
 	}
 	// Scene and Result must stay index/GlobalID-aligned — the identity contract
-	// doc.go promises to ⑤ (golden-diff) and ⑦ (flow cutover). If a future Build
-	// change dropped or reordered elements, the two consumers would silently
-	// desync; this is the one invariant this seam can guard that the geometry
-	// package's hand-wired test cannot.
+	// doc.go promises to consumers. If a future Build change dropped or reordered
+	// elements, consumers would silently desync; this is the one invariant this
+	// seam can guard that the geometry package's hand-wired test cannot.
 	if len(a.Scene.Elements) != len(a.Result.Elements) {
 		t.Fatalf("Scene/Result element count mismatch: %d vs %d", len(a.Scene.Elements), len(a.Result.Elements))
 	}

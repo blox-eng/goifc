@@ -154,7 +154,7 @@ func TestBuildImport_MultiStoreyPlansDeterministic(t *testing.T) {
 	f2 := parseFixture(t, "testdata/two_storey_spanning.ifc")
 	m2, _ := BuildImport(f2)
 	if !reflect.DeepEqual(m1.StoreyPlans, m2.StoreyPlans) {
-		t.Fatal("StoreyPlans not byte-identical across re-import (determinism / #1344 drift protection)")
+		t.Fatal("StoreyPlans not byte-identical across re-import (determinism drift protection)")
 	}
 }
 
