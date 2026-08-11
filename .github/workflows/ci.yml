@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  conventional-commits:
+    name: Conventional Commits Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+     - name: Conventional Commits
+       uses: webiny/action-conventional-commits@7f91b1595ca1951cdb671ddc9f07a49081ec5b69 # v1.4.2
+       with:
+         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         allowed-commit-types: "feat,fix,cicd,chore,patch,release,test,docs,refactor,ci,dev"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: conventional-commits
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.4'
+          cache: true
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          args: --timeout=5m
+          skip-cache: true
+          skip-save-cache: true
+        env:
+          GOPROXY: https://proxy.golang.org,direct
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.4'
+          cache: true
+      - name: Run tests
+        # goifc is pure Go with no cgo dependencies. Pinning CGO_ENABLED=0
+        # asserts that property in CI: if a dependency ever sneaks in a cgo
+        # requirement, the build fails loudly here instead of silently
+        # linking against system libraries.
+        env:
+          CGO_ENABLED: '0'
+        run: go test -v -cover ./...
