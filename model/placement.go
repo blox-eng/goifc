@@ -84,11 +84,11 @@ func coords(inst *step.Instance) []float64 {
 	return out
 }
 
-func dot(a, b []float64) float64 { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] }
-func sub(a, b []float64) []float64 { return []float64{a[0]-b[0], a[1]-b[1], a[2]-b[2]} }
-func scale(a []float64, s float64) []float64 { return []float64{a[0]*s, a[1]*s, a[2]*s} }
+func dot(a, b []float64) float64             { return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] }
+func sub(a, b []float64) []float64           { return []float64{a[0] - b[0], a[1] - b[1], a[2] - b[2]} }
+func scale(a []float64, s float64) []float64 { return []float64{a[0] * s, a[1] * s, a[2] * s} }
 func cross(a, b []float64) []float64 {
-	return []float64{a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]}
+	return []float64{a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]}
 }
 func normalize(a []float64) []float64 {
 	n := dot(a, a)
