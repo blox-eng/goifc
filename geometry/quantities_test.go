@@ -243,8 +243,8 @@ func TestMeshVolume_WatertightGate(t *testing.T) {
 }
 
 // A closed 2-manifold that is INCONSISTENTLY wound (one triangle flipped) must
-// also be rejected — the signed sum would be wrong. This is the exact defect
-// Task 1 removes at the source; the gate is the backstop.
+// also be rejected — the signed sum would be wrong. Tessellation already emits
+// consistently wound triangles; this gate is the backstop if that ever slips.
 func TestMeshVolume_InconsistentWindingRejected(t *testing.T) {
 	verts, tris := boxMesh(v3{0, 0, 0}, v3{2, 3, 4})
 	tris[1], tris[2] = tris[2], tris[1] // flip one triangle's winding

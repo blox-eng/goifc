@@ -25,10 +25,10 @@ func TestMat4IdentityAndMul(t *testing.T) {
 func TestMat4MulComposesRotationThenTranslation(t *testing.T) {
 	// 90° about Z: X axis -> +Y. Column-major basis columns.
 	rot := Identity()
-	rot[0], rot[1] = 0, 1 // new X column = (0,1,0)
+	rot[0], rot[1] = 0, 1  // new X column = (0,1,0)
 	rot[4], rot[5] = -1, 0 // new Y column = (-1,0,0)
 	trans := Identity()
-	trans[12] = 5 // translate +5 X in parent frame
+	trans[12] = 5           // translate +5 X in parent frame
 	world := trans.Mul(rot) // parent(trans) applied to child(rot)
 	x, _, _ := world.Translation()
 	if math.Abs(x-5) > 1e-9 {

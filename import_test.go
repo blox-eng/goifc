@@ -79,7 +79,7 @@ func TestBuildImport_Tree(t *testing.T) {
 			t.Errorf("%s parent = %q want %q", child, got, wantParent)
 		}
 	}
-	check("Site A", "")          // root (its parent IfcProject is not emitted)
+	check("Site A", "")           // root (its parent IfcProject is not emitted)
 	check("Building A", "Site A") // aggregate chain
 	check("Level 1", "Building A")
 	check("Room 101", "Level 1") // space aggregated into storey

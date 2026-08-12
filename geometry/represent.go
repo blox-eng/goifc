@@ -2,8 +2,11 @@ package geometry
 
 import "github.com/blox-eng/goifc/step"
 
+// Positional attribute indices (0-based) along the representation chain:
 // IfcProduct.Representation, IfcProductDefinitionShape.Representations,
-// IfcShapeRepresentation.Items — see plan Global Constraints for the full index map.
+// IfcShapeRepresentation.RepresentationIdentifier and .Items. Stable across
+// IFC2X3 and IFC4 — model/ifcattr.go applies the same convention to the
+// semantic entities.
 const (
 	attrProductRepresentation = 6
 	attrShapeRepresentations  = 2
