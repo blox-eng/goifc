@@ -8,7 +8,7 @@ import (
 
 func TestHorizontalPlaneIsRightHanded(t *testing.T) {
 	p := HorizontalPlane(2.5)
-	if !p.valid() {
+	if !p.Valid() {
 		t.Fatalf("HorizontalPlane must be a valid right-handed basis: %+v", p)
 	}
 	if p.Origin != [3]float64{0, 0, 2.5} {
@@ -23,7 +23,7 @@ func TestPlaneValidRejectsLeftHanded(t *testing.T) {
 	// U=+X, V=+Y, N=-Z reads as a reasonable "look up instead of down" plane and
 	// is left-handed: it would silently swap outer rings and holes.
 	p := Plane{Origin: [3]float64{0, 0, 0}, U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, -1}}
-	if p.valid() {
+	if p.Valid() {
 		t.Fatal("left-handed basis must be rejected")
 	}
 }
@@ -36,7 +36,7 @@ func TestPlaneValidRejectsNonOrthonormal(t *testing.T) {
 		"NaN origin":        {Origin: [3]float64{math.NaN(), 0, 0}, U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, 1}},
 	}
 	for name, p := range cases {
-		if p.valid() {
+		if p.Valid() {
 			t.Errorf("%s: must be rejected", name)
 		}
 	}
@@ -51,7 +51,7 @@ func TestPlaneFromNormalProducesValidBasis(t *testing.T) {
 		if !ok {
 			t.Fatalf("n=%v: want ok", n)
 		}
-		if !p.valid() {
+		if !p.Valid() {
 			t.Fatalf("n=%v: basis invalid: %+v", n, p)
 		}
 		want := normv(n)

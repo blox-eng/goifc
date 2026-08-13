@@ -159,8 +159,9 @@ the value is retained for compatibility with drawings already on disk.
 The regression gate matters more than the new tests: **the entire existing section
 suite must pass byte-identically through the `HorizontalPlane` delegation.**
 `TestSectionRingsCubeMidCut`, `TestFootprintHoleNesting`, `TestSectionRingsTJunction`,
-`TestSectionRingsOnPlaneFace`, and `TestSectionRingsCornerTouch` are parameterized
-over planes rather than replaced.
+`TestSectionRingsOnPlaneFace`, and `TestSectionRingsCornerTouch` are unchanged —
+they are simply passed `HorizontalPlane(...)` at their call sites rather than
+being replaced.
 
 New cases:
 
@@ -177,7 +178,9 @@ New cases:
 - **`PlaneFromNormal`** — produces a valid right-handed basis for axis-aligned,
   oblique, and near-degenerate normals; `ok=false` for zero-length and non-finite.
 - **Silhouette is invariant under flipping N** — the same closed box, cut with two
-  opposed planes clear of the mesh, yields byte-identical rings. This pins a property
+  opposed planes clear of the mesh, yields rings of the same area (the two planes have
+  different U/V bases, so the rings cannot be byte-identical; the test compares areas
+  only). This pins a property
   that is easy to assume is a hazard and is not: for a closed solid the parity boundary
   of the front-facing set equals that of the back-facing set, because edges shared by
   two front faces cancel while each silhouette edge is shared by one front and one back

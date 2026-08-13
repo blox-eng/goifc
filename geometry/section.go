@@ -5,14 +5,14 @@ import (
 	"sort"
 )
 
-// Section-cut ring extraction: slice a triangle mesh at a horizontal plane
-// z = cutZ and recover the closed world-XY poché rings. Manifold-hardened and
-// deterministic — the same input always yields byte-identical output, so
+// Section-cut ring extraction: slice a triangle mesh at an arbitrary plane and
+// recover the closed poché rings in that plane's UV coordinates. Manifold-hardened
+// and deterministic — the same input always yields byte-identical output, so
 // downstream source-model drift detection sees no false churn.
 
 const (
 	sectionWeldQuantum = 1e5  // 1e-5 m weld quantum (matches footprintPerimeter)
-	sectionOnPlaneEps  = 1e-9 // |z-cutZ| below this counts a vertex as on-plane
+	sectionOnPlaneEps  = 1e-9 // signed distance from the plane below this counts a vertex as on-plane
 	sectionAreaEps     = 1e-12
 )
 
@@ -156,17 +156,21 @@ func belowRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 type LoopRole string
 
 const (
-	LoopCut        LoopRole = "cut"   // section poché — the plane crosses the solid
-	LoopSilhouette LoopRole = "below" // the outline of faces opposing the plane normal,
-	// drawn as light context. Named "below" historically, when the only
-	// supported plane was horizontal and this was always the view from above.
+	LoopCut LoopRole = "cut" // section poché — the plane crosses the solid
+
+	// LoopSilhouette is the outline of faces opposing the plane normal, drawn
+	// as light context. Named "below" historically, when the only supported
+	// plane was horizontal and this was always the view from above.
+	LoopSilhouette LoopRole = "below"
 )
 
-// Loop is one closed ring of an element's plan footprint, world XY meters, Y-up
-// (the FE applies the single Y-flip). Outer rings are wound CCW; HOLE rings
-// (an inner boundary of a hollow/annular section) are wound CW and share the
-// outer ring's Role — so an even-odd / nonzero Path2D fill on the FE renders
-// them as cutouts with no extra field.
+// Loop is one closed ring of an element's plan footprint, in the cutting
+// plane's UV coordinates, meters (for HorizontalPlane these are world X and
+// Y). Coordinates are emitted in the IFC-native orientation; a renderer whose
+// Y axis points down applies its own flip. Outer rings are wound CCW; HOLE
+// rings (an inner boundary of a hollow/annular section) are wound CW and
+// share the outer ring's Role — so an even-odd or nonzero polygon fill
+// renders them as cutouts with no extra field.
 type Loop struct {
 	Role   LoopRole
 	Points [][2]float64
@@ -176,12 +180,17 @@ type Loop struct {
 // coordinates (meters), hole-nested and tagged LoopCut. Winding and determinism
 // guarantees match the horizontal path exactly.
 //
-// Returns nil when the plane misses the mesh, the mesh is degenerate, or p's
-// basis is invalid. Unlike FootprintOn it never falls back to a silhouette or a
-// bounding box: a caller building a section wants to know the plane missed
-// rather than receive a fabricated outline.
+// Returns nil when the plane misses the mesh, the mesh is degenerate, p's
+// basis is invalid, or the plane contains a solid's edges while bisecting it
+// (a triangle only emits a crossing segment when it has a vertex strictly
+// above AND a vertex strictly below the plane; a face that merely touches the
+// plane along an edge contributes nothing, so the cut ring cannot close — a
+// known limitation, not a genuine miss; see
+// TestSectionOnPlaneContainingEdgesIsKnownGap). Unlike FootprintOn it never
+// falls back to a silhouette or a bounding box: a caller building a section
+// wants to know the plane missed rather than receive a fabricated outline.
 func (e Element) SectionOn(p Plane) []Loop {
-	if !p.valid() || len(e.Tris) < 3 || len(e.Verts) < 9 {
+	if !p.Valid() || len(e.Tris) < 3 || len(e.Verts) < 9 {
 		return nil
 	}
 	cut := sectionRings(worldPoints(e.Verts, e.Placement), e.Tris, p)
@@ -198,8 +207,15 @@ func (e Element) SectionOn(p Plane) []Loop {
 //
 // Returns nil when p's basis is invalid (see Plane) — no rings rather than
 // wrongly-wound ones.
+//
+// The plane-contains-edges gap documented on SectionOn is WORSE here: instead
+// of returning nil, FootprintOn falls through to the silhouette branch and
+// returns one ring tagged LoopSilhouette — a genuine section rendered as light
+// context rather than as cut poché, with no signal that a real cut was
+// missed. A caller that needs to reliably distinguish a real cut from context
+// must not rely on Role alone in this case.
 func FootprintOn(e Element, p Plane) []Loop {
-	if !p.valid() {
+	if !p.Valid() {
 		return nil
 	}
 	if len(e.Tris) < 3 || len(e.Verts) < 9 {
@@ -327,11 +343,12 @@ func aabbRingOn(min, max [3]float64, p Plane) [][2]float64 {
 	return [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
 }
 
-// stitchParityRings welds the given XY segment endpoints (quantum 1e-5 m), keeps
-// odd-parity (unshared/boundary) edges, and walks them into closed rings —
+// stitchParityRings welds the given plane-UV segment endpoints (quantum 1e-5 m),
+// keeps odd-parity (unshared/boundary) edges, and walks them into closed rings —
 // canonical (rotated to lex-smallest vertex), CCW, self-intersection-rejected,
 // and deterministically sorted so identical input yields byte-identical output.
-// Shared by sectionRings (cut crossings) and belowRings (downward-face edges).
+// Shared by sectionRings (cut crossings) and belowRings (edges of faces opposing
+// the plane normal).
 func stitchParityRings(segs [][2][2]float64) [][][2]float64 {
 	keyToID := map[[2]int64]int{}
 	var pos [][2]float64

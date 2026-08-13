@@ -35,6 +35,13 @@ func HorizontalPlane(cutZ float64) Plane {
 // origin with normal n. U is seeded from the world axis least parallel to n, so
 // the choice is deterministic and never degenerate. Returns ok=false for a
 // non-finite origin, or a non-finite or zero-length n.
+//
+// The resulting U (and therefore V) is deterministic for a given n but
+// otherwise UNSPECIFIED: it is NOT guaranteed to match HorizontalPlane's frame
+// for a +Z normal, or any other particular in-plane orientation. It may also
+// change between versions of this package. A caller that needs a specific U/V
+// orientation (e.g. to match HorizontalPlane, or an external convention) must
+// build the Plane itself rather than rely on this function's choice.
 func PlaneFromNormal(origin, n [3]float64) (Plane, bool) {
 	if !finite3(origin) || !finite3(n) {
 		return Plane{}, false
@@ -63,9 +70,12 @@ func PlaneFromNormal(origin, n [3]float64) (Plane, bool) {
 	return Plane{Origin: origin, U: u, V: v, N: nn}, true
 }
 
-// valid reports whether p's basis is finite, orthonormal to planeBasisEps, and
-// right-handed. Everything downstream of the projection assumes all three.
-func (p Plane) valid() bool {
+// Valid reports whether p's basis is finite, orthonormal to planeBasisEps, and
+// right-handed (N == U x V). Everything downstream of the projection assumes
+// all three. SectionOn and FootprintOn return no rings when a plane fails this
+// check, so a caller that hand-builds a Plane can call Valid up front to tell
+// a bad basis apart from a plane that genuinely missed the mesh.
+func (p Plane) Valid() bool {
 	if !finite3(p.Origin) {
 		return false
 	}
