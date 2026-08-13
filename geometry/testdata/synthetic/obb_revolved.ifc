@@ -1,0 +1,43 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('obb_revolved.ifc','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+/* An IfcRevolvedAreaSolid has no dedicated tessellation path, so this element
+   falls back to the OBB box built from the points reachable in its
+   representation subtree. That box is a conservative point-cloud envelope, NOT
+   the swept volume: it spans the profile ring plus the revolution axis origin,
+   and the 90-degree sweep is not represented in it at all. That is the point —
+   the fixture exists to exercise the OBB source, not to be geometrically
+   faithful. Its placement is rotated 45 degrees about Z and translated, so the
+   local box and the world AABB genuinely differ. */
+#1=IFCPROJECT('0proj',$,'P',$,$,$,$,(#20),#10);
+#10=IFCUNITASSIGNMENT((#11));
+#11=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#20=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#21,$);
+#21=IFCAXIS2PLACEMENT3D(#22,$,$);
+#22=IFCCARTESIANPOINT((0.,0.,0.));
+#30=IFCCARTESIANPOINT((7.,-3.,2.));
+#31=IFCDIRECTION((0.,0.,1.));
+#32=IFCDIRECTION((0.70710678118654752,0.70710678118654752,0.));
+#33=IFCAXIS2PLACEMENT3D(#30,#31,#32);
+#34=IFCLOCALPLACEMENT($,#33);
+#40=IFCCARTESIANPOINT((0.,0.));
+#41=IFCCARTESIANPOINT((2.,0.));
+#42=IFCCARTESIANPOINT((2.,3.));
+#43=IFCCARTESIANPOINT((0.,3.));
+#44=IFCPOLYLINE((#40,#41,#42,#43,#40));
+#45=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,'Rect',#44);
+#50=IFCCARTESIANPOINT((0.,0.,0.));
+#51=IFCAXIS2PLACEMENT3D(#50,$,$);
+#52=IFCCARTESIANPOINT((0.,0.,4.));
+#53=IFCDIRECTION((0.,1.,0.));
+#54=IFCAXIS1PLACEMENT(#52,#53);
+#55=IFCREVOLVEDAREASOLID(#45,#51,#54,90.);
+#56=IFCSHAPEREPRESENTATION(#20,'Body','SweptSolid',(#55));
+#57=IFCPRODUCTDEFINITIONSHAPE($,$,(#56));
+#70=IFCBUILDINGELEMENTPROXY('0revolve',$,'Revolved',$,$,#34,#57,$);
+ENDSEC;
+END-ISO-10303-21;
