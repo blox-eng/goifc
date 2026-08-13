@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.4'
+          go-version: '1.25.12'
           cache: true
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -69,7 +69,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.4'
+          go-version: '1.25.12'
           cache: true
       - name: Run tests
         # goifc is pure Go with no cgo dependencies. Pinning CGO_ENABLED=0
@@ -94,10 +94,12 @@ jobs:
       # tells you a newer version exists, govulncheck tells you whether a known
       # vulnerability is actually REACHABLE from this code — and it covers the
       # Go standard library, which a dependency bump never touches. The pinned
-      # toolchain (1.25.4) is exactly the kind of thing this catches.
+      # toolchain is exactly the kind of thing this catches — and did, on the first
+      # run: GO-2026-4601 (net/url IPv6 parsing) was reachable from WriteGLB via
+      # gltf.Encoder.Encode on the then-pinned 1.25.4, fixed in 1.25.8.
       - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
-          go-version-input: '1.25.4'
+          go-version-input: '1.25.12'
           go-package: ./...
 
   fuzz:
@@ -112,7 +114,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.4'
+          go-version: '1.25.12'
           cache: true
       # goifc parses files supplied by third parties, and its recursion guards
       # (maxMapDepth, maxWalkDepth, maxApproxLadder) are hand-reasoned defences
