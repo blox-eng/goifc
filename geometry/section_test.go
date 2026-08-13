@@ -352,12 +352,24 @@ func TestSectionOnObliquePlaneArea(t *testing.T) {
 	}
 }
 
-func TestSectionOnPlaneGrazingEdges(t *testing.T) {
-	// x+y=1 runs exactly along two vertical edges of the unit cube. Every side
-	// triangle touching them is {0,+,+} or {0,-,-}, so none spans the plane and
-	// no ring closes. Emitting nothing is the honest answer here — the same rule
-	// that makes a coplanar face produce no spurious ring. Pinned so the
-	// behaviour is a documented decision rather than a surprise.
+func TestSectionOnPlaneContainingEdgesIsKnownGap(t *testing.T) {
+	// x+y=1 does not graze the cube — it BISECTS it, passing through the
+	// interior (the cube centre lies exactly on it) with the two vertical
+	// edges (1,0,z) and (0,1,z) as the long sides of the cut. The true section
+	// is a real 1 x sqrt(2) rectangle, area sqrt(2).
+	//
+	// SectionOn returns nil instead, because a triangle only emits a crossing
+	// segment when it has a vertex STRICTLY above and a vertex STRICTLY below
+	// the plane. The top and bottom faces do span it and emit their segments
+	// correctly, but the side faces merely touch it along an edge (every side
+	// vertex is on-plane or one-sided), so they contribute nothing and the two
+	// spanning segments never connect into a closed ring.
+	//
+	// This pins CURRENT behaviour so a change is noticed — it does NOT assert
+	// that nil is the right answer. It is a known gap: a caller cutting a
+	// diagonal section through a rectangular column here is told the plane
+	// missed when it in fact bisected the solid. Fixing it belongs with the
+	// strict-sign span test in sectionRings/triCrossing, not here.
 	e := elemBox(v3{0, 0, 0}, v3{1, 1, 1})
 	p, ok := PlaneFromNormal([3]float64{0.5, 0.5, 0.5}, [3]float64{1, 1, 0})
 	if !ok {
