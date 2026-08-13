@@ -2,7 +2,7 @@ package geometry
 
 import "math"
 
-// planeBasisEps is the tolerance for the orthonormality checks in Plane.valid.
+// planeBasisEps is the tolerance for the orthonormality checks in Plane.Valid.
 const planeBasisEps = 1e-9
 
 // Plane is a cutting plane: a point on it plus an orthonormal basis. U and V
@@ -34,7 +34,11 @@ func HorizontalPlane(cutZ float64) Plane {
 // PlaneFromNormal derives a right-handed orthonormal basis for the plane through
 // origin with normal n. U is seeded from the world axis least parallel to n, so
 // the choice is deterministic and never degenerate. Returns ok=false for a
-// non-finite origin, or a non-finite or zero-length n.
+// non-finite origin, or an n that is non-finite, shorter than 1e-12, or large
+// enough that normalizing it overflows.
+//
+// ok=true guarantees Valid reports true for the returned plane, so a caller
+// that checks ok need not check Valid as well.
 //
 // The resulting U (and therefore V) is deterministic for a given n but
 // otherwise UNSPECIFIED: it is NOT guaranteed to match HorizontalPlane's frame
@@ -67,7 +71,15 @@ func PlaneFromNormal(origin, n [3]float64) (Plane, bool) {
 	// v = n x u completes a right-handed frame: u x v == u x (n x u) == n,
 	// since u is unit and perpendicular to n.
 	v := crossv(nn, u)
-	return Plane{Origin: origin, U: u, V: v, N: nn}, true
+	p := Plane{Origin: origin, U: u, V: v, N: nn}
+	// dot(n,n) overflows to +Inf for a huge-but-finite n, which clears the length
+	// gate above and leaves nn the zero vector. Rather than enumerate every such
+	// case, confirm the basis actually built: ok=true has to mean the plane is
+	// usable, or a caller who checks only ok gets silently empty rings later.
+	if !p.Valid() {
+		return Plane{}, false
+	}
+	return p, true
 }
 
 // Valid reports whether p's basis is finite, orthonormal to planeBasisEps, and

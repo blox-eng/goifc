@@ -206,7 +206,9 @@ func (e Element) SectionOn(p Plane) []Loop {
 // the element's world AABB projected into p's UV.
 //
 // Returns nil when p's basis is invalid (see Plane) — no rings rather than
-// wrongly-wound ones.
+// wrongly-wound ones — and likewise when the last-resort AABB fallback is
+// reached with a non-finite bounding box, since projecting one yields NaN
+// coordinates rather than a rectangle.
 //
 // The plane-contains-edges gap documented on SectionOn is WORSE here: instead
 // of returning nil, FootprintOn falls through to the silhouette branch and
@@ -219,7 +221,7 @@ func FootprintOn(e Element, p Plane) []Loop {
 		return nil
 	}
 	if len(e.Tris) < 3 || len(e.Verts) < 9 {
-		return []Loop{{Role: LoopSilhouette, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
+		return aabbFallback(e, p)
 	}
 	w := worldPoints(e.Verts, e.Placement)
 	if cut := sectionRings(w, e.Tris, p); len(cut) > 0 {
@@ -228,11 +230,29 @@ func FootprintOn(e Element, p Plane) []Loop {
 	if below := belowRings(w, e.Tris, p); len(below) > 0 {
 		return nestEvenOdd(below, LoopSilhouette)
 	}
+	return aabbFallback(e, p)
+}
+
+// aabbFallback is the last-resort projected-AABB loop, or nil when the box is
+// not finite. An element with no mesh never had its bounds measured, so it can
+// still carry worldAABB's empty sentinel (+Inf min, -Inf max) — and unlike the
+// old world-XY rectangle, which passed those through, projecting them multiplies
+// an infinity by a zero basis component and yields NaN. Emitting nil says "no
+// footprint" honestly instead of shipping four NaN corners downstream.
+func aabbFallback(e Element, p Plane) []Loop {
+	if !finite3(e.BBoxMin) || !finite3(e.BBoxMax) {
+		return nil
+	}
 	return []Loop{{Role: LoopSilhouette, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
 }
 
-// Footprint is FootprintOn at the horizontal plane z = cutZ. Retained unchanged
-// for callers that only ever wanted a floor plan.
+// Footprint is FootprintOn at the horizontal plane z = cutZ, for callers that
+// only ever wanted a floor plan. Behaviour is identical to the pre-Plane
+// implementation for every finite cutZ.
+//
+// One deliberate difference: a non-finite cutZ now yields nil, where the old
+// implementation returned a silhouette or AABB ring built around NaN. Callers
+// that indexed the result unconditionally should check its length.
 func Footprint(e Element, cutZ float64) []Loop {
 	return FootprintOn(e, HorizontalPlane(cutZ))
 }

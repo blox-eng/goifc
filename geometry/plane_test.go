@@ -34,6 +34,12 @@ func TestPlaneValidRejectsNonOrthonormal(t *testing.T) {
 		"non-perpendicular": {U: [3]float64{1, 0, 0}, V: [3]float64{1, 1, 0}, N: [3]float64{0, 0, 1}},
 		"zero N":            {U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, 0}},
 		"NaN origin":        {Origin: [3]float64{math.NaN(), 0, 0}, U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, 1}},
+		// A NaN component makes the ADJACENT unit-length check useless — every
+		// comparison against NaN is false — so finite3 is the only line standing
+		// between a NaN basis and NaN ring coordinates.
+		"NaN in U": {U: [3]float64{math.NaN(), 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, 1}},
+		"NaN in N": {U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, math.NaN()}},
+		"Inf in V": {U: [3]float64{1, 0, 0}, V: [3]float64{0, math.Inf(1), 0}, N: [3]float64{0, 0, 1}},
 	}
 	for name, p := range cases {
 		if p.Valid() {
@@ -94,5 +100,33 @@ func TestProjectUVAndSignedDist(t *testing.T) {
 	}
 	if got := projectUV(p, v3{5, 6, 7}); got != [2]float64{5, 6} {
 		t.Fatalf("projectUV = %v, want {5,6}", got)
+	}
+}
+
+// UV is plane-LOCAL, not world-absolute. Every other plane in this suite has
+// zero in-plane origin components (HorizontalPlane's origin is {0,0,cutZ}), so
+// dropping the origin subtraction in projectUV is invisible to them; this plane
+// is offset along U and V so it is not.
+func TestProjectUVIsOriginRelative(t *testing.T) {
+	p := Plane{Origin: [3]float64{1, 2, 0}, U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, 1}}
+	if !p.Valid() {
+		t.Fatal("fixture plane must be valid")
+	}
+	if got := projectUV(p, v3{5, 6, 7}); got != [2]float64{4, 4} {
+		t.Fatalf("projectUV = %v, want {4,4}; {5,6} means the origin was not subtracted", got)
+	}
+}
+
+// A finite n whose squared length overflows leaves the normalized vector zero,
+// which cleared the length gate and returned an all-zero basis with ok=true.
+// ok=true must imply Valid, or a caller who checks only ok gets silent nil rings.
+func TestPlaneFromNormalRejectsOverflowingNormal(t *testing.T) {
+	for _, n := range [][3]float64{
+		{1e200, 1e200, 1e200}, {1e200, 0, 0}, {0, 1e300, 1e300},
+	} {
+		p, ok := PlaneFromNormal([3]float64{0, 0, 0}, n)
+		if ok && !p.Valid() {
+			t.Errorf("n=%v: ok=true but basis invalid: %+v", n, p)
+		}
 	}
 }

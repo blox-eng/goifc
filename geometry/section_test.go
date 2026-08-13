@@ -500,3 +500,57 @@ func TestLoopRoleWireValuesUnchanged(t *testing.T) {
 		t.Fatalf("LoopSilhouette = %q, want \"below\"", LoopSilhouette)
 	}
 }
+
+// belowRings keeps the faces OPPOSING p.N. Every other silhouette test uses a
+// closed box, where the front-facing and back-facing parity boundaries are
+// identical, so inverting the predicate is invisible to them. An open mesh is
+// the only input that can tell the two sets apart.
+func TestBelowRingsKeepsOnlyOpposingFaces(t *testing.T) {
+	// A 2x2 quad facing -Z at z=0, and a 1x1 quad facing +Z at z=1. Looking
+	// along N=+Z, only the -Z-facing quad opposes N, so the area must be 4.
+	w := []v3{
+		{0, 0, 0}, {2, 0, 0}, {2, 2, 0}, {0, 2, 0},
+		{0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1},
+	}
+	tris := []uint32{0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7}
+	rings := belowRings(w, tris, HorizontalPlane(0))
+	if len(rings) != 1 {
+		t.Fatalf("want 1 silhouette ring, got %d: %v", len(rings), rings)
+	}
+	if a := ringArea(rings[0]); math.Abs(a-4) > 1e-9 {
+		t.Fatalf("silhouette area = %v, want 4 (the -Z-facing quad); 1 means the facing test is inverted", a)
+	}
+}
+
+// An element with no mesh never had its bounds measured, so it can still carry
+// worldAABB's empty sentinel. Projecting an infinity through a basis multiplies
+// it by a zero component and yields NaN, so the fallback must decline instead.
+func TestFootprintOnNonFiniteAabbYieldsNoRings(t *testing.T) {
+	e := Element{
+		BBoxMin: [3]float64{math.Inf(1), math.Inf(1), math.Inf(1)},
+		BBoxMax: [3]float64{math.Inf(-1), math.Inf(-1), math.Inf(-1)},
+	}
+	for _, p := range []Plane{HorizontalPlane(1), planeYZ(0)} {
+		if got := FootprintOn(e, p); got != nil {
+			t.Fatalf("non-finite AABB: want nil, got %v", got)
+		}
+	}
+}
+
+// A non-finite basis must yield NO rings, not rings full of NaN coordinates.
+// Plane.Valid rejects these today via both finite3 and the handedness check;
+// this pins the outcome callers depend on regardless of which check catches it.
+func TestSectionOnRejectsNonFiniteBasis(t *testing.T) {
+	e := elemBox(v3{0, 0, 0}, v3{1, 1, 1})
+	for name, bad := range map[string]Plane{
+		"NaN in U": {Origin: [3]float64{0, 0, 0.5}, U: [3]float64{math.NaN(), 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, 1}},
+		"Inf in N": {Origin: [3]float64{0, 0, 0.5}, U: [3]float64{1, 0, 0}, V: [3]float64{0, 1, 0}, N: [3]float64{0, 0, math.Inf(1)}},
+	} {
+		if got := e.SectionOn(bad); got != nil {
+			t.Errorf("%s: SectionOn want nil, got %v", name, got)
+		}
+		if got := FootprintOn(e, bad); got != nil {
+			t.Errorf("%s: FootprintOn want nil, got %v", name, got)
+		}
+	}
+}
