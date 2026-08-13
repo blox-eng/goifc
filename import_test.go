@@ -143,7 +143,7 @@ func TestBuildImport_MultiStoreyPlans(t *testing.T) {
 	if _, ok := role(level1, "IfcWall"); ok {
 		t.Fatalf("level1 plan must not include the ground-floor wall")
 	}
-	if r, ok := role(level1, "IfcSlab"); !ok || r != geometry.LoopBelow {
+	if r, ok := role(level1, "IfcSlab"); !ok || r != geometry.LoopSilhouette {
 		t.Fatalf("level1: slab should be below-context, got %q ok=%v", r, ok)
 	}
 }

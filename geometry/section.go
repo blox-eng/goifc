@@ -5,24 +5,24 @@ import (
 	"sort"
 )
 
-// Section-cut ring extraction: slice a triangle mesh at a horizontal plane
-// z = cutZ and recover the closed world-XY poché rings. Manifold-hardened and
-// deterministic — the same input always yields byte-identical output, so
+// Section-cut ring extraction: slice a triangle mesh at an arbitrary plane and
+// recover the closed poché rings in that plane's UV coordinates. Manifold-hardened
+// and deterministic — the same input always yields byte-identical output, so
 // downstream source-model drift detection sees no false churn.
 
 const (
 	sectionWeldQuantum = 1e5  // 1e-5 m weld quantum (matches footprintPerimeter)
-	sectionOnPlaneEps  = 1e-9 // |z-cutZ| below this counts a vertex as on-plane
+	sectionOnPlaneEps  = 1e-9 // signed distance from the plane below this counts a vertex as on-plane
 	sectionAreaEps     = 1e-12
 )
 
-// weldXY quantizes a world-XY point to an integer key at 1e-5 m resolution.
+// weldUV quantizes a plane-UV point to an integer key at 1e-5 m resolution.
 // Go brep meshes emit unshared vertices per face, so section-segment endpoints
-// must be welded by position or rings never close. Reused by later tasks.
-func weldXY(p [2]float64) [2]int64 {
+// must be welded by position or rings never close.
+func weldUV(q [2]float64) [2]int64 {
 	return [2]int64{
-		int64(math.Round(p[0] * sectionWeldQuantum)),
-		int64(math.Round(p[1] * sectionWeldQuantum)),
+		int64(math.Round(q[0] * sectionWeldQuantum)),
+		int64(math.Round(q[1] * sectionWeldQuantum)),
 	}
 }
 
@@ -37,42 +37,46 @@ func planeSign(d float64) int {
 	return 0
 }
 
-// triCrossing returns the crossing XY points of a triangle that genuinely spans
+// triCrossing returns the crossing UV points of a triangle that genuinely spans
 // the plane (it has at least one strictly-above and one strictly-below vertex).
 // On-plane vertices count as crossing points. A spanning triangle yields exactly
 // two distinct points; anything else is rejected by the caller.
-func triCrossing(verts [3]v3, ds [3]float64, ss [3]int) [][2]float64 {
+func triCrossing(p Plane, verts [3]v3, ds [3]float64, ss [3]int) [][2]float64 {
 	var pts [][2]float64
-	add := func(p [2]float64) {
-		for _, q := range pts {
-			if q == p {
+	add := func(q [2]float64) {
+		for _, r := range pts {
+			if r == q {
 				return
 			}
 		}
-		pts = append(pts, p)
+		pts = append(pts, q)
 	}
 	for i := 0; i < 3; i++ {
 		j := (i + 1) % 3
 		if ss[i] == 0 {
-			add([2]float64{verts[i][0], verts[i][1]})
+			add(projectUV(p, verts[i]))
 		}
 		if ss[i]*ss[j] < 0 { // strict sign change across this edge
 			tt := ds[i] / (ds[i] - ds[j])
-			add([2]float64{
+			// Interpolate in 3D, then project: projection is affine, so this
+			// agrees with interpolating in-plane, and it stays correct for a
+			// plane that is not axis-aligned.
+			add(projectUV(p, v3{
 				verts[i][0] + tt*(verts[j][0]-verts[i][0]),
 				verts[i][1] + tt*(verts[j][1]-verts[i][1]),
-			})
+				verts[i][2] + tt*(verts[j][2]-verts[i][2]),
+			}))
 		}
 	}
 	return pts
 }
 
-// sectionRings returns the closed world-XY rings where the triangle mesh crosses
-// the horizontal plane z = cutZ. World XY, meters, Y-up (IFC-native — NEVER flip
-// here). Empty when the plane misses the mesh. Each ring is wound CCW, canonical
-// (rotated to start at its lexicographically-smallest vertex), and the returned
-// slice is sorted deterministically — same input ALWAYS yields byte-identical output.
-func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
+// sectionRings returns the closed rings where the triangle mesh crosses plane p,
+// in p's UV coordinates, meters. Empty when the plane misses the mesh. Each ring
+// is wound CCW, canonical (rotated to its lexicographically-smallest vertex),
+// and the returned slice is sorted deterministically — same input ALWAYS yields
+// byte-identical output.
+func sectionRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	nv := uint32(len(w))
 
 	// Collect cut segments where triangles genuinely span the plane. Internal
@@ -85,7 +89,7 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 			continue
 		}
 		verts := [3]v3{w[i0], w[i1], w[i2]}
-		ds := [3]float64{verts[0][2] - cutZ, verts[1][2] - cutZ, verts[2][2] - cutZ}
+		ds := [3]float64{signedDist(p, verts[0]), signedDist(p, verts[1]), signedDist(p, verts[2])}
 		ss := [3]int{planeSign(ds[0]), planeSign(ds[1]), planeSign(ds[2])}
 		// Only genuine spans emit a segment; a face merely resting on / touching
 		// the plane (coplanar, or one on-plane edge) does not span it.
@@ -94,7 +98,7 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 		if !hasAbove || !hasBelow {
 			continue
 		}
-		pts := triCrossing(verts, ds, ss)
+		pts := triCrossing(p, verts, ds, ss)
 		if len(pts) != 2 {
 			continue
 		}
@@ -103,17 +107,24 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 	return stitchParityRings(segs)
 }
 
-// belowRings is the top-down silhouette of a solid: the boundary of its
-// downward-facing (−Z normal) faces, stitched into closed world-XY rings.
-// World XY, Y-up (no flip). Reuses stitchParityRings.
+// belowRings is the silhouette of a solid seen along p.N: the boundary of the
+// faces pointing AWAY from p.N, stitched into closed rings in p's UV
+// coordinates. Reuses stitchParityRings.
 //
-// LIMITATION: true below-context is the projected-polygon UNION of all
-// downward patches. This parity-boundary approach is a lighter approximation —
-// for a non-convex/furniture solid whose downward faces sit at different
-// heights, overlapping projected patches may leave internal boundary edges
-// rather than one filled silhouette. Acceptable because "below" is drawn as
-// light context only; a full 2D polygon-union library is a possible follow-up.
-func belowRings(w []v3, tris []uint32) [][][2]float64 {
+// For a CLOSED solid this outline is invariant under flipping p.N — edges shared
+// by two same-facing faces cancel, while each silhouette edge is shared by one
+// front and one back face and survives in either set. A consumer that needs the
+// near face specifically, rather than the outline, must decide that itself.
+//
+// An OPEN mesh has no such symmetry: a one-sided surface opposes exactly one of
+// the two directions and yields nothing for the other. Callers that may hold
+// non-closed geometry must choose p.N deliberately.
+//
+// LIMITATION: true silhouette is the projected-polygon UNION of all such
+// patches. This parity-boundary approach is a lighter approximation — for a
+// non-convex solid whose faces sit at different depths, overlapping projected
+// patches may leave internal boundary edges rather than one filled silhouette.
+func belowRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	nv := uint32(len(w))
 
 	var segs [][2][2]float64
@@ -124,55 +135,137 @@ func belowRings(w []v3, tris []uint32) [][][2]float64 {
 		}
 		n := crossv(subv(w[i1], w[i0]), subv(w[i2], w[i0]))
 		l := math.Sqrt(dotv(n, n))
-		if l == 0 || n[2]/l >= -1e-6 { // keep only downward-facing faces
+		if l == 0 || dotv(n, p.N)/l >= -1e-6 { // keep only faces opposing p.N
 			continue
 		}
-		p0 := [2]float64{w[i0][0], w[i0][1]}
-		p1 := [2]float64{w[i1][0], w[i1][1]}
-		p2 := [2]float64{w[i2][0], w[i2][1]}
+		q0 := projectUV(p, w[i0])
+		q1 := projectUV(p, w[i1])
+		q2 := projectUV(p, w[i2])
 		segs = append(segs,
-			[2][2]float64{p0, p1},
-			[2][2]float64{p1, p2},
-			[2][2]float64{p2, p0},
+			[2][2]float64{q0, q1},
+			[2][2]float64{q1, q2},
+			[2][2]float64{q2, q0},
 		)
 	}
 	return stitchParityRings(segs)
 }
 
-// LoopRole tags a footprint loop as section poché or light below-context.
+// LoopRole tags a footprint loop as section poché or light context.
+//
+// The string VALUES are a serialization contract: consumers persist them in
+// drawing data and match them as literals in renderer code. LoopSilhouette's
+// value stays "below" for that reason — it is the name that was wrong, not the
+// value. Do not change the values without a coordinated consumer and data
+// migration.
 type LoopRole string
 
 const (
-	LoopCut   LoopRole = "cut"   // section poché — the plane crosses the solid
-	LoopBelow LoopRole = "below" // top-down silhouette, light context
+	LoopCut LoopRole = "cut" // section poché — the plane crosses the solid
+
+	// LoopSilhouette is the outline of faces opposing the plane normal, drawn
+	// as light context. Named "below" historically, when the only supported
+	// plane was horizontal and this was always the view from above.
+	LoopSilhouette LoopRole = "below"
 )
 
-// Loop is one closed ring of an element's plan footprint, world XY meters, Y-up
-// (the FE applies the single Y-flip). Outer rings are wound CCW; HOLE rings
-// (an inner boundary of a hollow/annular section) are wound CW and share the
-// outer ring's Role — so an even-odd / nonzero Path2D fill on the FE renders
-// them as cutouts with no extra field.
+// Loop is one closed ring of an element's plan footprint, in the cutting
+// plane's UV coordinates, meters (for HorizontalPlane these are world X and
+// Y). Coordinates are emitted in the IFC-native orientation; a renderer whose
+// Y axis points down applies its own flip. Outer rings are wound CCW; HOLE
+// rings (an inner boundary of a hollow/annular section) are wound CW and
+// share the outer ring's Role — so an even-odd or nonzero polygon fill
+// renders them as cutouts with no extra field.
 type Loop struct {
 	Role   LoopRole
 	Points [][2]float64
 }
 
-// Footprint is the plan geometry of ONE element at cut height cutZ (world
-// meters): the section-cut rings (poché, hole-nested) if the plane crosses the
-// solid, else the top-down silhouette drawn as "below" context, else the
-// world-AABB rectangle as a last resort.
-func Footprint(e Element, cutZ float64) []Loop {
+// SectionOn returns the closed CUT rings where e's mesh crosses p, in p's UV
+// coordinates (meters), hole-nested and tagged LoopCut. Winding and determinism
+// guarantees match the horizontal path exactly.
+//
+// Returns nil when the plane misses the mesh, the mesh is degenerate, p's
+// basis is invalid, or the plane contains a solid's edges while bisecting it
+// (a triangle only emits a crossing segment when it has a vertex strictly
+// above AND a vertex strictly below the plane; a face that merely touches the
+// plane along an edge contributes nothing, so the cut ring cannot close — a
+// known limitation, not a genuine miss; see
+// TestSectionOnPlaneContainingEdgesIsKnownGap). Unlike FootprintOn it never
+// falls back to a silhouette or a bounding box: a caller building a section
+// wants to know the plane missed rather than receive a fabricated outline.
+func (e Element) SectionOn(p Plane) []Loop {
+	if !p.Valid() || len(e.Tris) < 3 || len(e.Verts) < 9 {
+		return nil
+	}
+	cut := sectionRings(worldPoints(e.Verts, e.Placement), e.Tris, p)
+	if len(cut) == 0 {
+		return nil
+	}
+	return nestEvenOdd(cut, LoopCut)
+}
+
+// FootprintOn is the plan geometry of ONE element on plane p (world meters, in
+// p's UV frame): the section-cut rings (poché, hole-nested) if the plane crosses
+// the solid, else the silhouette of faces opposing p.N drawn as context, else
+// the element's world AABB projected into p's UV.
+//
+// Returns nil when p's basis is invalid (see Plane) — no rings rather than
+// wrongly-wound ones — and likewise when the last-resort AABB fallback is
+// reached with a non-finite bounding box, since projecting one yields NaN
+// coordinates rather than a rectangle.
+//
+// The plane-contains-edges gap documented on SectionOn is WORSE here: instead
+// of returning nil, FootprintOn falls through to the silhouette branch and
+// returns one ring tagged LoopSilhouette — a genuine section rendered as light
+// context rather than as cut poché, with no signal that a real cut was
+// missed. A caller that needs to reliably distinguish a real cut from context
+// must not rely on Role alone in this case.
+//
+// For a NON-CLOSED mesh the silhouette branch is direction-dependent: an open
+// or one-sided surface opposes only one of the two normal directions, so the
+// flipped direction yields no silhouette and falls through to the bounding-box
+// fallback — a rectangle tagged LoopSilhouette in place of the real outline,
+// with no signal. Closed solids are unaffected: their outline is invariant
+// under flipping p.N (see belowRings).
+func FootprintOn(e Element, p Plane) []Loop {
+	if !p.Valid() {
+		return nil
+	}
 	if len(e.Tris) < 3 || len(e.Verts) < 9 {
-		return []Loop{{Role: LoopBelow, Points: aabbRing(e.BBoxMin, e.BBoxMax)}}
+		return aabbFallback(e, p)
 	}
 	w := worldPoints(e.Verts, e.Placement)
-	if cut := sectionRings(w, e.Tris, cutZ); len(cut) > 0 {
+	if cut := sectionRings(w, e.Tris, p); len(cut) > 0 {
 		return nestEvenOdd(cut, LoopCut)
 	}
-	if below := belowRings(w, e.Tris); len(below) > 0 {
-		return nestEvenOdd(below, LoopBelow)
+	if below := belowRings(w, e.Tris, p); len(below) > 0 {
+		return nestEvenOdd(below, LoopSilhouette)
 	}
-	return []Loop{{Role: LoopBelow, Points: aabbRing(e.BBoxMin, e.BBoxMax)}}
+	return aabbFallback(e, p)
+}
+
+// aabbFallback is the last-resort projected-AABB loop, or nil when the box is
+// not finite. An element with no mesh never had its bounds measured, so it can
+// still carry worldAABB's empty sentinel (+Inf min, -Inf max) — and unlike the
+// old world-XY rectangle, which passed those through, projecting them multiplies
+// an infinity by a zero basis component and yields NaN. Emitting nil says "no
+// footprint" honestly instead of shipping four NaN corners downstream.
+func aabbFallback(e Element, p Plane) []Loop {
+	if !finite3(e.BBoxMin) || !finite3(e.BBoxMax) {
+		return nil
+	}
+	return []Loop{{Role: LoopSilhouette, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
+}
+
+// Footprint is FootprintOn at the horizontal plane z = cutZ, for callers that
+// only ever wanted a floor plan. Behaviour is identical to the pre-Plane
+// implementation for every finite cutZ.
+//
+// One deliberate difference: a non-finite cutZ now yields nil, where the old
+// implementation returned a silhouette or AABB ring built around NaN. Callers
+// that indexed the result unconditionally should check its length.
+func Footprint(e Element, cutZ float64) []Loop {
+	return FootprintOn(e, HorizontalPlane(cutZ))
 }
 
 // nestEvenOdd classifies each ring by containment depth and emits Loops: a ring
@@ -252,24 +345,46 @@ func pointInPolygon(p [2]float64, poly [][2]float64) bool {
 	return inside
 }
 
-// aabbRing is the world-XY rectangle of an element's AABB — the last-resort
-// footprint when a mesh yields no usable rings. CCW, 4 points.
-func aabbRing(min, max [3]float64) [][2]float64 {
-	return [][2]float64{
-		{min[0], min[1]}, {max[0], min[1]}, {max[0], max[1]}, {min[0], max[1]},
+// aabbRingOn is the element's world AABB projected into p's UV frame: the 2D
+// bounding rectangle of the box's eight corners, CCW. The last-resort footprint
+// when a mesh yields no usable rings.
+//
+// This is a bounding rectangle, not a silhouette — the same approximation the
+// horizontal path always made, now expressed in the caller's frame instead of
+// world XY. For HorizontalPlane it reduces to exactly the old world-XY
+// rectangle.
+func aabbRingOn(min, max [3]float64, p Plane) [][2]float64 {
+	uMin, vMin := math.Inf(1), math.Inf(1)
+	uMax, vMax := math.Inf(-1), math.Inf(-1)
+	for i := 0; i < 8; i++ {
+		c := v3{min[0], min[1], min[2]}
+		if i&1 != 0 {
+			c[0] = max[0]
+		}
+		if i&2 != 0 {
+			c[1] = max[1]
+		}
+		if i&4 != 0 {
+			c[2] = max[2]
+		}
+		q := projectUV(p, c)
+		uMin, uMax = math.Min(uMin, q[0]), math.Max(uMax, q[0])
+		vMin, vMax = math.Min(vMin, q[1]), math.Max(vMax, q[1])
 	}
+	return [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
 }
 
-// stitchParityRings welds the given XY segment endpoints (quantum 1e-5 m), keeps
-// odd-parity (unshared/boundary) edges, and walks them into closed rings —
+// stitchParityRings welds the given plane-UV segment endpoints (quantum 1e-5 m),
+// keeps odd-parity (unshared/boundary) edges, and walks them into closed rings —
 // canonical (rotated to lex-smallest vertex), CCW, self-intersection-rejected,
 // and deterministically sorted so identical input yields byte-identical output.
-// Shared by sectionRings (cut crossings) and belowRings (downward-face edges).
+// Shared by sectionRings (cut crossings) and belowRings (edges of faces opposing
+// the plane normal).
 func stitchParityRings(segs [][2][2]float64) [][][2]float64 {
 	keyToID := map[[2]int64]int{}
 	var pos [][2]float64
 	idOf := func(p [2]float64) int {
-		k := weldXY(p)
+		k := weldUV(p)
 		if id, ok := keyToID[k]; ok {
 			return id
 		}
