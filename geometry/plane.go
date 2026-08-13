@@ -3,7 +3,12 @@ package geometry
 import "math"
 
 // planeBasisEps is the tolerance for the orthonormality checks in Plane.Valid.
-const planeBasisEps = 1e-9
+// Generous on purpose: the failure this guard exists to stop is a LEFT-handed
+// basis silently swapping outer rings and holes, and that is caught by a sign
+// test which no magnitude tolerance can weaken. Meanwhile a basis hand-built
+// from single-precision directions lands around 1e-7, and rejecting it would
+// surface as an empty drawing indistinguishable from a plane that missed.
+const planeBasisEps = 1e-6
 
 // Plane is a cutting plane: a point on it plus an orthonormal basis. U and V
 // span the plane and define the 2D coordinates of emitted rings; N is the

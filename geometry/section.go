@@ -116,6 +116,10 @@ func sectionRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 // front and one back face and survives in either set. A consumer that needs the
 // near face specifically, rather than the outline, must decide that itself.
 //
+// An OPEN mesh has no such symmetry: a one-sided surface opposes exactly one of
+// the two directions and yields nothing for the other. Callers that may hold
+// non-closed geometry must choose p.N deliberately.
+//
 // LIMITATION: true silhouette is the projected-polygon UNION of all such
 // patches. This parity-boundary approach is a lighter approximation — for a
 // non-convex solid whose faces sit at different depths, overlapping projected
@@ -216,6 +220,13 @@ func (e Element) SectionOn(p Plane) []Loop {
 // context rather than as cut poché, with no signal that a real cut was
 // missed. A caller that needs to reliably distinguish a real cut from context
 // must not rely on Role alone in this case.
+//
+// For a NON-CLOSED mesh the silhouette branch is direction-dependent: an open
+// or one-sided surface opposes only one of the two normal directions, so the
+// flipped direction yields no silhouette and falls through to the bounding-box
+// fallback — a rectangle tagged LoopSilhouette in place of the real outline,
+// with no signal. Closed solids are unaffected: their outline is invariant
+// under flipping p.N (see belowRings).
 func FootprintOn(e Element, p Plane) []Loop {
 	if !p.Valid() {
 		return nil

@@ -554,3 +554,43 @@ func TestSectionOnRejectsNonFiniteBasis(t *testing.T) {
 		}
 	}
 }
+
+// An open mesh has no front/back symmetry, so which way p.N points decides
+// whether FootprintOn returns the real outline or falls through to the bounding
+// box. A triangle is used because its outline (area 2) and its AABB rectangle
+// (area 4) differ — a quad would hide the substitution behind equal areas.
+func TestFootprintOnOpenMeshIsDirectionDependent(t *testing.T) {
+	e := Element{
+		GlobalID:  "open",
+		Verts:     []float32{0, 0, 0, 2, 0, 0, 0, 2, 0},
+		Tris:      []uint32{0, 2, 1}, // wound to face -Z
+		Placement: model.Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+		BBoxMin:   [3]float64{0, 0, 0}, BBoxMax: [3]float64{2, 2, 0},
+	}
+
+	// N=+Z opposes the face: the true triangular outline.
+	facing := FootprintOn(e, HorizontalPlane(5))
+	if len(facing) != 1 {
+		t.Fatalf("N=+Z: want 1 loop, got %d", len(facing))
+	}
+	if a := ringArea(facing[0].Points); math.Abs(a-2) > 1e-9 {
+		t.Fatalf("N=+Z: area = %v, want 2 (the triangle itself)", a)
+	}
+
+	// N=-Z opposes nothing, so the silhouette branch yields nothing and the
+	// bounding-box fallback substitutes a rectangle — tagged the same way.
+	flipped := Plane{Origin: [3]float64{0, 0, 5}, U: [3]float64{1, 0, 0}, V: [3]float64{0, -1, 0}, N: [3]float64{0, 0, -1}}
+	if !flipped.Valid() {
+		t.Fatal("flipped fixture must be a valid right-handed basis")
+	}
+	away := FootprintOn(e, flipped)
+	if len(away) != 1 {
+		t.Fatalf("N=-Z: want 1 loop, got %d", len(away))
+	}
+	if a := ringArea(away[0].Points); math.Abs(a-4) > 1e-9 {
+		t.Fatalf("N=-Z: area = %v, want 4 (the AABB rectangle fallback)", a)
+	}
+	if away[0].Role != LoopSilhouette {
+		t.Fatalf("N=-Z: role = %q, want %q — the fallback is indistinguishable by Role", away[0].Role, LoopSilhouette)
+	}
+}
