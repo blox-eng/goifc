@@ -3,7 +3,7 @@
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on
 minor versions, as the README states. Releases before v0.2.0 predate this file.
 
-## v0.2.0 (unreleased)
+## v0.2.0 — 2026-08-13
 
 ### Breaking
 
