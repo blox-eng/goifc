@@ -54,8 +54,8 @@ func TestFootprintBelowWhenPlaneAbove(t *testing.T) {
 	if len(loops) != 1 {
 		t.Fatalf("want 1 loop, got %d: %v", len(loops), loops)
 	}
-	if loops[0].Role != LoopBelow {
-		t.Fatalf("want LoopBelow, got %q", loops[0].Role)
+	if loops[0].Role != LoopSilhouette {
+		t.Fatalf("want LoopSilhouette, got %q", loops[0].Role)
 	}
 }
 
@@ -65,8 +65,8 @@ func TestFootprintAabbFallback(t *testing.T) {
 	if len(loops) != 1 {
 		t.Fatalf("want 1 loop, got %d: %v", len(loops), loops)
 	}
-	if loops[0].Role != LoopBelow {
-		t.Fatalf("want LoopBelow, got %q", loops[0].Role)
+	if loops[0].Role != LoopSilhouette {
+		t.Fatalf("want LoopSilhouette, got %q", loops[0].Role)
 	}
 	if a := ringArea(loops[0].Points); math.Abs(a-6.0) > 1e-6 {
 		t.Fatalf("want area 6.0, got %v", a)
@@ -487,5 +487,16 @@ func TestSectionOnDeterministic(t *testing.T) {
 	}
 	if !reflect.DeepEqual(e.SectionOn(p), e.SectionOn(p)) {
 		t.Fatal("SectionOn not deterministic on an oblique plane")
+	}
+}
+
+func TestLoopRoleWireValuesUnchanged(t *testing.T) {
+	// These strings are persisted in drawing data and matched as literals by
+	// renderers. Changing them invalidates drawings already on disk.
+	if string(LoopCut) != "cut" {
+		t.Fatalf("LoopCut = %q, want \"cut\"", LoopCut)
+	}
+	if string(LoopSilhouette) != "below" {
+		t.Fatalf("LoopSilhouette = %q, want \"below\"", LoopSilhouette)
 	}
 }

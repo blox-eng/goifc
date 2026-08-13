@@ -79,7 +79,7 @@ func TestStoreyPlansSpanningColumn(t *testing.T) {
 	if _, ok := b["W1"]; ok {
 		t.Fatalf("plan B should not include the floor-1 wall, got %v", b)
 	}
-	if b["SLAB2"] != geometry.LoopBelow {
+	if b["SLAB2"] != geometry.LoopSilhouette {
 		t.Fatalf("plan B: slab should be below-context, got %q", b["SLAB2"])
 	}
 }

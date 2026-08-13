@@ -146,12 +146,20 @@ func belowRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	return stitchParityRings(segs)
 }
 
-// LoopRole tags a footprint loop as section poché or light below-context.
+// LoopRole tags a footprint loop as section poché or light context.
+//
+// The string VALUES are a serialization contract: consumers persist them in
+// drawing data and match them as literals in renderer code. LoopSilhouette's
+// value stays "below" for that reason — it is the name that was wrong, not the
+// value. Do not change the values without a coordinated consumer and data
+// migration.
 type LoopRole string
 
 const (
-	LoopCut   LoopRole = "cut"   // section poché — the plane crosses the solid
-	LoopBelow LoopRole = "below" // top-down silhouette, light context
+	LoopCut        LoopRole = "cut"   // section poché — the plane crosses the solid
+	LoopSilhouette LoopRole = "below" // the outline of faces opposing the plane normal,
+	// drawn as light context. Named "below" historically, when the only
+	// supported plane was horizontal and this was always the view from above.
 )
 
 // Loop is one closed ring of an element's plan footprint, world XY meters, Y-up
@@ -195,16 +203,16 @@ func FootprintOn(e Element, p Plane) []Loop {
 		return nil
 	}
 	if len(e.Tris) < 3 || len(e.Verts) < 9 {
-		return []Loop{{Role: LoopBelow, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
+		return []Loop{{Role: LoopSilhouette, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
 	}
 	w := worldPoints(e.Verts, e.Placement)
 	if cut := sectionRings(w, e.Tris, p); len(cut) > 0 {
 		return nestEvenOdd(cut, LoopCut)
 	}
 	if below := belowRings(w, e.Tris, p); len(below) > 0 {
-		return nestEvenOdd(below, LoopBelow)
+		return nestEvenOdd(below, LoopSilhouette)
 	}
-	return []Loop{{Role: LoopBelow, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
+	return []Loop{{Role: LoopSilhouette, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
 }
 
 // Footprint is FootprintOn at the horizontal plane z = cutZ. Retained unchanged
