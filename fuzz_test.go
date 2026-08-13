@@ -1,4 +1,4 @@
-package ifc
+package ifc_test
 
 import (
 	"io"
@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	ifc "github.com/blox-eng/goifc"
 	"github.com/blox-eng/goifc/step"
 )
 
@@ -45,7 +46,7 @@ func FuzzAssemble(f *testing.F) {
 		if err != nil {
 			return
 		}
-		a, err := Assemble(file)
+		a, err := ifc.Assemble(file)
 		if err != nil {
 			if a != nil {
 				t.Fatalf("Assemble returned both a result and an error: %v", err)
