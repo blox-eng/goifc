@@ -57,13 +57,32 @@ func axis2placement(a *step.Instance) Mat4 {
 		}
 	}
 	// Gram-Schmidt: make x orthonormal to z, y = z × x.
-	x = normalize(sub(x, scale(z, dot(x, z))))
+	x = normalize(orthogonalize(x, z))
 	y := cross(z, x)
 	// Columns 0,1,2 are the basis vectors x,y,z (column-major).
 	m[0], m[1], m[2] = x[0], x[1], x[2]
 	m[4], m[5], m[6] = y[0], y[1], y[2]
 	m[8], m[9], m[10] = z[0], z[1], z[2]
 	return m
+}
+
+// orthogonalize removes z's component from x. A RefDirection that is parallel
+// to Axis (or zero) leaves nothing to project: normalize would hand back the
+// zero vector, collapsing basis columns 0 and 1 and making the whole placement
+// SINGULAR. Every direction rotated through such a matrix comes back
+// zero-length, so a caller that normalizes a "world normal" gets NaN with
+// nothing to notice — the silent-wrong-answer class this package works to
+// avoid. Fall back to whichever world axis z leans on least, which is at most
+// 45 degrees from the plane and so always projects to a usable vector.
+func orthogonalize(x, z []float64) []float64 {
+	if p := sub(x, scale(z, dot(x, z))); dot(p, p) > 1e-20 {
+		return p
+	}
+	fallback := []float64{1, 0, 0}
+	if math.Abs(z[0]) >= math.Abs(z[1]) {
+		fallback = []float64{0, 1, 0}
+	}
+	return sub(fallback, scale(z, dot(fallback, z)))
 }
 
 // coords extracts the float list from an IfcCartesianPoint / IfcDirection.

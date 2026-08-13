@@ -66,6 +66,15 @@ func TestWorldVerts_EmptyIsEmptyNotPanic(t *testing.T) {
 	if got := (Element{Verts: []float32{}}).WorldVerts(); len(got) != 0 {
 		t.Errorf("WorldVerts of zero-length Verts = %v, want empty", got)
 	}
+	// A partial trailing triple is dropped, not emitted half-transformed with a
+	// fabricated zero component.
+	e := Element{Verts: []float32{1, 2, 3, 9, 9}, Placement: model.Identity()}
+	if got := e.WorldVerts(); len(got) != 3 {
+		t.Errorf("WorldVerts of a partial trailing triple = %v, want 3 floats", got)
+	}
+	if got := (Element{Verts: []float32{1, 2}}).WorldVerts(); len(got) != 0 {
+		t.Errorf("WorldVerts of a sub-triple slice = %v, want empty", got)
+	}
 }
 
 func TestWorldNormal_IgnoresTranslation(t *testing.T) {
@@ -122,7 +131,7 @@ func TestWorldVerts_AABBEqualsBBox(t *testing.T) {
 	paths = append(paths, "../testdata/two_storey_spanning.ifc")
 
 	seen := map[GeomSource]int{}
-	placed := 0
+	rotated := 0
 	for _, path := range paths {
 		f, err := step.ParseFile(path)
 		if err != nil {
@@ -141,11 +150,11 @@ func TestWorldVerts_AABBEqualsBBox(t *testing.T) {
 				continue
 			}
 			seen[e.Source]++
-			if e.Placement != model.Identity() {
-				placed++
+			if isRotated(e.Placement) {
+				rotated++
 			}
 			min, max := aabbOf(e.WorldVerts())
-			if !closeVec(min, e.BBoxMin, 1e-5) || !closeVec(max, e.BBoxMax, 1e-5) {
+			if !closeVecRel(min, e.BBoxMin) || !closeVecRel(max, e.BBoxMax) {
 				t.Errorf("%s %s (%s): AABB(WorldVerts) = %v..%v, BBox = %v..%v",
 					filepath.Base(path), e.GlobalID, e.Source, min, max, e.BBoxMin, e.BBoxMax)
 			}
@@ -157,8 +166,59 @@ func TestWorldVerts_AABBEqualsBBox(t *testing.T) {
 			t.Errorf("corpus exercised no %s elements — the invariant is untested for that source", src)
 		}
 	}
-	if placed == 0 {
-		t.Error("corpus has no non-identity placement — the invariant holds vacuously")
+	// A translation-only placement is not enough: it commutes with the AABB, so
+	// the invariant would hold even if WorldVerts dropped the rotation. Only a
+	// rotated placement makes this test able to fail.
+	if rotated == 0 {
+		t.Error("corpus has no ROTATED placement — the invariant holds vacuously")
+	}
+}
+
+// isRotated reports whether m's 3x3 part differs from identity, i.e. whether
+// the placement does anything a bare translation would not.
+func isRotated(m model.Mat4) bool {
+	id := model.Identity()
+	for _, i := range []int{0, 1, 2, 4, 5, 6, 8, 9, 10} {
+		if math.Abs(m[i]-id[i]) > 1e-12 {
+			return true
+		}
+	}
+	return false
+}
+
+// closeVecRel compares world coordinates with a tolerance that scales with
+// magnitude. WorldVerts rounds to float32, whose quantum grows with distance
+// from the origin (~6e-5 m at 1 km, ~8e-3 m at 100 km), and georeferenced IFC
+// models routinely sit at such offsets. A fixed absolute epsilon would make
+// the next real-world fixture fail for a rounding reason that has nothing to
+// do with the frame invariant this test guards.
+func closeVecRel(a, b [3]float64) bool {
+	for i := range a {
+		if math.Abs(a[i]-b[i]) > 1e-6*math.Max(1, math.Abs(b[i])) {
+			return false
+		}
+	}
+	return true
+}
+
+// TestWorldNormal_ParsedPlacement ties WorldNormal to a placement the PARSER
+// produced, not a hand-built matrix: obb_revolved.ifc is placed at 45 degrees
+// about Z, so a local +X must come back on the diagonal, still unit-length.
+func TestWorldNormal_ParsedPlacement(t *testing.T) {
+	e := buildOne(t, "testdata/synthetic/obb_revolved.ifc")
+	if !isRotated(e.Placement) {
+		t.Fatalf("fixture placement is not rotated: %v", e.Placement)
+	}
+	h := math.Sqrt2 / 2
+	if got := e.WorldNormal([3]float64{1, 0, 0}); !closeVec(got, [3]float64{h, h, 0}, 1e-9) {
+		t.Errorf("WorldNormal(+X) = %v, want (%v,%v,0)", got, h, h)
+	}
+	if got := e.WorldNormal([3]float64{0, 1, 0}); !closeVec(got, [3]float64{-h, h, 0}, 1e-9) {
+		t.Errorf("WorldNormal(+Y) = %v, want (%v,%v,0)", got, -h, h)
+	}
+	n := e.WorldNormal([3]float64{1, 0, 0})
+	if l := math.Sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]); math.Abs(l-1) > 1e-9 {
+		t.Errorf("parsed placement is not orthonormal: |WorldNormal(+X)| = %v, want 1", l)
 	}
 }
 

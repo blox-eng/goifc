@@ -7,8 +7,12 @@ ENDSEC;
 DATA;
 /* An IfcRevolvedAreaSolid has no dedicated tessellation path, so this element
    falls back to the OBB box built from the points reachable in its
-   representation subtree. Its placement is rotated 45 degrees about Z and
-   translated, so the local box and the world AABB genuinely differ. */
+   representation subtree. That box is a conservative point-cloud envelope, NOT
+   the swept volume: it spans the profile ring plus the revolution axis origin,
+   and the 90-degree sweep is not represented in it at all. That is the point —
+   the fixture exists to exercise the OBB source, not to be geometrically
+   faithful. Its placement is rotated 45 degrees about Z and translated, so the
+   local box and the world AABB genuinely differ. */
 #1=IFCPROJECT('0proj',$,'P',$,$,$,$,(#20),#10);
 #10=IFCUNITASSIGNMENT((#11));
 #11=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
