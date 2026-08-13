@@ -46,7 +46,13 @@ func axis2placement(a *step.Instance) Mat4 {
 	}
 	z := []float64{0, 0, 1}
 	if d, ok := a.Ref(attrAxisZ); ok {
-		if v := coords(d); len(v) == 3 {
+		// A zero Axis would hit normalize's zero-norm passthrough and stay
+		// zero, collapsing y = z X x too and leaving the placement SINGULAR —
+		// the same defect orthogonalize closes one line below, reached by a
+		// different door. IFC's own MagnitudeGreaterZero rule forbids it, but
+		// this package parses files it did not author, so keep the default
+		// world axis rather than trust the input.
+		if v := coords(d); len(v) == 3 && dot(v, v) > degenerateSq {
 			z = normalize(v)
 		}
 	}
@@ -66,6 +72,11 @@ func axis2placement(a *step.Instance) Mat4 {
 	return m
 }
 
+// degenerateSq is the squared-magnitude floor below which a direction vector is
+// treated as absent rather than meaningful. Squared, so callers compare against
+// dot(v,v) without a square root.
+const degenerateSq = 1e-20
+
 // orthogonalize removes z's component from x. A RefDirection that is parallel
 // to Axis (or zero) leaves nothing to project: normalize would hand back the
 // zero vector, collapsing basis columns 0 and 1 and making the whole placement
@@ -75,7 +86,17 @@ func axis2placement(a *step.Instance) Mat4 {
 // avoid. Fall back to whichever world axis z leans on least, which is at most
 // 45 degrees from the plane and so always projects to a usable vector.
 func orthogonalize(x, z []float64) []float64 {
-	if p := sub(x, scale(z, dot(x, z))); dot(p, p) > 1e-20 {
+	// Scale-RELATIVE, not absolute: IfcDirection carries no unit-length
+	// requirement, so a legal RefDirection of (1e-11,0,0) is perpendicular to
+	// Axis and perfectly unambiguous. Against a fixed epsilon its projection
+	// looks degenerate, the fallback fires, and the element's X axis silently
+	// comes back rotated 90 degrees — a wrong answer produced by the guard
+	// against wrong answers. Measure the projection against x's own magnitude.
+	// The comparison is against x's OWN squared magnitude, with no floor: a
+	// floor of 1 would re-absolutize the test for exactly the small vectors it
+	// is meant to protect. Zero x gives a zero threshold, and 0 > 0 is false,
+	// so the genuinely-degenerate case still falls through.
+	if p := sub(x, scale(z, dot(x, z))); dot(p, p) > degenerateSq*dot(x, x) {
 		return p
 	}
 	fallback := []float64{1, 0, 0}
