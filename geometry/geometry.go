@@ -28,10 +28,16 @@ func promoteSource(cur, next GeomSource) GeomSource {
 // Element is one element's proxy mesh in ELEMENT-LOCAL meters, plus its world
 // placement and world-space AABB. Verts is X,Y,Z triples; Tris indexes them.
 type Element struct {
-	GlobalID  string
+	GlobalID string
+	// Verts are ELEMENT-LOCAL X,Y,Z triples in meters. They are NOT world
+	// coordinates: apply Placement (or call [Element.WorldVerts]) to obtain
+	// world positions. BBoxMin/BBoxMax below ARE world — mixing a
+	// Verts-derived direction with a BBox-derived position silently yields
+	// wrong results in the local frame. For directions use
+	// [Element.WorldNormal], which drops the translation.
 	Verts     []float32
 	Tris      []uint32
-	Placement model.Mat4 // world, meters, IFC-native Z-up (-> GLB node.matrix)
+	Placement model.Mat4 // local -> world, meters, IFC-native Z-up (-> GLB node.matrix)
 	BBoxMin   [3]float64 // world-space AABB, meters
 	BBoxMax   [3]float64
 	Source    GeomSource
