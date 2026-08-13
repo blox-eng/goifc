@@ -134,7 +134,7 @@ func ringArea(r [][2]float64) float64 { // shoelace, abs
 
 func TestSectionRingsCubeMidCut(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{1, 1, 1})
-	rings := sectionRings(w, tris, 0.5)
+	rings := sectionRings(w, tris, HorizontalPlane(0.5))
 	if len(rings) != 1 {
 		t.Fatalf("want 1 ring, got %d: %v", len(rings), rings)
 	}
@@ -145,7 +145,7 @@ func TestSectionRingsCubeMidCut(t *testing.T) {
 
 func TestSectionRingsPlaneMisses(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{1, 1, 1})
-	rings := sectionRings(w, tris, 5.0)
+	rings := sectionRings(w, tris, HorizontalPlane(5.0))
 	if len(rings) != 0 {
 		t.Fatalf("want 0 rings, got %d: %v", len(rings), rings)
 	}
@@ -160,7 +160,7 @@ func TestSectionRingsTwoDisjointBoxes(t *testing.T) {
 	for _, i := range t2 {
 		tris = append(tris, i+off)
 	}
-	rings := sectionRings(w, tris, 1.0)
+	rings := sectionRings(w, tris, HorizontalPlane(1.0))
 	if len(rings) != 2 {
 		t.Fatalf("want 2 rings, got %d: %v", len(rings), rings)
 	}
@@ -180,7 +180,7 @@ func TestSectionRingsTJunction(t *testing.T) {
 	for _, i := range t2 {
 		tris = append(tris, i+off)
 	}
-	rings := sectionRings(w, tris, 1.0)
+	rings := sectionRings(w, tris, HorizontalPlane(1.0))
 	if len(rings) == 0 {
 		t.Fatalf("want >=1 ring, got 0")
 	}
@@ -198,7 +198,7 @@ func TestSectionRingsTJunction(t *testing.T) {
 
 func TestSectionRingsOnPlaneFace(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{1, 1, 1})
-	rings := sectionRings(w, tris, 1.0) // top face coplanar with cut
+	rings := sectionRings(w, tris, HorizontalPlane(1.0)) // top face coplanar with cut
 	// Nothing spans the plane; the box merely touches it -> 0 section rings.
 	if len(rings) != 0 {
 		t.Fatalf("want 0 rings (coplanar top face skipped), got %d: %v", len(rings), rings)
@@ -218,7 +218,7 @@ func TestSectionRingsCornerTouch(t *testing.T) {
 	for _, i := range t2 {
 		tris = append(tris, i+off)
 	}
-	rings := sectionRings(w, tris, 1.0)
+	rings := sectionRings(w, tris, HorizontalPlane(1.0))
 	if len(rings) != 2 {
 		t.Fatalf("want 2 rings (corner-touch resolved cleanly), got %d: %v", len(rings), rings)
 	}
@@ -239,7 +239,7 @@ func TestSectionRingsCornerTouch(t *testing.T) {
 
 func TestBelowRingsCube(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{2, 3, 1})
-	rings := belowRings(w, tris)
+	rings := belowRings(w, tris, HorizontalPlane(0))
 	if len(rings) != 1 {
 		t.Fatalf("want 1 silhouette ring, got %d", len(rings))
 	}
@@ -250,13 +250,13 @@ func TestBelowRingsCube(t *testing.T) {
 
 func TestBelowRingsDeterministic(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{2, 3, 1})
-	if !reflect.DeepEqual(belowRings(w, tris), belowRings(w, tris)) {
+	if !reflect.DeepEqual(belowRings(w, tris, HorizontalPlane(0)), belowRings(w, tris, HorizontalPlane(0))) {
 		t.Fatal("belowRings not deterministic")
 	}
 }
 
 func TestAabbRing(t *testing.T) {
-	r := aabbRing([3]float64{1, 1, 0}, [3]float64{4, 3, 2})
+	r := aabbRingOn([3]float64{1, 1, 0}, [3]float64{4, 3, 2}, HorizontalPlane(0))
 	if got := ringArea(r); math.Abs(got-6.0) > 1e-6 {
 		t.Fatalf("want 6.0, got %v", got)
 	}
@@ -283,8 +283,8 @@ func TestSectionRingsDeterministic(t *testing.T) {
 	for _, i := range t2 {
 		tris = append(tris, i+off)
 	}
-	r1 := sectionRings(w, tris, 1.0)
-	r2 := sectionRings(w, tris, 1.0)
+	r1 := sectionRings(w, tris, HorizontalPlane(1.0))
+	r2 := sectionRings(w, tris, HorizontalPlane(1.0))
 	if !reflect.DeepEqual(r1, r2) {
 		t.Fatalf("non-deterministic output:\n r1=%v\n r2=%v", r1, r2)
 	}

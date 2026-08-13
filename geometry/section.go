@@ -16,13 +16,13 @@ const (
 	sectionAreaEps     = 1e-12
 )
 
-// weldXY quantizes a world-XY point to an integer key at 1e-5 m resolution.
+// weldUV quantizes a plane-UV point to an integer key at 1e-5 m resolution.
 // Go brep meshes emit unshared vertices per face, so section-segment endpoints
-// must be welded by position or rings never close. Reused by later tasks.
-func weldXY(p [2]float64) [2]int64 {
+// must be welded by position or rings never close.
+func weldUV(q [2]float64) [2]int64 {
 	return [2]int64{
-		int64(math.Round(p[0] * sectionWeldQuantum)),
-		int64(math.Round(p[1] * sectionWeldQuantum)),
+		int64(math.Round(q[0] * sectionWeldQuantum)),
+		int64(math.Round(q[1] * sectionWeldQuantum)),
 	}
 }
 
@@ -37,42 +37,46 @@ func planeSign(d float64) int {
 	return 0
 }
 
-// triCrossing returns the crossing XY points of a triangle that genuinely spans
+// triCrossing returns the crossing UV points of a triangle that genuinely spans
 // the plane (it has at least one strictly-above and one strictly-below vertex).
 // On-plane vertices count as crossing points. A spanning triangle yields exactly
 // two distinct points; anything else is rejected by the caller.
-func triCrossing(verts [3]v3, ds [3]float64, ss [3]int) [][2]float64 {
+func triCrossing(p Plane, verts [3]v3, ds [3]float64, ss [3]int) [][2]float64 {
 	var pts [][2]float64
-	add := func(p [2]float64) {
-		for _, q := range pts {
-			if q == p {
+	add := func(q [2]float64) {
+		for _, r := range pts {
+			if r == q {
 				return
 			}
 		}
-		pts = append(pts, p)
+		pts = append(pts, q)
 	}
 	for i := 0; i < 3; i++ {
 		j := (i + 1) % 3
 		if ss[i] == 0 {
-			add([2]float64{verts[i][0], verts[i][1]})
+			add(projectUV(p, verts[i]))
 		}
 		if ss[i]*ss[j] < 0 { // strict sign change across this edge
 			tt := ds[i] / (ds[i] - ds[j])
-			add([2]float64{
+			// Interpolate in 3D, then project: projection is affine, so this
+			// agrees with interpolating in-plane, and it stays correct for a
+			// plane that is not axis-aligned.
+			add(projectUV(p, v3{
 				verts[i][0] + tt*(verts[j][0]-verts[i][0]),
 				verts[i][1] + tt*(verts[j][1]-verts[i][1]),
-			})
+				verts[i][2] + tt*(verts[j][2]-verts[i][2]),
+			}))
 		}
 	}
 	return pts
 }
 
-// sectionRings returns the closed world-XY rings where the triangle mesh crosses
-// the horizontal plane z = cutZ. World XY, meters, Y-up (IFC-native — NEVER flip
-// here). Empty when the plane misses the mesh. Each ring is wound CCW, canonical
-// (rotated to start at its lexicographically-smallest vertex), and the returned
-// slice is sorted deterministically — same input ALWAYS yields byte-identical output.
-func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
+// sectionRings returns the closed rings where the triangle mesh crosses plane p,
+// in p's UV coordinates, meters. Empty when the plane misses the mesh. Each ring
+// is wound CCW, canonical (rotated to its lexicographically-smallest vertex),
+// and the returned slice is sorted deterministically — same input ALWAYS yields
+// byte-identical output.
+func sectionRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	nv := uint32(len(w))
 
 	// Collect cut segments where triangles genuinely span the plane. Internal
@@ -85,7 +89,7 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 			continue
 		}
 		verts := [3]v3{w[i0], w[i1], w[i2]}
-		ds := [3]float64{verts[0][2] - cutZ, verts[1][2] - cutZ, verts[2][2] - cutZ}
+		ds := [3]float64{signedDist(p, verts[0]), signedDist(p, verts[1]), signedDist(p, verts[2])}
 		ss := [3]int{planeSign(ds[0]), planeSign(ds[1]), planeSign(ds[2])}
 		// Only genuine spans emit a segment; a face merely resting on / touching
 		// the plane (coplanar, or one on-plane edge) does not span it.
@@ -94,7 +98,7 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 		if !hasAbove || !hasBelow {
 			continue
 		}
-		pts := triCrossing(verts, ds, ss)
+		pts := triCrossing(p, verts, ds, ss)
 		if len(pts) != 2 {
 			continue
 		}
@@ -103,17 +107,20 @@ func sectionRings(w []v3, tris []uint32, cutZ float64) [][][2]float64 {
 	return stitchParityRings(segs)
 }
 
-// belowRings is the top-down silhouette of a solid: the boundary of its
-// downward-facing (−Z normal) faces, stitched into closed world-XY rings.
-// World XY, Y-up (no flip). Reuses stitchParityRings.
+// belowRings is the silhouette of a solid seen along p.N: the boundary of the
+// faces pointing AWAY from p.N, stitched into closed rings in p's UV
+// coordinates. Reuses stitchParityRings.
 //
-// LIMITATION: true below-context is the projected-polygon UNION of all
-// downward patches. This parity-boundary approach is a lighter approximation —
-// for a non-convex/furniture solid whose downward faces sit at different
-// heights, overlapping projected patches may leave internal boundary edges
-// rather than one filled silhouette. Acceptable because "below" is drawn as
-// light context only; a full 2D polygon-union library is a possible follow-up.
-func belowRings(w []v3, tris []uint32) [][][2]float64 {
+// For a CLOSED solid this outline is invariant under flipping p.N — edges shared
+// by two same-facing faces cancel, while each silhouette edge is shared by one
+// front and one back face and survives in either set. A consumer that needs the
+// near face specifically, rather than the outline, must decide that itself.
+//
+// LIMITATION: true silhouette is the projected-polygon UNION of all such
+// patches. This parity-boundary approach is a lighter approximation — for a
+// non-convex solid whose faces sit at different depths, overlapping projected
+// patches may leave internal boundary edges rather than one filled silhouette.
+func belowRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	nv := uint32(len(w))
 
 	var segs [][2][2]float64
@@ -124,16 +131,16 @@ func belowRings(w []v3, tris []uint32) [][][2]float64 {
 		}
 		n := crossv(subv(w[i1], w[i0]), subv(w[i2], w[i0]))
 		l := math.Sqrt(dotv(n, n))
-		if l == 0 || n[2]/l >= -1e-6 { // keep only downward-facing faces
+		if l == 0 || dotv(n, p.N)/l >= -1e-6 { // keep only faces opposing p.N
 			continue
 		}
-		p0 := [2]float64{w[i0][0], w[i0][1]}
-		p1 := [2]float64{w[i1][0], w[i1][1]}
-		p2 := [2]float64{w[i2][0], w[i2][1]}
+		q0 := projectUV(p, w[i0])
+		q1 := projectUV(p, w[i1])
+		q2 := projectUV(p, w[i2])
 		segs = append(segs,
-			[2][2]float64{p0, p1},
-			[2][2]float64{p1, p2},
-			[2][2]float64{p2, p0},
+			[2][2]float64{q0, q1},
+			[2][2]float64{q1, q2},
+			[2][2]float64{q2, q0},
 		)
 	}
 	return stitchParityRings(segs)
@@ -157,22 +164,34 @@ type Loop struct {
 	Points [][2]float64
 }
 
-// Footprint is the plan geometry of ONE element at cut height cutZ (world
-// meters): the section-cut rings (poché, hole-nested) if the plane crosses the
-// solid, else the top-down silhouette drawn as "below" context, else the
-// world-AABB rectangle as a last resort.
-func Footprint(e Element, cutZ float64) []Loop {
+// FootprintOn is the plan geometry of ONE element on plane p (world meters, in
+// p's UV frame): the section-cut rings (poché, hole-nested) if the plane crosses
+// the solid, else the silhouette of faces opposing p.N drawn as context, else
+// the element's world AABB projected into p's UV.
+//
+// Returns nil when p's basis is invalid (see Plane) — no rings rather than
+// wrongly-wound ones.
+func FootprintOn(e Element, p Plane) []Loop {
+	if !p.valid() {
+		return nil
+	}
 	if len(e.Tris) < 3 || len(e.Verts) < 9 {
-		return []Loop{{Role: LoopBelow, Points: aabbRing(e.BBoxMin, e.BBoxMax)}}
+		return []Loop{{Role: LoopBelow, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
 	}
 	w := worldPoints(e.Verts, e.Placement)
-	if cut := sectionRings(w, e.Tris, cutZ); len(cut) > 0 {
+	if cut := sectionRings(w, e.Tris, p); len(cut) > 0 {
 		return nestEvenOdd(cut, LoopCut)
 	}
-	if below := belowRings(w, e.Tris); len(below) > 0 {
+	if below := belowRings(w, e.Tris, p); len(below) > 0 {
 		return nestEvenOdd(below, LoopBelow)
 	}
-	return []Loop{{Role: LoopBelow, Points: aabbRing(e.BBoxMin, e.BBoxMax)}}
+	return []Loop{{Role: LoopBelow, Points: aabbRingOn(e.BBoxMin, e.BBoxMax, p)}}
+}
+
+// Footprint is FootprintOn at the horizontal plane z = cutZ. Retained unchanged
+// for callers that only ever wanted a floor plan.
+func Footprint(e Element, cutZ float64) []Loop {
+	return FootprintOn(e, HorizontalPlane(cutZ))
 }
 
 // nestEvenOdd classifies each ring by containment depth and emits Loops: a ring
@@ -252,12 +271,33 @@ func pointInPolygon(p [2]float64, poly [][2]float64) bool {
 	return inside
 }
 
-// aabbRing is the world-XY rectangle of an element's AABB — the last-resort
-// footprint when a mesh yields no usable rings. CCW, 4 points.
-func aabbRing(min, max [3]float64) [][2]float64 {
-	return [][2]float64{
-		{min[0], min[1]}, {max[0], min[1]}, {max[0], max[1]}, {min[0], max[1]},
+// aabbRingOn is the element's world AABB projected into p's UV frame: the 2D
+// bounding rectangle of the box's eight corners, CCW. The last-resort footprint
+// when a mesh yields no usable rings.
+//
+// This is a bounding rectangle, not a silhouette — the same approximation the
+// horizontal path always made, now expressed in the caller's frame instead of
+// world XY. For HorizontalPlane it reduces to exactly the old world-XY
+// rectangle.
+func aabbRingOn(min, max [3]float64, p Plane) [][2]float64 {
+	uMin, vMin := math.Inf(1), math.Inf(1)
+	uMax, vMax := math.Inf(-1), math.Inf(-1)
+	for i := 0; i < 8; i++ {
+		c := v3{min[0], min[1], min[2]}
+		if i&1 != 0 {
+			c[0] = max[0]
+		}
+		if i&2 != 0 {
+			c[1] = max[1]
+		}
+		if i&4 != 0 {
+			c[2] = max[2]
+		}
+		q := projectUV(p, c)
+		uMin, uMax = math.Min(uMin, q[0]), math.Max(uMax, q[0])
+		vMin, vMax = math.Min(vMin, q[1]), math.Max(vMax, q[1])
 	}
+	return [][2]float64{{uMin, vMin}, {uMax, vMin}, {uMax, vMax}, {uMin, vMax}}
 }
 
 // stitchParityRings welds the given XY segment endpoints (quantum 1e-5 m), keeps
@@ -269,7 +309,7 @@ func stitchParityRings(segs [][2][2]float64) [][][2]float64 {
 	keyToID := map[[2]int64]int{}
 	var pos [][2]float64
 	idOf := func(p [2]float64) int {
-		k := weldXY(p)
+		k := weldUV(p)
 		if id, ok := keyToID[k]; ok {
 			return id
 		}
