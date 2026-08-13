@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.12'
+          go-version-file: go.mod
           cache: true
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -69,7 +69,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.12'
+          go-version-file: go.mod
           cache: true
       - name: Run tests
         # goifc is pure Go with no cgo dependencies. Pinning CGO_ENABLED=0
@@ -99,13 +99,13 @@ jobs:
       # gltf.Encoder.Encode on the then-pinned 1.25.4, fixed in 1.25.8.
       - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
-          go-version-input: '1.25.12'
+          go-version-file: go.mod
           go-package: ./...
 
   fuzz:
     name: Fuzz Smoke
     runs-on: ubuntu-latest
-    needs: test
+    needs: conventional-commits
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,15 +114,17 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.25.12'
+          go-version-file: go.mod
           cache: true
-      # goifc parses files supplied by third parties, and its recursion guards
-      # (maxMapDepth, maxWalkDepth, maxApproxLadder) are hand-reasoned defences
-      # whose own comments describe the failure as a stack overflow that
-      # recover() cannot catch. A short per-PR run will not prove they hold, but
-      # it does stop a REGRESSION that reopens a crash the corpus already knows
-      # about, since the seed corpus and any committed testdata/fuzz/ crashers
-      # replay every run.
+      # What this job does and does NOT buy, stated honestly: replaying the
+      # seed corpus and any committed testdata/fuzz/ crashers already happens
+      # under plain `go test ./...` in the Test job above, which is a REQUIRED
+      # check. So regression-catching is banked there, not here. All this job
+      # adds is 60s of coverage-guided exploration per target — thin against a
+      # strict STEP grammar, but cheap, and it is where a new crasher would
+      # first show up. Real assurance needs a long scheduled run, not this.
+      # Deliberately not a required check: a fuzz OOM or timeout is infra
+      # noise and must not block a merge.
       - name: Fuzz the STEP parser
         env:
           CGO_ENABLED: '0'

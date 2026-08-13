@@ -60,6 +60,13 @@ func FuzzAssemble(f *testing.F) {
 		// Verts by vertex triple, so an out-of-range index is a corrupt mesh
 		// that would fault whatever renders or measures it downstream.
 		for _, e := range a.Scene.Elements {
+			// Check the triple-alignment first: len/3 truncates, so a Verts
+			// slice of length 3n+1 passes the range check below while being
+			// structurally malformed.
+			if len(e.Verts)%3 != 0 {
+				t.Fatalf("element %s (%s): %d floats in Verts, not a whole number of XYZ triples",
+					e.GlobalID, e.Source, len(e.Verts))
+			}
 			nv := uint32(len(e.Verts) / 3)
 			for _, idx := range e.Tris {
 				if idx >= nv {
