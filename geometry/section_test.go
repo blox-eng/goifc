@@ -289,3 +289,191 @@ func TestSectionRingsDeterministic(t *testing.T) {
 		t.Fatalf("non-deterministic output:\n r1=%v\n r2=%v", r1, r2)
 	}
 }
+
+// planeYZ is the vertical plane at x = atX, viewed along -X: U=+Y, V=+Z, N=+X.
+func planeYZ(atX float64) Plane {
+	return Plane{
+		Origin: [3]float64{atX, 0, 0},
+		U:      [3]float64{0, 1, 0},
+		V:      [3]float64{0, 0, 1},
+		N:      [3]float64{1, 0, 0},
+	}
+}
+
+func TestSectionOnVerticalCutHoleNesting(t *testing.T) {
+	// Concentric boxes; a vertical cut through the middle yields the outer
+	// boundary plus a nested hole — the same shape the horizontal path yields,
+	// now on a plane the old code could not express.
+	e := hollowBox(v3{0, 0, 0}, v3{4, 4, 4}, v3{1, 1, 1}, v3{3, 3, 3})
+	loops := e.SectionOn(planeYZ(2))
+	if len(loops) != 2 {
+		t.Fatalf("want 2 loops (outer + hole), got %d: %v", len(loops), loops)
+	}
+	var outer, hole int
+	for _, l := range loops {
+		if l.Role != LoopCut {
+			t.Fatalf("want LoopCut, got %q", l.Role)
+		}
+		if a := polygonArea2D(l.Points); a > 0 {
+			outer++
+		} else {
+			hole++
+		}
+	}
+	if outer != 1 || hole != 1 {
+		t.Fatalf("want 1 CCW outer and 1 CW hole, got %d/%d", outer, hole)
+	}
+}
+
+func TestSectionOnObliquePlaneArea(t *testing.T) {
+	// A 45-degree plane cutting the unit cube at x+y=0.5 crosses two side FACES
+	// and yields a sqrt(0.5) x 1 rectangle. Proves the UV projection is a real
+	// projection: dropping Z would give a degenerate 0, dropping X would give
+	// 0.5, and neither is sqrt(0.5).
+	//
+	// The plane is deliberately offset from the cube centre. Through the centre
+	// it would be x+y=1, which passes exactly along the (1,0,z) and (0,1,z)
+	// EDGES; triangles merely touching the plane do not span it (by design, see
+	// TestSectionRingsOnPlaneFace), so no side segments are emitted and no ring
+	// closes. That degenerate case is pinned separately below.
+	e := elemBox(v3{0, 0, 0}, v3{1, 1, 1})
+	p, ok := PlaneFromNormal([3]float64{0.25, 0.25, 0.5}, [3]float64{1, 1, 0})
+	if !ok {
+		t.Fatal("PlaneFromNormal failed")
+	}
+	loops := e.SectionOn(p)
+	if len(loops) != 1 {
+		t.Fatalf("want 1 loop, got %d: %v", len(loops), loops)
+	}
+	got := math.Abs(polygonArea2D(loops[0].Points))
+	want := math.Sqrt(0.5)
+	if math.Abs(got-want) > 1e-9 {
+		t.Fatalf("area = %v, want sqrt(0.5) = %v", got, want)
+	}
+}
+
+func TestSectionOnPlaneGrazingEdges(t *testing.T) {
+	// x+y=1 runs exactly along two vertical edges of the unit cube. Every side
+	// triangle touching them is {0,+,+} or {0,-,-}, so none spans the plane and
+	// no ring closes. Emitting nothing is the honest answer here — the same rule
+	// that makes a coplanar face produce no spurious ring. Pinned so the
+	// behaviour is a documented decision rather than a surprise.
+	e := elemBox(v3{0, 0, 0}, v3{1, 1, 1})
+	p, ok := PlaneFromNormal([3]float64{0.5, 0.5, 0.5}, [3]float64{1, 1, 0})
+	if !ok {
+		t.Fatal("PlaneFromNormal failed")
+	}
+	if got := e.SectionOn(p); got != nil {
+		t.Fatalf("edge-grazing plane: want nil, got %v", got)
+	}
+}
+
+func TestSectionOnRotationInvariance(t *testing.T) {
+	// The test that catches a wrong basis: the same box cut horizontally, and
+	// rotated 90 degrees about X then cut with the correspondingly rotated
+	// plane, must give the same ring area.
+	e := elemBox(v3{0, 0, 0}, v3{1, 2, 3})
+	flat := e.SectionOn(HorizontalPlane(1.5))
+	if len(flat) != 1 {
+		t.Fatalf("horizontal: want 1 loop, got %d", len(flat))
+	}
+
+	// Rotate 90 degrees about X (column-major): local +Y -> world +Z,
+	// local +Z -> world -Y.
+	rot := e
+	rot.Placement = model.Mat4{
+		1, 0, 0, 0,
+		0, 0, 1, 0,
+		0, -1, 0, 0,
+		0, 0, 0, 1,
+	}
+	// The plane's origin and normal rotate the same way: (0,0,1.5) -> (0,-1.5,0)
+	// and +Z -> -Y.
+	p, ok := PlaneFromNormal([3]float64{0, -1.5, 0}, [3]float64{0, -1, 0})
+	if !ok {
+		t.Fatal("PlaneFromNormal failed")
+	}
+	turned := rot.SectionOn(p)
+	if len(turned) != 1 {
+		t.Fatalf("rotated: want 1 loop, got %d: %v", len(turned), turned)
+	}
+
+	a := math.Abs(polygonArea2D(flat[0].Points))
+	b := math.Abs(polygonArea2D(turned[0].Points))
+	if math.Abs(a-b) > 1e-9 {
+		t.Fatalf("rotation-variant: horizontal area %v vs rotated %v", a, b)
+	}
+}
+
+func TestSectionOnRejectsInvalidBasis(t *testing.T) {
+	e := hollowBox(v3{0, 0, 0}, v3{4, 4, 4}, v3{1, 1, 1}, v3{3, 3, 3})
+	lefty := Plane{Origin: [3]float64{2, 0, 0}, U: [3]float64{0, 1, 0}, V: [3]float64{0, 0, 1}, N: [3]float64{-1, 0, 0}}
+	if got := e.SectionOn(lefty); got != nil {
+		t.Fatalf("left-handed basis: want nil, got %v", got)
+	}
+	if got := FootprintOn(e, lefty); got != nil {
+		t.Fatalf("left-handed basis: FootprintOn want nil, got %v", got)
+	}
+	skew := Plane{Origin: [3]float64{2, 0, 0}, U: [3]float64{0, 1, 0}, V: [3]float64{0, 1, 1}, N: [3]float64{1, 0, 0}}
+	if got := e.SectionOn(skew); got != nil {
+		t.Fatalf("non-orthonormal basis: want nil, got %v", got)
+	}
+}
+
+func TestSectionOnPlaneMisses(t *testing.T) {
+	e := elemBox(v3{0, 0, 0}, v3{1, 1, 1})
+	if got := e.SectionOn(planeYZ(50)); got != nil {
+		t.Fatalf("plane clear of the mesh: want nil, got %v", got)
+	}
+}
+
+func TestFootprintOnSilhouetteInvariantUnderFlip(t *testing.T) {
+	// For a CLOSED solid the parity boundary of the front-facing set equals that
+	// of the back-facing set, so flipping N changes nothing. Pinned so a future
+	// reader does not "fix" a flip that was never wrong.
+	e := elemBox(v3{0, 0, 0}, v3{1, 2, 3})
+	fwd := FootprintOn(e, planeYZ(-10))
+	back, ok := PlaneFromNormal([3]float64{-10, 0, 0}, [3]float64{-1, 0, 0})
+	if !ok {
+		t.Fatal("PlaneFromNormal failed")
+	}
+	rev := FootprintOn(e, back)
+	if len(fwd) != 1 || len(rev) != 1 {
+		t.Fatalf("want 1 silhouette loop each, got %d and %d", len(fwd), len(rev))
+	}
+	a := math.Abs(polygonArea2D(fwd[0].Points))
+	b := math.Abs(polygonArea2D(rev[0].Points))
+	if math.Abs(a-b) > 1e-9 {
+		t.Fatalf("silhouette area changed with N sign: %v vs %v", a, b)
+	}
+}
+
+func TestFootprintOnAabbFallbackUsesPlaneFrame(t *testing.T) {
+	// An element with no usable mesh, cut on a vertical plane, must fall back to
+	// its AABB projected into UV — not the world-XY rectangle.
+	e := Element{
+		GlobalID: "empty",
+		BBoxMin:  [3]float64{0, 0, 0},
+		BBoxMax:  [3]float64{1, 2, 3},
+	}
+	loops := FootprintOn(e, planeYZ(0))
+	if len(loops) != 1 {
+		t.Fatalf("want 1 fallback loop, got %d", len(loops))
+	}
+	// U=+Y spans 0..2, V=+Z spans 0..3 -> area 6. The world-XY rectangle would
+	// be 1 x 2 = 2.
+	if got := math.Abs(polygonArea2D(loops[0].Points)); math.Abs(got-6) > 1e-12 {
+		t.Fatalf("fallback area = %v, want 6 (UV frame); 2 means world XY", got)
+	}
+}
+
+func TestSectionOnDeterministic(t *testing.T) {
+	e := hollowBox(v3{0, 0, 0}, v3{4, 4, 4}, v3{1, 1, 1}, v3{3, 3, 3})
+	p, ok := PlaneFromNormal([3]float64{2, 2, 2}, [3]float64{1, 2, 3})
+	if !ok {
+		t.Fatal("PlaneFromNormal failed")
+	}
+	if !reflect.DeepEqual(e.SectionOn(p), e.SectionOn(p)) {
+		t.Fatal("SectionOn not deterministic on an oblique plane")
+	}
+}

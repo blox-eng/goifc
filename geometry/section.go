@@ -164,6 +164,25 @@ type Loop struct {
 	Points [][2]float64
 }
 
+// SectionOn returns the closed CUT rings where e's mesh crosses p, in p's UV
+// coordinates (meters), hole-nested and tagged LoopCut. Winding and determinism
+// guarantees match the horizontal path exactly.
+//
+// Returns nil when the plane misses the mesh, the mesh is degenerate, or p's
+// basis is invalid. Unlike FootprintOn it never falls back to a silhouette or a
+// bounding box: a caller building a section wants to know the plane missed
+// rather than receive a fabricated outline.
+func (e Element) SectionOn(p Plane) []Loop {
+	if !p.valid() || len(e.Tris) < 3 || len(e.Verts) < 9 {
+		return nil
+	}
+	cut := sectionRings(worldPoints(e.Verts, e.Placement), e.Tris, p)
+	if len(cut) == 0 {
+		return nil
+	}
+	return nestEvenOdd(cut, LoopCut)
+}
+
 // FootprintOn is the plan geometry of ONE element on plane p (world meters, in
 // p's UV frame): the section-cut rings (poché, hole-nested) if the plane crosses
 // the solid, else the silhouette of faces opposing p.N drawn as context, else
