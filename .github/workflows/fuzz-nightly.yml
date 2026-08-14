@@ -58,7 +58,10 @@ jobs:
       - name: Fuzz
         env:
           CGO_ENABLED: '0'
-        run: .github/scripts/fuzz-smoke.sh ${{ matrix.package }} ${{ matrix.target }} ${{ inputs.fuzztime || '30m' }}
+          FUZZTIME: ${{ inputs.fuzztime || '30m' }}
+          PKG: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
+        run: .github/scripts/fuzz-smoke.sh "$PKG" "$TARGET" "$FUZZTIME"
       # A crasher is written under testdata/fuzz/ and is the whole point of the
       # run — it must leave the runner even though the step above failed.
       - name: Upload crashers
