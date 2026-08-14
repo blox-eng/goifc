@@ -13,14 +13,16 @@
 
 [![cgo: disabled](https://img.shields.io/badge/cgo-disabled-00ADD8.svg)](.github/workflows/ci.yml)
 [![dependencies: 1](https://img.shields.io/badge/dependencies-1-00ADD8.svg)](go.mod)
-[![tests: 198](https://img.shields.io/badge/tests-198-00ADD8.svg)](https://github.com/blox-eng/goifc/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/blox-eng/goifc/branch/main/graph/badge.svg)](https://codecov.io/gh/blox-eng/goifc)
 [![govulncheck](https://img.shields.io/badge/govulncheck-enforced-00ADD8.svg)](.github/workflows/ci.yml)
 
 Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
-One `go get`, 6,500 lines, one static binary.
+One `go get`, one static binary.
 
-**Docs:** [`ifc`](https://pkg.go.dev/github.com/blox-eng/goifc) ·
+**[Documentation](https://blox-eng.github.io/goifc/)** — guides, concepts and the
+compatibility policy.
+
+**API reference:** [`ifc`](https://pkg.go.dev/github.com/blox-eng/goifc) ·
 [`step`](https://pkg.go.dev/github.com/blox-eng/goifc/step) ·
 [`model`](https://pkg.go.dev/github.com/blox-eng/goifc/model) ·
 [`geometry`](https://pkg.go.dev/github.com/blox-eng/goifc/geometry)
@@ -33,7 +35,8 @@ and a container three times the size of the service using it.
 
 So the question was never "is IfcOpenShell better." It is. The question was how
 much of it I actually needed. The answer turned out to be: parse the file, walk
-the semantics, tessellate enough to get numbers. That fits in 6,500 lines of Go.
+the semantics, tessellate enough to get numbers. That fits in a few thousand
+lines of Go.
 
 This is that subset, extracted and made honest about its edges.
 
@@ -108,7 +111,7 @@ func main() {
 	for i := range a.Result.Elements {
 		e := a.Result.Elements[i]
 		if e.Qto.Volume == nil {
-			continue // no volume for this element — see "Quantities" below
+			continue // no volume for this element — see the next section
 		}
 		fmt.Printf("%s\t%.3f m³\t(%s)\n", e.Name, *e.Qto.Volume, e.QuantitySource)
 	}
@@ -139,113 +142,49 @@ for _, n := range m.Nodes {
 Because nodes are emitted parents-first, you can create each row as you walk and
 resolve `ParentIndex` against ids you have already written. No second pass.
 
-## The pipeline
+## The numbers are labelled, and some of them are bounds
 
-`Assemble` runs three stages, each usable on its own:
+Every element reports where its quantities came from — `"qto"` for an authored
+`IfcElementQuantity` (net, from the modeller), `"geometry"` for one derived from
+the proxy mesh (**gross** — a wall over-reports by its windows and doors), and
+`"none"` where neither exists, never a fabricated `0.0`.
 
-| Package    | Does                                                                       |
-|------------|----------------------------------------------------------------------------|
-| `step`     | STEP/SPF (ISO 10303-21) tokenizer and entity graph. Schema-agnostic — no EXPRESS. |
-| `model`    | Entity graph → semantic `[]Element`. Ports ifcopenshell's `util.element`, `util.placement`, `util.unit`. |
-| `geometry` | Proxy tessellation, derived quantities, plane sections, and a Y-up GLB whose node names are `GlobalId`s. |
+That tag is the most important thing to understand before trusting a total:
+[quantities and provenance](https://blox-eng.github.io/goifc/concepts/quantities/).
 
-`step` is genuinely standalone. It parses any STEP file, IFC or not.
+The meshes are proxy geometry for visualization, not a B-rep substitute — do not
+clash-detect with them. The rest of the edges, stated plainly, are in
+[limitations](https://blox-eng.github.io/goifc/limitations/).
 
-## Quantities carry their provenance
+## More
 
-Every element reports where its numbers came from, because the two sources are
-not equally trustworthy:
+- [The pipeline](https://blox-eng.github.io/goifc/concepts/pipeline/) — `step`,
+  `model` and `geometry`, each usable on its own.
+- [Sections and floor plans](https://blox-eng.github.io/goifc/guides/sections/) —
+  cut the model with any plane, get closed 2D rings back.
+- [Storey plans](https://blox-eng.github.io/goifc/guides/storey-plans/) — what
+  `BuildImport` pre-bakes per `IfcBuildingStorey`.
+- [Local and world frames](https://blox-eng.github.io/goifc/concepts/frames/) —
+  meshes are local, bounding boxes are world, and mixing them is wrong without
+  erroring.
+- [The `step` package](https://blox-eng.github.io/goifc/step/) — parses any STEP
+  file, IFC or not.
 
-| `QuantitySource` | Means                                                        |
-|------------------|--------------------------------------------------------------|
-| `"qto"`          | Authored `IfcElementQuantity`. Net, exact, from the modeller. |
-| `"geometry"`     | Derived from the proxy mesh. Gross — a bounding estimate.     |
-| `"none"`         | Neither available. Never a fabricated `0.0`.                  |
+## Compatibility
 
-Authored quantities always win. A missing quantity stays missing. If you only
-trust one tier, filter on the tag — that is what it is for.
+The API is unstable pre-1.0 — expect breaking changes on minor versions, and pin
+a version. Used in production by Blox, whose import pipeline is the only consumer
+this has been hardened against, so the well-trodden path is `BuildImport` on
+architectural IFC exports; off that path, expect to find edges.
 
-## Sections and floor plans
-
-Cut the tessellated model with any plane and get closed 2D rings back, in the
-plane's own UV coordinates and metres:
-
-```go
-p, ok := geometry.PlaneFromNormal([3]float64{0, 0, 3}, [3]float64{0, 0, 1})
-if !ok {
-	panic("degenerate normal")
-}
-for _, e := range a.Scene.Elements {
-	for _, loop := range e.SectionOn(p) { // or geometry.FootprintOn(e, p)
-		_ = loop.Points // [][2]float64, outer rings CCW, holes CW
-	}
-}
-```
-
-`geometry.HorizontalPlane(z)` is the common case. `SectionOn` returns the true
-cut rings and returns nil rather than inventing an outline when the plane misses;
-`FootprintOn` is the forgiving sibling that falls back to a silhouette, which is
-what you want for a plan view and not what you want for a section.
-
-`BuildImport` uses this to pre-bake `StoreyPlans` — one `StoreyPlan` per
-`IfcBuildingStorey`, cut 1.2 m above the floor, with each entity's loops tagged
-by `GlobalID` and IFC class. That is a renderable floor plan without a second
-pass over the geometry.
-
-## Limitations
-
-**Geometry-derived volume is gross, not net.** On the `"geometry"` tier the
-extrude path reports the solid, un-subtracted volume. A wall with a window and
-a door over-reports against IfcOpenShell's net figure. Netting openings out of
-extruded geometry is out of scope — the tag exists so you can tell these apart
-and treat them as bounds.
-
-**Tessellated geometry is proxy geometry.** The meshes in the GLB are simplified
-representations for visualization. They are not a substitute for a B-rep kernel.
-Do not clash-detect with them.
-
-**No EXPRESS schema.** The semantic layer reads positional attribute indices that
-are stable across IFC2X3 and IFC4 for core entities. Exotic or schema-specific
-attributes are not reachable this way.
-
-**A section plane lying exactly along a solid's edges emits nothing.** A triangle
-only contributes a crossing segment when it has a vertex strictly above and one
-strictly below, so a face that merely touches the plane cannot close a ring. This
-is a known gap with a test pinning it, not an undiagnosed bug.
-
-## Status
-
-6,532 lines of non-test Go. The 198 tests are 190 unit, 6 runnable examples and
-2 fuzz targets; the one dependency is
-[`qmuntal/gltf`](https://github.com/qmuntal/gltf). The fuzz jobs are a 60-second
-smoke test per push — where a new crasher shows up first, not assurance on their
-own.
-
-Used in production by Blox, whose import pipeline is the only consumer this has
-been hardened against — so the well-trodden path is `BuildImport` on architectural
-IFC exports. Off that path, expect to find edges.
-
-The API is unstable pre-1.0 — expect breaking changes on minor versions. v0.2.0
-renamed `geometry.LoopBelow` to `LoopSilhouette`, a source-only break: the
-serialized string stayed `"below"`, so stored data was unaffected. Breaks are
-kept that shape where possible, but not promised. No support SLA.
-
-## Roadmap
-
-The open issues are the roadmap, and both are about getting more out of the
-geometry that is already tessellated:
-
-- [#4](https://github.com/blox-eng/goifc/issues/4) — classify an element's
-  outward-facing direction, so facades can be binned per elevation.
-- [#6](https://github.com/blox-eng/goifc/issues/6) — `ElevationView`: project a
-  facade onto a vertical plane, with openings.
-
-Netting openings out of extruded volume is deliberately **not** on it. That needs
-a real B-rep kernel, and the honest answer there is IfcOpenShell.
+Both of those have a fuller answer, including the serialization contracts that
+hold steady even when the Go API does not, in the
+[compatibility policy](https://blox-eng.github.io/goifc/compatibility/).
 
 ## Contributing
 
-Issues and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Commits follow
+Issues and PRs welcome — the [open issues](https://github.com/blox-eng/goifc/issues)
+are the roadmap. See [CONTRIBUTING.md](CONTRIBUTING.md). Commits follow
 [Conventional Commits](https://www.conventionalcommits.org/); CI enforces it.
 
 ## License

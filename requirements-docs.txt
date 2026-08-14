@@ -1,0 +1,10 @@
+# Documentation toolchain, pinned exactly so a docs build is reproducible and a
+# theme release cannot silently restyle the published site. Only direct
+# dependencies are listed; pip resolves the rest.
+#
+# Bumping these is a normal PR — `pip install -r requirements-docs.txt` and
+# `mkdocs serve` locally, and the docs workflow builds the same versions.
+
+mkdocs-material==9.7.7
+mike==2.2.0
+mkdocs-llmstxt==0.5.0

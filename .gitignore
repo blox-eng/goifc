@@ -1,3 +1,10 @@
 # Coverage profile written by `make test` and by the Test job in ci.yml.
 coverage.out
 coverage.html
+
+# Rendered docs site from `mkdocs build`. The published copy lives on the
+# gh-pages branch, written by mike from the Docs workflow — never committed here.
+/site/
+
+# Python venv holding the pinned docs toolchain, created by `make docs-deps`.
+/.venv-docs/

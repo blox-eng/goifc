@@ -23,6 +23,27 @@ pull request. A PR won't merge if either fails.
 `make all` additionally formats and vets. Run it before you push if your
 editor does not format on save; CI will not reformat for you.
 
+## Documentation
+
+The site at <https://blox-eng.github.io/goifc/> is built from `docs/` with
+MkDocs. To preview a change locally:
+
+```bash
+make docs-serve
+```
+
+The build runs with `--strict`, so a broken internal link fails rather than
+publishing a dead one. `make docs` does a one-shot build if you only want the
+check.
+
+Two pages are *included* from their canonical file rather than copied —
+`docs/step.md` from `step/README.md`, and `docs/changelog.md` from
+`CHANGELOG.md`. Edit the source file, not the page, or your change will be
+overwritten by the include.
+
+Docs deploy automatically on merge to `main` and on `v*` tags. It is deliberately
+not a required check: a Pages outage should never block a merge.
+
 ## Pull requests
 
 Keep PRs focused on one change. Include a test for any bug fix or new

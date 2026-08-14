@@ -1,0 +1,122 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  # Build (never deploy) on PRs that touch the docs, so a broken link or a moved
+  # snippet target fails in review rather than after merge. mkdocs runs with
+  # strict: true, which turns those into build errors.
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
+      - 'step/README.md'
+      - 'CHANGELOG.md'
+      - '.github/workflows/docs.yml'
+
+# Deploys serialize onto the gh-pages branch: two concurrent `mike deploy`
+# pushes race on the same ref. cancel-in-progress stays FALSE so a tag deploy
+# is never killed halfway by a push to main landing behind it.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+      - name: Install docs toolchain
+        run: pip install -r requirements-docs.txt
+      - name: Build
+        run: mkdocs build --strict
+
+  deploy:
+    name: Deploy Docs
+    # Never on a pull request: the build job above is the PR signal, and a fork
+    # PR must not be able to push to gh-pages.
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # contents: write is scoped to this one job — it is the only thing here that
+    # pushes, and it pushes to gh-pages only. Same pattern as release.yml.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # mike commits onto the gh-pages branch, so it needs the full history
+          # of the ref it is rewriting, not a shallow tip.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-docs.txt
+      - name: Install docs toolchain
+        run: pip install -r requirements-docs.txt
+      - name: Configure git identity for mike
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      # Two deploy paths, one alias policy:
+      #
+      #   push to main  -> version "dev",  no alias.  Unreleased docs, always
+      #                    reachable at /dev/ and never the default.
+      #   tag v*        -> version "1.2",  alias "latest" (moved), and the
+      #                    site root redirects to it.
+      #
+      # --update-aliases is what lets "latest" move off the previous release
+      # instead of erroring. --push writes gh-pages directly; mike creates that
+      # branch on the first run, so nothing needs to pre-exist.
+      - name: Deploy dev docs
+        if: startsWith(github.ref, 'refs/heads/')
+        run: mike deploy --push --update-aliases dev
+
+      # Without a default, gh-pages has no index.html at its root and the site
+      # root 404s — every link that points at the bare site URL is dead until
+      # the next tag runs set-default. So seed the default on the first main
+      # deploy and leave it alone afterwards; the tag path below moves it to
+      # `latest` and this guard then never fires again.
+      - name: Seed the root redirect if there is none
+        if: startsWith(github.ref, 'refs/heads/')
+        run: |
+          if git show origin/gh-pages:index.html >/dev/null 2>&1; then
+            echo "Root redirect already present; leaving the default alone."
+          else
+            echo "No root redirect yet — pointing it at dev."
+            mike set-default --push dev
+          fi
+
+      - name: Deploy release docs
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          # v1.2.3 -> 1.2, so patch releases republish in place rather than
+          # littering the version selector with entries nobody chooses between.
+          version="$(printf '%s' "${TAG#v}" | cut -d. -f1,2)"
+          mike deploy --push --update-aliases "$version" latest
+          mike set-default --push latest
