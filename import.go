@@ -7,10 +7,8 @@ import (
 )
 
 // ImportNode is one node of the import contract: spatial containers +
-// physical elements in a single parents-first tree. Field names map onto a
-// typical importer's row — GlobalID/IFCClass/Name/ParentIndex directly, Qto to
-// dimensions, OriginMin to a transform origin, BBox{Min,Max} to a bounding
-// box. Spatial nodes have no geometry, so their AABB stays zero.
+// physical elements in a single parents-first tree. Spatial nodes have no
+// geometry, so their AABB stays zero.
 type ImportNode struct {
 	GlobalID       string
 	ExpressID      int

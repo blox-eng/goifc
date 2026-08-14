@@ -145,6 +145,8 @@ jobs:
       # adds is 60s of coverage-guided exploration per target — thin against a
       # strict STEP grammar, but cheap, and it is where a new crasher would
       # first show up. Real assurance needs a long scheduled run, not this.
+      # That run now exists: .github/workflows/fuzz-nightly.yml (30m/target,
+      # nightly).
       # Deliberately not a required check: a fuzz OOM or timeout is infra
       # noise and must not block a merge. fuzz-smoke.sh enforces that split —
       # it forgives the known -fuzztime shutdown race and nothing else, so a

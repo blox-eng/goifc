@@ -2,21 +2,21 @@ package model
 
 import "github.com/blox-eng/goifc/step"
 
-// spatialClasses is the set of spatial-container classes emitted as import-tree
-// nodes. IfcProject is intentionally
-// excluded (it is the file root, not a placed container in the object tree).
+// spatialClasses is the set of spatial-container classes emitted as
+// import-tree nodes. IfcProject is intentionally excluded (it is the file
+// root, not a placed container in the object tree).
 var spatialClasses = []string{"IfcSite", "IfcBuilding", "IfcBuildingStorey", "IfcSpace"}
 
 // SpatialNodes returns the spatial-container elements (Site/Building/Storey/
 // Space) as semantic Elements, in deterministic id order. model.Extract omits
 // these — it is physical-only, matching the ifcopenshell parity reference
-// (by_type("IfcElement")) — so SpatialNodes recovers
-// them here to reproduce the import contract's site→storey→element tree.
+// (by_type("IfcElement")) — so SpatialNodes recovers them here to reproduce
+// the import contract's site→storey→element tree.
 //
-// These carry identity, name, and AUTHORED (tier-1) Qto — quantity extraction
-// runs for spatial nodes too, so an IfcSpace/IfcBuildingStorey with
-// Qto_SpaceBaseQuantities.GrossFloorArea emits real dimensions.
-// Spatial containers have no proxy geometry (their AABB is zero), so no geometry
+// These carry identity, name, and AUTHORED (tier-1) Qto — QtoQuantities runs
+// for spatial nodes too, so an IfcSpace/IfcBuildingStorey with
+// Qto_SpaceBaseQuantities.GrossFloorArea emits real dimensions. Spatial
+// containers have no proxy geometry (their AABB is zero), so no geometry
 // tier is applied; ParentIndex is assigned by the import-assembly layer.
 func SpatialNodes(f *step.File) []Element {
 	scale := UnitScale(f)

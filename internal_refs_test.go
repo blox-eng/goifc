@@ -33,8 +33,10 @@ func TestNoInternalReferences(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			// Nothing under .git or testdata is published documentation.
-			if name := d.Name(); name == ".git" || name == "testdata" {
+			// Nothing under .git, testdata, or vendor is published
+			// documentation — vendored code is not this project's, so it
+			// must not be able to fail this check on our behalf.
+			if name := d.Name(); name == ".git" || name == "testdata" || name == "vendor" {
 				return filepath.SkipDir
 			}
 			return nil
