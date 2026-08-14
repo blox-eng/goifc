@@ -6,11 +6,11 @@ import (
 	"github.com/blox-eng/goifc/step"
 )
 
-// ImportNode is one node of the flow import contract (import_emit.py): spatial
-// containers + physical elements in a single parents-first tree. It adapts to
-// flow's types.IFCElement downstream — GlobalID/IFCClass/Name/ParentIndex map
-// directly; Qto → dimensions; OriginMin → transform.origin; BBox{Min,Max} →
-// bounding_box. Spatial nodes have no geometry, so their AABB stays zero.
+// ImportNode is one node of the import contract: spatial containers +
+// physical elements in a single parents-first tree. Field names map onto a
+// typical importer's row — GlobalID/IFCClass/Name/ParentIndex directly, Qto to
+// dimensions, OriginMin to a transform origin, BBox{Min,Max} to a bounding
+// box. Spatial nodes have no geometry, so their AABB stays zero.
 type ImportNode struct {
 	GlobalID       string
 	ExpressID      int
@@ -52,7 +52,8 @@ type ImportModel struct {
 	// TypeLayers is the build-up per distinct IfcTypeObject, keyed by the type's
 	// GlobalId — the same key ImportNode.TypeGlobalID carries. Keyed by TYPE, not
 	// by occurrence: a real model has ~70 types and ~1,400 typed occurrences, and
-	// this whole struct is adapted into a Temporal payload with a 2 MB cap.
+	// this whole struct is typically serialized into a workflow payload with a
+	// low-megabyte size cap.
 	//
 	// A type that resolved but carries no ordered build-up is PRESENT with an
 	// empty Layers slice — that is a positive claim ("this type has no layers"),
@@ -62,16 +63,16 @@ type ImportModel struct {
 	TypeLayers map[string]TypeLayerSet
 }
 
-// BuildImport turns a parsed STEP file into the flow import contract, reproducing
-// import_emit.py: spatial containers (SpatialNodes) + physical elements (Assemble)
-// in ONE parents-first ordered tree.
+// BuildImport turns a parsed STEP file into the import contract: spatial
+// containers (SpatialNodes) + physical elements (Assemble) in ONE parents-first
+// ordered tree.
 //
 //	parent map  = IfcRelAggregates ∪ IfcRelContainedInSpatialStructure, FORWARD
 //	              (iterate each rel's Related* → RelatingObject/Structure). NEVER
 //	              per-node model.Container — Container(storey) self-parents (a storey
 //	              is the RelatingStructure of its own containment rels).
-//	order       = topo BFS from roots; a parent always precedes its child, so the
-//	              flow workflow's createdIDs[*ParentIndex] lookup never misses.
+//	order       = topo BFS from roots; a parent always precedes its child, so
+//	              a consumer's parentID[*ParentIndex] lookup never misses.
 //	geometry    = joined to physical nodes by GlobalID (the emitted order is NOT
 //	              index-aligned with Scene.Elements once spatial nodes are interleaved).
 func BuildImport(f *step.File) (*ImportModel, error) {
@@ -205,9 +206,9 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 }
 
 // forwardParentMap builds child-ExpressID → parent-ExpressID from the two
-// containment relations, matching import_emit._parent_map. It iterates the rels
-// FORWARD (RelatingObject/Structure is the parent, Related* the children) so a
-// spatial container is never resolved as its own parent.
+// containment relations. It iterates the rels FORWARD (RelatingObject/Structure
+// is the parent, Related* the children) so a spatial container is never
+// resolved as its own parent.
 //
 //	IfcRelAggregates(..., RelatingObject=4, RelatedObjects=5)
 //	IfcRelContainedInSpatialStructure(..., RelatedElements=4, RelatingStructure=5)
@@ -245,8 +246,8 @@ func forwardParentMap(f *step.File) map[int]int {
 }
 
 // topoOrder returns ExpressIDs parents-first: BFS from roots (a node whose parent
-// is absent from the set), matching import_emit._topo_order. Nodes left unvisited
-// by a reference cycle are appended in input order so none are dropped.
+// is absent from the set). Nodes left unvisited by a reference cycle are
+// appended in input order so none are dropped.
 func topoOrder(all []model.Element, parentOf map[int]int, inSet map[int]bool) []int {
 	children := make(map[int][]int)
 	var roots []int

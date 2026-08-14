@@ -90,8 +90,8 @@ func faceOuterLoop(face *step.Instance) []v3 {
 		// face normal (IFC spec); reverse them so the loop winding — which
 		// triangulateFace derives the facet normal from via Newell's method —
 		// matches the intended outward facing. Ignoring this ships those facets
-		// inside-out (inward normals / backface-culled), and the AABB oracle is
-		// blind to it since the vertex set is identical.
+		// inside-out (inward normals / backface-culled), and the AABB cross-check
+		// is blind to it since the vertex set is identical.
 		if o, ok := bv.Ref.Get(attrBoundOrientation); ok && o.Kind == step.KindBool && !o.B {
 			reverseV3(pts)
 		}

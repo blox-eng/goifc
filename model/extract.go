@@ -10,7 +10,7 @@ import (
 // across IFC2X3 and IFC4 (union, generated from the ifcopenshell schema —
 // ifcopenshell.ifcopenshell_wrapper.schema_by_name(...).declaration_by_name("IfcElement")
 // walked recursively via .subtypes()), minus IfcOpeningElement/IfcOpeningStandardCase
-// (the oracle's by_type("IfcElement") selection excludes openings — they are voids,
+// (the ifcopenshell parity oracle's by_type("IfcElement") selection excludes openings — they are voids,
 // not real elements). This matches the oracle's selection semantics: ifcopenshell's
 // by_type() expands to all schema subtypes automatically, but the step layer is
 // exact-match only (step.ByType does no schema subtype expansion), so the full

@@ -3,17 +3,17 @@ package model
 import "github.com/blox-eng/goifc/step"
 
 // spatialClasses is the set of spatial-container classes emitted as import-tree
-// nodes, matching import_emit.py's _SPATIAL. IfcProject is intentionally
+// nodes. IfcProject is intentionally
 // excluded (it is the file root, not a placed container in the object tree).
 var spatialClasses = []string{"IfcSite", "IfcBuilding", "IfcBuildingStorey", "IfcSpace"}
 
 // SpatialNodes returns the spatial-container elements (Site/Building/Storey/
 // Space) as semantic Elements, in deterministic id order. model.Extract omits
-// these — it is physical-only, to match the parity oracle
-// (semantic_oracle.py's by_type("IfcElement")) — so SpatialNodes recovers
+// these — it is physical-only, matching the ifcopenshell parity reference
+// (by_type("IfcElement")) — so SpatialNodes recovers
 // them here to reproduce the Python import contract's site→storey→element tree.
 //
-// These carry identity, name, and AUTHORED (tier-1) Qto — import_emit.py runs
+// These carry identity, name, and AUTHORED (tier-1) Qto — the geometry stage runs
 // _qto_quantities for spatial nodes too, so an IfcSpace/IfcBuildingStorey with
 // Qto_SpaceBaseQuantities.GrossFloorArea emits real dimensions (contract parity).
 // Spatial containers have no proxy geometry (their AABB is zero), so no geometry

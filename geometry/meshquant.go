@@ -7,8 +7,8 @@ import (
 )
 
 // meshQuantities computes tier-2 quantities from an element's WORLD-space proxy
-// mesh, porting ifcopenshell.util.shape so the values track the Python
-// import_emit baseline (which measured real world-coord meshes):
+// mesh, porting ifcopenshell.util.shape so the values track the
+// ifcopenshell baseline (which measured real world-coord meshes):
 //
 //	area      = get_max_side_area        (max over X/Y/Z of Σ actual area of tris facing +axis)
 //	volume    = get_volume               (|Σ signed tetra|, unconditional)

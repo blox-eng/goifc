@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestSpatialNodes_FullChain: the import contract (import_emit.py) emits the
+// TestSpatialNodes_FullChain: the import contract emits the
 // spatial containers Site/Building/Storey/Space as nodes — but NOT IfcProject
 // (_SPATIAL = Site,Building,Storey,Space) — so the object tree nests elements
 // under their storey. model.Extract omits these (physical-only, for the
