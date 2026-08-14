@@ -6,7 +6,9 @@
 # that catch bugs, and the checks that genuinely must pass — build, vet, lint,
 # `go test ./...`, govulncheck — already do.
 #
-# Flip informational to false on either status to make it binding.
+# Flip informational to false on either status to make it binding — but for
+# patch, see the decision note below: the branch protection ruleset must also
+# have codecov/patch as a required check, or it will stay advisory.
 coverage:
   status:
     project:
