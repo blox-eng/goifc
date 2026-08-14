@@ -17,6 +17,7 @@ import (
 var internalRefs = []string{
 	"import_emit",
 	"semantic_oracle",
+	"_qto_quantities",
 	"Temporal",
 	"flow's",
 	"flow import contract",
