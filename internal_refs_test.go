@@ -25,6 +25,9 @@ var internalRefs = []string{
 }
 
 // thisFile is skipped: it necessarily contains every banned string above.
+// This is the root-relative path the walk (starting at ".") produces for
+// this file, not just its basename — a same-named file in a subpackage
+// must not be exempted.
 const thisFile = "internal_refs_test.go"
 
 func TestNoInternalReferences(t *testing.T) {
@@ -41,7 +44,7 @@ func TestNoInternalReferences(t *testing.T) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(path, ".go") || filepath.Base(path) == thisFile {
+		if !strings.HasSuffix(path, ".go") || path == thisFile {
 			return nil
 		}
 		src, err := os.ReadFile(path)

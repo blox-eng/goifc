@@ -48,8 +48,12 @@ jobs:
       # The generated corpus lives in GOCACHE/fuzz and is what makes a long run
       # compound instead of restarting from the seeds every night. Restoring it
       # is best-effort: a cache miss costs coverage depth, never correctness.
+      # Restore and save are split (rather than a single actions/cache step)
+      # because that step's post-action only saves on success, and a failing
+      # run is exactly the run whose corpus matters most: a crasher was found.
+      # The save step below runs unconditionally so that corpus is kept.
       - name: Restore fuzz corpus
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build/fuzz
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
@@ -71,3 +75,11 @@ jobs:
           name: fuzz-crashers-${{ matrix.target }}
           path: '**/testdata/fuzz/**'
           if-no-files-found: ignore
+      # Save unconditionally: a failing run is a run that found something,
+      # and that corpus is the most valuable one this project will produce.
+      - name: Save fuzz corpus
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
