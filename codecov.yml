@@ -14,6 +14,15 @@ coverage:
         target: auto        # compare against the parent commit, not a fixed bar
         threshold: 1%       # ignore the sub-1% drift of an ordinary refactor
         informational: true
+    # Patch gate decision, 2026-08-14: deliberately left informational.
+    #
+    # Only one pull request has merged since Codecov was activated. This sample is
+    # too small to decide whether the 80% patch target is realistic or would block
+    # legitimate work. Once approximately five PRs have merged with Codecov active,
+    # compare their patch coverage against the target and decide. If the evidence
+    # supports gating, flip informational to false. Do not forget: changing this
+    # flag alone does not make the check binding. The codecov/patch status must
+    # also be added to the branch protection ruleset as a required check.
     patch:
       default:
         target: 80%         # new code is where a target is actually useful
