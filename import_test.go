@@ -43,7 +43,7 @@ func parentName(m *ImportModel, i int) string {
 // TestBuildImport_Tree exercises the spatial+physical import contract:
 // forward parent-map (C1: no storey self-parent), topo/parents-first order
 // (C2), spatial Qto (C3), and the fills-element door → null parent semantics
-// of import_emit._parent_map.
+// of the forward parent map.
 func TestBuildImport_Tree(t *testing.T) {
 	f := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
 	m, err := BuildImport(f)

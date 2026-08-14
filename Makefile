@@ -56,6 +56,11 @@ fuzz: ## Fuzz the untrusted-input paths (override with FUZZTIME=30m)
 	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),60s)
 	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),60s)
 
+fuzz-deep: ## Fuzz hard (default 30m per target; override with FUZZTIME=2h)
+	@echo "Deep-fuzzing each target for $(or $(FUZZTIME),30m)..."
+	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),30m)
+	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),30m)
+
 ci: lint test vulncheck ## Run the blocking CI checks (lint + test + vulncheck)
 
 all: fmt vet lint test build ## Run all checks and build

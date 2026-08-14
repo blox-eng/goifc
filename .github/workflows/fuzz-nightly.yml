@@ -1,0 +1,85 @@
+name: Fuzz Nightly
+
+on:
+  schedule:
+    # 03:17 UTC — off the hour, because everything on the hour contends for
+    # runners and a delayed fuzz start silently shortens the run.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: 'Duration per target (Go duration, e.g. 30m, 2h)'
+        required: false
+        default: '30m'
+
+concurrency:
+  group: fuzz-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fuzz:
+    name: Deep Fuzz (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false # one target crashing must not cancel the other's run
+      matrix:
+        include:
+          - target: FuzzParseBytes
+            package: ./step/
+          - target: FuzzAssemble
+            package: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The generated corpus lives in GOCACHE/fuzz and is what makes a long run
+      # compound instead of restarting from the seeds every night. Restoring it
+      # is best-effort: a cache miss costs coverage depth, never correctness.
+      # Restore and save are split (rather than a single actions/cache step)
+      # because that step's post-action only saves on success, and a failing
+      # run is exactly the run whose corpus matters most: a crasher was found.
+      # The save step below runs unconditionally so that corpus is kept.
+      - name: Restore fuzz corpus
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-corpus-${{ matrix.target }}-
+      - name: Fuzz
+        env:
+          CGO_ENABLED: '0'
+          FUZZTIME: ${{ inputs.fuzztime || '30m' }}
+          PKG: ${{ matrix.package }}
+          TARGET: ${{ matrix.target }}
+        run: .github/scripts/fuzz-smoke.sh "$PKG" "$TARGET" "$FUZZTIME"
+      # A crasher is written under testdata/fuzz/ and is the whole point of the
+      # run — it must leave the runner even though the step above failed.
+      - name: Upload crashers
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fuzz-crashers-${{ matrix.target }}
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
+      # Save unconditionally: a failing run is a run that found something,
+      # and that corpus is the most valuable one this project will produce.
+      - name: Save fuzz corpus
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}

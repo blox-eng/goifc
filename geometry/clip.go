@@ -57,10 +57,11 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]
 	if len(verts) == 0 || len(tris) == 0 {
 		return nil, nil, SourceOBB, false
 	}
-	// Empirically (verified against the oracle on a real gable-end roof clip,
-	// AgreementFlag=.F.): the kept side is the one whose signed distance to the
-	// base plane has the SAME sign convention as AgreementFlag itself — i.e.
-	// keep the >=0 side when AgreementFlag is TRUE, the <=0 side when FALSE.
+	// Empirically (verified against the ifcopenshell parity oracle on a real
+	// gable-end roof clip, AgreementFlag=.F.): the kept side is the one whose
+	// signed distance to the base plane has the SAME sign convention as
+	// AgreementFlag itself — i.e. keep the >=0 side when AgreementFlag is
+	// TRUE, the <=0 side when FALSE.
 	if second.IsA("IfcPolygonalBoundedHalfSpace") {
 		verts, tris, ok = clipTrianglesByBoundedPlane(verts, tris, origin, normal, agreeInside, second)
 		if !ok {

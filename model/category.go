@@ -161,9 +161,8 @@ var predefinedTypeIndexIFC4 = map[string]int{
 // predefinedTypeIndexIFC2X3 — IFC2X3's IfcElement subtree only added
 // PredefinedType to a handful of classes (door/window/stairflight gained it
 // later, in IFC4). IfcRamp/IfcRoof/IfcStair carry the equivalent enum under
-// the legacy name "ShapeType" at the same position — included here since the
-// oracle resolves it via getattr(elem,"PredefinedType") or
-// getattr(elem,"ShapeType") (semantic_oracle.py).
+// the legacy name "ShapeType" at the same position — included here so the
+// enum resolves off PredefinedType with a ShapeType fallback.
 var predefinedTypeIndexIFC2X3 = map[string]int{
 	"IFCCOVERING":        8,
 	"IFCELEMENTASSEMBLY": 9,

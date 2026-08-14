@@ -1,4 +1,7 @@
 name: CodeQL
+# Required check on main (ruleset 20694555). Unlike Fuzz Smoke, which is
+# deliberately advisory because a fuzz timeout is infra noise, CodeQL is
+# deterministic — a finding here is a finding, so it gates.
 
 on:
   push:

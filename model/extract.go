@@ -6,18 +6,21 @@ import (
 	"github.com/blox-eng/goifc/step"
 )
 
-// emitOrRenderClasses is the complete set of concrete IfcElement subtype names
-// across IFC2X3 and IFC4 (union, generated from the ifcopenshell schema —
+// emitOrRenderClasses is the complete set of concrete IfcElement subtype
+// names across IFC2X3 and IFC4 (union, generated from the ifcopenshell
+// schema —
 // ifcopenshell.ifcopenshell_wrapper.schema_by_name(...).declaration_by_name("IfcElement")
-// walked recursively via .subtypes()), minus IfcOpeningElement/IfcOpeningStandardCase
-// (the oracle's by_type("IfcElement") selection excludes openings — they are voids,
-// not real elements). This matches the oracle's selection semantics: ifcopenshell's
-// by_type() expands to all schema subtypes automatically, but the step layer is
-// exact-match only (step.ByType does no schema subtype expansion), so the full
-// subtype closure must be baked in here instead. Every entry below is provably an
-// IfcElement subtype by construction, so this list can only ever be under-inclusive
-// relative to the oracle (a missing element class), never over-inclusive (an EXTRA
-// class the oracle wouldn't also emit).
+// walked recursively via .subtypes()), minus
+// IfcOpeningElement/IfcOpeningStandardCase (the ifcopenshell parity oracle's
+// by_type("IfcElement") selection excludes openings — they are voids, not
+// real elements). This matches the oracle's selection semantics:
+// ifcopenshell's by_type() expands to all schema subtypes automatically, but
+// the step layer is exact-match only (step.ByType does no schema subtype
+// expansion), so the full subtype closure must be baked in here instead.
+// Every entry below is provably an IfcElement subtype by construction, so
+// this list can only ever be under-inclusive relative to the oracle (a
+// missing element class), never over-inclusive (an EXTRA class the oracle
+// wouldn't also emit).
 var emitOrRenderClasses = []string{
 	"IfcActuator", "IfcAirTerminal", "IfcAirTerminalBox",
 	"IfcAirToAirHeatRecovery", "IfcAlarm", "IfcAudioVisualAppliance",
