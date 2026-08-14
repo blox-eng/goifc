@@ -1,0 +1,29 @@
+# Codecov is a reporting tool here, not a gate.
+#
+# Both statuses are informational: they post the number and the delta on a pull
+# request and never turn a check red. A coverage threshold that blocks a merge
+# mostly teaches people to write tests that move the number rather than tests
+# that catch bugs, and the checks that genuinely must pass — build, vet, lint,
+# `go test ./...`, govulncheck — already do.
+#
+# Flip informational to false on either status to make it binding.
+coverage:
+  status:
+    project:
+      default:
+        target: auto        # compare against the parent commit, not a fixed bar
+        threshold: 1%       # ignore the sub-1% drift of an ordinary refactor
+        informational: true
+    patch:
+      default:
+        target: 80%         # new code is where a target is actually useful
+        informational: true
+
+comment:
+  layout: "condensed_header, diff, flags, components"
+  require_changes: true     # stay quiet on pull requests that move nothing
+
+# The profile is produced with -coverpkg=./..., so every non-test file in the
+# module already appears whether or not its own package has a test binary.
+ignore:
+  - "**/*_test.go"

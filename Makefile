@@ -5,7 +5,9 @@
 
 # Variables
 GOLANGCI_LINT_TIMEOUT := 5m
-TEST_FLAGS := -v -cover
+# Matches the Test job in ci.yml, including -coverpkg, so the number `make test`
+# prints is the number Codecov reports rather than a rosier per-package one.
+TEST_FLAGS := -v -covermode=atomic -coverpkg=./... -coverprofile=coverage.out
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -51,8 +53,8 @@ vulncheck: ## Scan for vulnerabilities reachable from this code (incl. stdlib)
 
 fuzz: ## Fuzz the untrusted-input paths (override with FUZZTIME=30m)
 	@echo "Fuzzing each target for $(or $(FUZZTIME),60s)..."
-	go test ./step/ -run FuzzParseBytes -fuzz FuzzParseBytes -fuzztime=$(or $(FUZZTIME),60s)
-	go test . -run FuzzAssemble -fuzz FuzzAssemble -fuzztime=$(or $(FUZZTIME),60s)
+	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),60s)
+	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),60s)
 
 ci: lint test vulncheck ## Run the blocking CI checks (lint + test + vulncheck)
 
