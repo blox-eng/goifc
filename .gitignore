@@ -1,0 +1,3 @@
+# Coverage profile written by `make test` and by the Test job in ci.yml.
+coverage.out
+coverage.html

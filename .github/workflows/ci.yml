@@ -76,9 +76,25 @@ jobs:
         # asserts that property in CI: if a dependency ever sneaks in a cgo
         # requirement, the build fails loudly here instead of silently
         # linking against system libraries.
+        #
+        # -coverpkg=./... attributes coverage to the package that OWNS the line
+        # rather than the package whose test executed it, which is the only way
+        # the cross-package paths (step parsed by a model test, geometry driven
+        # from Assemble) count at all. It reports one module-wide number instead
+        # of four per-package ones — 85.3% at the time of writing.
         env:
           CGO_ENABLED: '0'
-        run: go test -v -cover ./...
+        run: go test -v -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+      # Coverage reporting must never be able to fail a REQUIRED check on
+      # somebody else's outage, so fail_ci_if_error stays false. The token is
+      # optional here: blox-eng/goifc is public, so tokenless upload from
+      # Actions works, and the secret is read for the day that stops being true.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   govulncheck:
     name: Vulnerability Scan
@@ -99,6 +115,12 @@ jobs:
       # gltf.Encoder.Encode on the then-pinned 1.25.4, fixed in 1.25.8.
       - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
         with:
+          # go-version-input defaults to 'stable', and the action forwards BOTH
+          # it and go-version-file to setup-go, which then ignores the file and
+          # warns. That silently scanned whatever 'stable' happened to be rather
+          # than the toolchain we ship — the exact opposite of the paragraph
+          # above. Blanking it makes go.mod authoritative for real.
+          go-version-input: ''
           go-version-file: go.mod
           go-package: ./...
 
@@ -124,15 +146,17 @@ jobs:
       # strict STEP grammar, but cheap, and it is where a new crasher would
       # first show up. Real assurance needs a long scheduled run, not this.
       # Deliberately not a required check: a fuzz OOM or timeout is infra
-      # noise and must not block a merge.
+      # noise and must not block a merge. fuzz-smoke.sh enforces that split —
+      # it forgives the known -fuzztime shutdown race and nothing else, so a
+      # crasher still fails the job loudly.
       - name: Fuzz the STEP parser
         env:
           CGO_ENABLED: '0'
-        run: go test ./step/ -run FuzzParseBytes -fuzz FuzzParseBytes -fuzztime=60s
+        run: .github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes 60s
       - name: Fuzz the full assemble path
         env:
           CGO_ENABLED: '0'
-        run: go test . -run FuzzAssemble -fuzz FuzzAssemble -fuzztime=60s
+        run: .github/scripts/fuzz-smoke.sh . FuzzAssemble 60s
       - name: Upload crashers
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
