@@ -4,10 +4,7 @@ Cut the tessellated model with any plane and get closed 2D rings back, in the
 plane's own UV coordinates and metres.
 
 ```go
-p, ok := geometry.PlaneFromNormal([3]float64{0, 0, 3}, [3]float64{0, 0, 1})
-if !ok {
-	panic("degenerate normal")
-}
+p := geometry.HorizontalPlane(3.0) // cut at z = 3 m
 for _, e := range a.Scene.Elements {
 	for _, loop := range e.SectionOn(p) {
 		_ = loop.Points // [][2]float64, outer rings CCW, holes CW
@@ -15,7 +12,22 @@ for _, e := range a.Scene.Elements {
 }
 ```
 
-`geometry.HorizontalPlane(z)` is the common case and saves you the `ok` check.
+For a plane that is not horizontal, `PlaneFromNormal` builds one from an origin
+and a normal:
+
+```go
+p, ok := geometry.PlaneFromNormal([3]float64{0, 0, 3}, [3]float64{1, 0, 0})
+if !ok {
+	panic("degenerate normal")
+}
+```
+
+!!! warning "`PlaneFromNormal` does not promise a particular UV orientation"
+    Its `U` is deterministic for a given normal, but *which* in-plane
+    orientation it picks is unspecified and may change between versions —
+    including for a `+Z` normal, where it is **not** guaranteed to match
+    `HorizontalPlane`. If you persist `Points`, or need to match an external
+    convention, build the `Plane` yourself rather than rely on this choice.
 
 ## `SectionOn` versus `FootprintOn`
 
@@ -28,16 +40,11 @@ the solid.
 | Plane misses | `nil` | silhouette of faces opposing `p.N`, tagged `LoopSilhouette` |
 | Mesh degenerate / no silhouette | `nil` | bounding-box rectangle, tagged `LoopSilhouette` |
 
-`SectionOn` returns the true cut rings and returns `nil` rather than inventing an
-outline when the plane misses. `FootprintOn` is the forgiving sibling that falls
-back to a silhouette.
-
-**That is a plan-view feature and a section-view bug.** A floor plan wants
-context geometry for everything on the storey, whether or not the cut height
-happens to pass through it. A building section wants to know the plane missed —
-a fabricated rectangle in a section drawing is a lie that renders convincingly.
-
-Pick by which of those you are drawing.
+**That fallback is a plan-view feature and a section-view bug.** A floor plan
+wants context geometry for everything on the storey, whether or not the cut
+height happens to pass through it. A building section wants to know the plane
+missed — a fabricated rectangle in a section drawing is a lie that renders
+convincingly.
 
 ## Loop roles
 

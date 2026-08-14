@@ -35,9 +35,10 @@ vet: ## Run go vet
 	@echo "Running go vet..."
 	go vet ./...
 
-clean: ## Clean build artifacts
+clean: ## Clean build artifacts (Go cache, rendered site, docs venv)
 	@echo "Cleaning..."
 	go clean ./...
+	rm -rf site $(DOCS_VENV)
 
 vulncheck: ## Scan for vulnerabilities reachable from this code (incl. stdlib)
 	@echo "Running govulncheck..."

@@ -40,8 +40,3 @@ noted in [limitations](../limitations.md) — there is no EXPRESS schema behind 
 lossless with respect to the file. Tessellation is where proxy meshes and
 derived, gross quantities come from, and it is why quantities carry a
 [provenance tag](quantities.md).
-
-Choosing a stage is choosing how much you are willing to approximate. Stopping at
-`step` gets you the file. Stopping at `model` gets you the semantics with the
-modeller's own authored numbers. Going to `geometry` gets you numbers for
-elements the modeller never quantified, at the cost of them being bounds.

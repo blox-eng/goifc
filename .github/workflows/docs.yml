@@ -17,11 +17,13 @@ on:
       - 'CHANGELOG.md'
       - '.github/workflows/docs.yml'
 
-# Deploys serialize onto the gh-pages branch: two concurrent `mike deploy`
-# pushes race on the same ref. cancel-in-progress stays FALSE so a tag deploy
-# is never killed halfway by a push to main landing behind it.
+# Every push deploy writes the SAME gh-pages branch, so they must all share one
+# group — keying on github.ref would put a main push and a v* tag in different
+# groups and let them race to a non-fast-forward push. PR builds touch nothing
+# and only need to serialize per-PR. cancel-in-progress stays FALSE so a tag
+# deploy is never killed halfway by a push to main landing behind it.
 concurrency:
-  group: docs-${{ github.ref }}
+  group: docs-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
   cancel-in-progress: false
 
 permissions:
@@ -95,19 +97,27 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/')
         run: mike deploy --push --update-aliases dev
 
-      # Without a default, gh-pages has no index.html at its root and the site
-      # root 404s — every link that points at the bare site URL is dead until
-      # the next tag runs set-default. So seed the default on the first main
-      # deploy and leave it alone afterwards; the tag path below moves it to
-      # `latest` and this guard then never fires again.
-      - name: Seed the root redirect if there is none
+      # Two things do not exist until the first release tag, and every docs URL
+      # outside the site root depends on both:
+      #
+      #   - the root index.html redirect, without which the bare site URL 404s
+      #   - the `latest` alias, which is the prefix site_url and every README
+      #     link point at (mike serves each version under its own prefix and
+      #     writes NO per-page redirect at the root, so an unprefixed deep link
+      #     is dead, not redirected)
+      #
+      # Seed both on the first main deploy so the site is usable before any tag
+      # is cut. The tag path below moves `latest` onto the real release and
+      # re-sets the default, so this guard fires exactly once, ever.
+      - name: Seed the latest alias and root redirect if there is none
         if: startsWith(github.ref, 'refs/heads/')
         run: |
           if git show origin/gh-pages:index.html >/dev/null 2>&1; then
-            echo "Root redirect already present; leaving the default alone."
+            echo "Root redirect already present; leaving latest and the default alone."
           else
-            echo "No root redirect yet — pointing it at dev."
-            mike set-default --push dev
+            echo "No root redirect yet — pointing latest and the default at dev."
+            mike alias --push --update-aliases dev latest
+            mike set-default --push latest
           fi
 
       - name: Deploy release docs

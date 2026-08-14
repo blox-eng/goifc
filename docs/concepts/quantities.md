@@ -10,7 +10,7 @@ not equally trustworthy.
 | `"none"`         | Neither available. Never a fabricated `0.0`. |
 
 Authored quantities always win. A missing quantity stays missing. If you only
-trust one tier, filter on the tag — that is what it is for.
+trust one tier, filter on the tag.
 
 ## How the tiers get applied
 
@@ -27,16 +27,15 @@ Back-filling never overwrites. An element that arrived with an authored volume
 keeps it and stays `"qto"`; an element with no authored volume takes the derived
 one and becomes `"geometry"`; an element with no mesh either stays `"none"`.
 
-## Why gross is not a bug
+## Why tier 2 is gross
 
 On the `"geometry"` tier the extrude path reports the solid, un-subtracted
 volume. A wall with a window and a door over-reports against IfcOpenShell's net
 figure.
 
-This is a deliberate boundary, not an unfinished feature. Netting openings out of
-extruded geometry needs a real B-rep kernel; the honest answer there is
-IfcOpenShell. What goifc does instead is refuse to hide the difference — the tag
-exists so you can tell the two apart and treat tier 2 as a bound.
+Netting openings out of extruded geometry needs a real B-rep kernel; the honest
+answer there is IfcOpenShell. The tag exists so you can tell the two apart and
+treat tier 2 as a bound.
 
 !!! warning "Do not sum across tiers silently"
     Adding a `"qto"` volume to a `"geometry"` volume produces a number that is

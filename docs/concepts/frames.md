@@ -1,9 +1,9 @@
 # Local and world frames
 
 A `geometry.Element` carries data in **two different coordinate frames**, and
-nothing in the type system stops you from mixing them. This page exists because
-mixing them is wrong *without erroring* — the code runs, the numbers look
-plausible, and the answer is silently rotated or offset.
+nothing in the type system stops you from mixing them. Mixing them is wrong
+*without erroring*: the code runs, the numbers look plausible, and the answer is
+silently rotated or offset.
 
 | Field / method            | Frame | Units |
 |---------------------------|-------|-------|

@@ -1,17 +1,12 @@
 # Limitations
 
-The honest edges. None of these are undiagnosed bugs — each is a boundary that
-was chosen, and each has a test or a tag pinning it.
+The edges, stated plainly. Each is a chosen boundary, not an undiagnosed bug.
 
 ## Geometry-derived volume is gross, not net
 
-On the `"geometry"` tier the extrude path reports the solid, un-subtracted
-volume. A wall with a window and a door over-reports against IfcOpenShell's net
-figure.
-
-Netting openings out of extruded geometry is out of scope — it needs a real B-rep
-kernel. The [provenance tag](concepts/quantities.md) exists so you can tell these
-apart and treat tier 2 as a bound.
+Tier-2 volumes are un-subtracted solids: a wall over-reports by its windows and
+doors. See [quantities and provenance](concepts/quantities.md) — the tag exists
+so you can tell tier 1 from tier 2 and treat tier 2 as a bound.
 
 ## Tessellated geometry is proxy geometry
 

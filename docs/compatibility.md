@@ -45,8 +45,8 @@ across both. There is no EXPRESS schema — see [limitations](limitations.md).
 ## Go version
 
 The supported Go version is whatever `go.mod` declares. CI builds and tests with
-`CGO_ENABLED=0`, which asserts the no-cgo property rather than merely hoping for
-it: if a dependency ever introduces a cgo requirement, the build fails loudly.
+`CGO_ENABLED=0`: if a dependency ever introduces a cgo requirement, the build
+fails loudly instead of silently linking against system libraries.
 
 ## "Used in production by Blox" — what that scopes to
 

@@ -73,8 +73,8 @@ func main() {
 }
 ```
 
-That `e.QuantitySource` tag is not decoration. A volume derived from the proxy
-mesh is a gross bound, not the modeller's net figure — see
+`e.QuantitySource` says whether the number is the modeller's or a bound derived
+from the proxy mesh. A tier-2 volume is gross — read
 [quantities and provenance](concepts/quantities.md) before you put these numbers
 in front of anyone.
 

@@ -5,6 +5,10 @@ title: The step package
 <!-- Included from step/README.md rather than copied, so the package's own
      directory README and this page cannot disagree. Edit step/README.md. -->
 
+!!! note "Source"
+    This page is [`step/README.md`](https://github.com/blox-eng/goifc/blob/main/step/README.md)
+    included verbatim — edit that file, not this page.
+
 --8<-- "step/README.md"
 
 ## Also see

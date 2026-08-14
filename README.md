@@ -27,56 +27,22 @@ compatibility policy.
 [`model`](https://pkg.go.dev/github.com/blox-eng/goifc/model) ·
 [`geometry`](https://pkg.go.dev/github.com/blox-eng/goifc/geometry)
 
-## Why this exists
-
-I needed quantities out of IFC files inside a Go service. Every path led back to
-IfcOpenShell — which is very good, and which is a C++ toolchain, a Python runtime,
-and a container three times the size of the service using it.
-
-So the question was never "is IfcOpenShell better." It is. The question was how
-much of it I actually needed. The answer turned out to be: parse the file, walk
-the semantics, tessellate enough to get numbers. That fits in a few thousand
-lines of Go.
-
-This is that subset, extracted and made honest about its edges.
-
-## Which one you want
-
-|                       | goifc                            | IfcOpenShell                    |
-|-----------------------|----------------------------------|---------------------------------|
-| Deploy                | `go get`, static binary          | C++ toolchain, Python runtime   |
-| Solids                | proxy meshes                     | exact B-rep (OCCT)              |
-| Quantities            | authored, or derived + labelled  | authored, or exact from solids  |
-| Openings netted out   | no — gross volume                | yes — net volume                |
-| Schema coverage       | IFC2X3 / IFC4 core entities      | full EXPRESS schema             |
-| Runs in a Go process  | yes                              | via subprocess or bindings      |
+## Should you use it
 
 Pick goifc when deployment cost dominates and bounding numbers are good enough.
-Pick IfcOpenShell when the geometry has to be exact.
+Pick IfcOpenShell when the geometry has to be exact — it is the better library,
+and it is also a C++ toolchain, a Python runtime, and a container several times
+the size of the service using it. goifc is the subset you need to parse the
+file, walk the semantics, and tessellate enough to get numbers.
+
+The [feature-by-feature comparison](https://blox-eng.github.io/goifc/latest/)
+is on the docs site.
 
 ## Install
 
 ```bash
 go get github.com/blox-eng/goifc
 ```
-
-## What you get
-
-Everything starts with `step.ParseBytes`. From there, two entry points — pick by
-whether you want a flat list or a tree:
-
-| Call                | Returns        | Use when                                                        |
-|---------------------|----------------|-----------------------------------------------------------------|
-| `ifc.Assemble(f)`   | `*Assembled`   | You want the elements and their numbers. A flat `[]model.Element` with quantities back-filled, plus the `*geometry.Scene` they came from. |
-| `ifc.BuildImport(f)`| `*ImportModel` | You are importing the model into your own store. Spatial containers and physical elements in ONE parents-first tree (`ParentIndex` always points backwards), plus per-type material layers and per-storey floor plans. |
-
-`BuildImport` calls `Assemble` and adds the structure around it. It is the call
-Blox actually ships — the flat list is rarely what an importer wants, because
-a wall means little without the storey it sits on.
-
-Both hand back a `*geometry.Scene`, and `Scene.WriteGLB(w)` writes a Y-up GLB
-whose node names are `GlobalId`s — so a viewer's picked node is a database key,
-with no side table to maintain.
 
 ## Quickstart
 
@@ -123,24 +89,10 @@ func main() {
 
 The package is named `ifc`, not `goifc` — alias the import as above.
 
-Walking the tree instead:
-
-```go
-m, err := ifc.BuildImport(f)
-if err != nil {
-	panic(err)
-}
-for _, n := range m.Nodes {
-	depth := 0
-	for p := n.ParentIndex; p != nil; p = m.Nodes[*p].ParentIndex {
-		depth++
-	}
-	fmt.Printf("%*s%s (%s)\n", depth*2, "", n.Name, n.IFCClass)
-}
-```
-
-Because nodes are emitted parents-first, you can create each row as you walk and
-resolve `ParentIndex` against ids you have already written. No second pass.
+`Assemble` gives you a flat list. `ifc.BuildImport(f)` is the other entry point:
+the same elements as a parents-first tree with spatial containers, per-type
+material layers and pre-baked floor plans — the call Blox actually ships. See
+[getting started](https://blox-eng.github.io/goifc/latest/getting-started/).
 
 ## The numbers are labelled, and some of them are bounds
 
@@ -150,24 +102,24 @@ the proxy mesh (**gross** — a wall over-reports by its windows and doors), and
 `"none"` where neither exists, never a fabricated `0.0`.
 
 That tag is the most important thing to understand before trusting a total:
-[quantities and provenance](https://blox-eng.github.io/goifc/concepts/quantities/).
+[quantities and provenance](https://blox-eng.github.io/goifc/latest/concepts/quantities/).
 
 The meshes are proxy geometry for visualization, not a B-rep substitute — do not
 clash-detect with them. The rest of the edges, stated plainly, are in
-[limitations](https://blox-eng.github.io/goifc/limitations/).
+[limitations](https://blox-eng.github.io/goifc/latest/limitations/).
 
 ## More
 
-- [The pipeline](https://blox-eng.github.io/goifc/concepts/pipeline/) — `step`,
+- [The pipeline](https://blox-eng.github.io/goifc/latest/concepts/pipeline/) — `step`,
   `model` and `geometry`, each usable on its own.
-- [Sections and floor plans](https://blox-eng.github.io/goifc/guides/sections/) —
+- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/guides/sections/) —
   cut the model with any plane, get closed 2D rings back.
-- [Storey plans](https://blox-eng.github.io/goifc/guides/storey-plans/) — what
+- [Storey plans](https://blox-eng.github.io/goifc/latest/guides/storey-plans/) — what
   `BuildImport` pre-bakes per `IfcBuildingStorey`.
-- [Local and world frames](https://blox-eng.github.io/goifc/concepts/frames/) —
+- [Local and world frames](https://blox-eng.github.io/goifc/latest/concepts/frames/) —
   meshes are local, bounding boxes are world, and mixing them is wrong without
   erroring.
-- [The `step` package](https://blox-eng.github.io/goifc/step/) — parses any STEP
+- [The `step` package](https://blox-eng.github.io/goifc/latest/step/) — parses any STEP
   file, IFC or not.
 
 ## Compatibility
@@ -179,7 +131,7 @@ architectural IFC exports; off that path, expect to find edges.
 
 Both of those have a fuller answer, including the serialization contracts that
 hold steady even when the Go API does not, in the
-[compatibility policy](https://blox-eng.github.io/goifc/compatibility/).
+[compatibility policy](https://blox-eng.github.io/goifc/latest/compatibility/).
 
 ## Contributing
 

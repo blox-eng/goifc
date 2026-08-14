@@ -21,8 +21,6 @@ much of it I actually needed. The answer turned out to be: parse the file, walk
 the semantics, tessellate enough to get numbers. That fits in a few thousand
 lines of Go.
 
-This is that subset, extracted and made honest about its edges.
-
 ## Which one you want
 
 |                       | goifc                            | IfcOpenShell                    |

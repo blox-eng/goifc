@@ -1,6 +1,10 @@
 site_name: goifc
 site_description: Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
-site_url: https://blox-eng.github.io/goifc/
+# mike serves every version under its own prefix and writes only a root
+# index.html redirect — there is no per-page redirect at the bare root. So the
+# canonical URL, and every URL emitted into llms.txt, must carry the `latest`
+# alias or it 404s.
+site_url: https://blox-eng.github.io/goifc/latest/
 repo_url: https://github.com/blox-eng/goifc
 repo_name: blox-eng/goifc
 # Wires the "edit this page" pencil on every page straight to the file on main.
@@ -49,7 +53,19 @@ plugins:
   # navigation chrome. Cheap to publish, and this library is one an agent is
   # plausibly reading on a user's behalf.
   - llmstxt:
-      markdown_description: Read an IFC model from Go — parse STEP, walk the semantics, tessellate enough to get numbers.
+      # This is the one slot carrying something the page titles cannot imply,
+      # so it states the two traps an agent reading only godoc walks into:
+      # tier-2 quantities are gross, and meshes are local while boxes are world.
+      markdown_description: |
+        Pure-Go IFC/STEP reader. Three stages, each usable alone: `step` (schema-agnostic
+        SPF parser, no EXPRESS), `model` (semantic elements, units, placements), `geometry`
+        (proxy tessellation, derived quantities, plane sections, Y-up GLB). Quantities carry
+        a `QuantitySource` tag — `"qto"` is the modeller's authored net figure, `"geometry"`
+        is a GROSS bound derived from the proxy mesh, `"none"` means absent and never 0.
+        Meshes are element-local; placements and bounding boxes are world.
+      # One concatenated file, so an agent spends a single fetch instead of
+      # following ten links.
+      full_output: llms-full.txt
       sections:
         Getting started:
           - index.md
@@ -62,6 +78,7 @@ plugins:
           - step.md
           - limitations.md
           - compatibility.md
+          - changelog.md
 
 markdown_extensions:
   - admonition
@@ -114,6 +131,18 @@ nav:
 # A broken internal link or a snippet pointing at a moved file should fail the
 # build, not publish a site with a dead link in it.
 strict: true
+
+# strict alone only promotes links.not_found; everything below defaults to
+# `info` and is silently ignored. omitted_files is the one that actually bites:
+# a new page added to docs/ but not to nav publishes at a live URL that nothing
+# links to, with a green build.
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
 
 watch:
   - step/README.md
