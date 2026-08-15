@@ -1,4 +1,4 @@
-.PHONY: lint test build clean fmt vet help
+.PHONY: lint test build clean fmt vet help docs docs-serve docs-deps
 
 # Default target
 .DEFAULT_GOAL := help
@@ -35,9 +35,10 @@ vet: ## Run go vet
 	@echo "Running go vet..."
 	go vet ./...
 
-clean: ## Clean build artifacts
+clean: ## Clean build artifacts (Go cache, rendered site, docs venv)
 	@echo "Cleaning..."
 	go clean ./...
+	rm -rf site $(DOCS_VENV)
 
 vulncheck: ## Scan for vulnerabilities reachable from this code (incl. stdlib)
 	@echo "Running govulncheck..."
@@ -60,6 +61,28 @@ fuzz-deep: ## Fuzz hard (default 30m per target; override with FUZZTIME=2h)
 	@echo "Deep-fuzzing each target for $(or $(FUZZTIME),30m)..."
 	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),30m)
 	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),30m)
+
+# The docs toolchain is Python, so it lives in a venv rather than in the
+# developer's global site-packages — and in the SAME pinned versions the Docs
+# workflow installs, so a local build that passes is one CI will reproduce.
+DOCS_VENV := .venv-docs
+DOCS_BIN  := $(DOCS_VENV)/bin
+
+$(DOCS_BIN)/mkdocs: requirements-docs.txt
+	@echo "Installing the docs toolchain into $(DOCS_VENV)..."
+	python3 -m venv $(DOCS_VENV)
+	$(DOCS_BIN)/pip install --quiet --upgrade pip
+	$(DOCS_BIN)/pip install --quiet -r requirements-docs.txt
+	@touch $(DOCS_BIN)/mkdocs
+
+docs-deps: $(DOCS_BIN)/mkdocs ## Install the pinned docs toolchain into .venv-docs
+
+docs: $(DOCS_BIN)/mkdocs ## Build the docs site (strict — a broken link fails)
+	@echo "Building docs..."
+	$(DOCS_BIN)/mkdocs build --strict
+
+docs-serve: $(DOCS_BIN)/mkdocs ## Serve the docs at http://127.0.0.1:8000 with live reload
+	$(DOCS_BIN)/mkdocs serve
 
 ci: lint test vulncheck ## Run the blocking CI checks (lint + test + vulncheck)
 

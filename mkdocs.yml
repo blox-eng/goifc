@@ -1,0 +1,149 @@
+site_name: goifc
+site_description: Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
+# mike serves every version under its own prefix and writes only a root
+# index.html redirect — there is no per-page redirect at the bare root. So the
+# canonical URL, and every URL emitted into llms.txt, must carry the `latest`
+# alias or it 404s.
+site_url: https://blox-eng.github.io/goifc/latest/
+repo_url: https://github.com/blox-eng/goifc
+repo_name: blox-eng/goifc
+# Wires the "edit this page" pencil on every page straight to the file on main.
+edit_uri: edit/main/docs/
+copyright: MIT-licensed. Built by Blox.
+
+theme:
+  name: material
+  logo: assets/goifc-mark-dark.svg
+  favicon: assets/goifc-mark.svg
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    # The site follows the reader's OS by default, with an explicit override in
+    # both directions — a viewer who has chosen a theme keeps it.
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow system theme
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: cyan
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  # Emits /llms.txt so an agent pulling these docs gets the prose without the
+  # navigation chrome. Cheap to publish, and this library is one an agent is
+  # plausibly reading on a user's behalf.
+  - llmstxt:
+      # This is the one slot carrying something the page titles cannot imply,
+      # so it states the two traps an agent reading only godoc walks into:
+      # tier-2 quantities are gross, and meshes are local while boxes are world.
+      markdown_description: |
+        Pure-Go IFC/STEP reader. Three stages, each usable alone: `step` (schema-agnostic
+        SPF parser, no EXPRESS), `model` (semantic elements, units, placements), `geometry`
+        (proxy tessellation, derived quantities, plane sections, Y-up GLB). Quantities carry
+        a `QuantitySource` tag — `"qto"` is the modeller's authored net figure, `"geometry"`
+        is a GROSS bound derived from the proxy mesh, `"none"` means absent and never 0.
+        Meshes are element-local; placements and bounding boxes are world.
+      # One concatenated file, so an agent spends a single fetch instead of
+      # following ten links.
+      full_output: llms-full.txt
+      sections:
+        Getting started:
+          - index.md
+          - getting-started.md
+        Concepts:
+          - concepts/*.md
+        Guides:
+          - guides/*.md
+        Reference:
+          - step.md
+          - limitations.md
+          - compatibility.md
+          - changelog.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  # base_path reaches the repository root so a page can include a file that
+  # lives outside docs/ — step/README.md and CHANGELOG.md are published from
+  # their canonical location rather than copied into docs/ to rot.
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+
+extra:
+  version:
+    provider: mike
+    alias: true
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/blox-eng/goifc
+    - icon: fontawesome/brands/golang
+      link: https://pkg.go.dev/github.com/blox-eng/goifc
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts:
+      - The pipeline: concepts/pipeline.md
+      - Quantities and provenance: concepts/quantities.md
+      - Local and world frames: concepts/frames.md
+  - Guides:
+      - Sections and floor plans: guides/sections.md
+      - Storey plans: guides/storey-plans.md
+  - Reference:
+      - The step package: step.md
+      - Limitations: limitations.md
+      - Compatibility: compatibility.md
+      - Changelog: changelog.md
+  - Design docs:
+      - Overview: design/index.md
+      - Section geometry on an arbitrary plane: design/2026-08-13-arbitrary-section-plane.md
+
+# A broken internal link or a snippet pointing at a moved file should fail the
+# build, not publish a site with a dead link in it.
+strict: true
+
+# strict alone only promotes links.not_found; everything below defaults to
+# `info` and is silently ignored. omitted_files is the one that actually bites:
+# a new page added to docs/ but not to nav publishes at a live URL that nothing
+# links to, with a green build.
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+
+watch:
+  - step/README.md
+  - CHANGELOG.md

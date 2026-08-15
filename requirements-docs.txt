@@ -1,0 +1,11 @@
+# Documentation toolchain. These three are pinned so a theme or plugin release
+# cannot silently restyle the published site or change its output. Transitive
+# dependencies float — this is not a lockfile, and a docs build is not
+# bit-reproducible.
+#
+# Bumping these is a normal PR — `pip install -r requirements-docs.txt` and
+# `mkdocs serve` locally, and the docs workflow builds the same versions.
+
+mkdocs-material==9.7.7
+mike==2.2.0
+mkdocs-llmstxt==0.5.0
