@@ -1,0 +1,623 @@
+# goifc
+
+> Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
+
+Pure-Go IFC/STEP reader. Three stages, each usable alone: `step` (schema-agnostic
+SPF parser, no EXPRESS), `model` (semantic elements, units, placements), `geometry`
+(proxy tessellation, derived quantities, plane sections, Y-up GLB). Quantities carry
+a `QuantitySource` tag — `"qto"` is the modeller's authored net figure, `"geometry"`
+is a GROSS bound derived from the proxy mesh, `"none"` means absent and never 0.
+Meshes are element-local; placements and bounding boxes are world.
+
+
+# Getting started
+
+# goifc
+
+Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar. One `go get`, one static binary.
+
+```
+go get github.com/blox-eng/goifc
+```
+
+[Get started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md) [API reference](https://pkg.go.dev/github.com/blox-eng/goifc)
+
+## Why this exists
+
+I needed quantities out of IFC files inside a Go service. Every path led back to IfcOpenShell — which is very good, and which is a C++ toolchain, a Python runtime, and a container three times the size of the service using it.
+
+So the question was never "is IfcOpenShell better." It is. The question was how much of it I actually needed. The answer turned out to be: parse the file, walk the semantics, tessellate enough to get numbers. That fits in a few thousand lines of Go.
+
+## Which one you want
+
+|                      | goifc                           | IfcOpenShell                   |
+| -------------------- | ------------------------------- | ------------------------------ |
+| Deploy               | `go get`, static binary         | C++ toolchain, Python runtime  |
+| Solids               | proxy meshes                    | exact B-rep (OCCT)             |
+| Quantities           | authored, or derived + labelled | authored, or exact from solids |
+| Openings netted out  | no — gross volume               | yes — net volume               |
+| Schema coverage      | IFC2X3 / IFC4 core entities     | full EXPRESS schema            |
+| Runs in a Go process | yes                             | via subprocess or bindings     |
+
+Pick goifc when deployment cost dominates and bounding numbers are good enough. Pick IfcOpenShell when the geometry has to be exact.
+
+Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md).
+
+## Where to go next
+
+- **[Getting started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md)**
+
+  Install, parse a file, and get elements with quantities out of it.
+
+- **[The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md)**
+
+  Three stages — `step`, `model`, `geometry` — each usable on its own.
+
+- **[Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)**
+
+  Cut the tessellated model with any plane and get closed 2D rings back.
+
+- **[The `step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md)**
+
+  A schema-agnostic STEP/SPF parser that works on any STEP file, IFC or not.
+
+## API reference
+
+Package documentation lives on pkg.go.dev, which is generated from the source and always matches the release you are importing:
+
+[`ifc`](https://pkg.go.dev/github.com/blox-eng/goifc) · [`step`](https://pkg.go.dev/github.com/blox-eng/goifc/step) · [`model`](https://pkg.go.dev/github.com/blox-eng/goifc/model) · [`geometry`](https://pkg.go.dev/github.com/blox-eng/goifc/geometry)
+
+This site covers the things godoc cannot: how the pieces fit together, what the numbers mean, and where the edges are.
+
+# Getting started
+
+## Install
+
+```
+go get github.com/blox-eng/goifc
+```
+
+The package is named `ifc`, not `goifc`. Alias the import:
+
+```
+import ifc "github.com/blox-eng/goifc"
+```
+
+## Two entry points
+
+Everything starts with `step.ParseBytes`. From there, pick by whether you want a flat list or a tree:
+
+| Call                 | Returns        | Use when                                                                                                                                                                                                               |
+| -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ifc.Assemble(f)`    | `*Assembled`   | You want the elements and their numbers. A flat `[]model.Element` with quantities back-filled, plus the `*geometry.Scene` they came from.                                                                              |
+| `ifc.BuildImport(f)` | `*ImportModel` | You are importing the model into your own store. Spatial containers and physical elements in ONE parents-first tree (`ParentIndex` always points backwards), plus per-type material layers and per-storey floor plans. |
+
+`BuildImport` calls `Assemble` and adds the structure around it. It is the call Blox actually ships — the flat list is rarely what an importer wants, because a wall means little without the storey it sits on.
+
+Both hand back a `*geometry.Scene`, and `Scene.WriteGLB(w)` writes a Y-up GLB whose node names are `GlobalId`s — so a viewer's picked node is a database key, with no side table to maintain.
+
+## Quickstart: elements and quantities
+
+```
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "os"
+
+    ifc "github.com/blox-eng/goifc"
+    "github.com/blox-eng/goifc/step"
+)
+
+func main() {
+    src, err := os.ReadFile("model.ifc")
+    if err != nil {
+        panic(err)
+    }
+
+    f, err := step.ParseBytes(src)
+    if err != nil {
+        panic(err)
+    }
+
+    a, err := ifc.Assemble(f)
+    if err != nil {
+        panic(err)
+    }
+
+    for i := range a.Result.Elements {
+        e := a.Result.Elements[i]
+        if e.Qto.Volume == nil {
+            continue // no volume for this element — see Quantities
+        }
+        fmt.Printf("%s\t%.3f m³\t(%s)\n", e.Name, *e.Qto.Volume, e.QuantitySource)
+    }
+
+    var glb bytes.Buffer
+    a.Scene.WriteGLB(&glb) // proxy geometry for a viewer
+}
+```
+
+`e.QuantitySource` says whether the number is the modeller's or a bound derived from the proxy mesh. A tier-2 volume is gross — read [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) before you put these numbers in front of anyone.
+
+## Quickstart: walking the tree
+
+```
+m, err := ifc.BuildImport(f)
+if err != nil {
+    panic(err)
+}
+for _, n := range m.Nodes {
+    depth := 0
+    for p := n.ParentIndex; p != nil; p = m.Nodes[*p].ParentIndex {
+        depth++
+    }
+    fmt.Printf("%*s%s (%s)\n", depth*2, "", n.Name, n.IFCClass)
+}
+```
+
+Because nodes are emitted parents-first, you can create each row as you walk and resolve `ParentIndex` against ids you have already written. No second pass.
+
+## Next
+
+- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md) — what each of the three stages does, and how to use one on its own.
+- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) — cutting the model with a plane.
+- [Limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md) — the edges, stated plainly.
+# Concepts
+
+# Local and world frames
+
+A `geometry.Element` carries data in **two different coordinate frames**, and nothing in the type system stops you from mixing them. Mixing them is wrong *without erroring*: the code runs, the numbers look plausible, and the answer is silently rotated or offset.
+
+| Field / method                | Frame                   | Units     |
+| ----------------------------- | ----------------------- | --------- |
+| `Element.Verts`               | element-local           | metres    |
+| `Element.Placement`           | local → world transform | —         |
+| `Element.BBoxMin` / `BBoxMax` | **world**               | metres    |
+| `Element.WorldVerts()`        | **world**               | metres    |
+| `Element.WorldNormal(v)`      | **world**               | direction |
+
+Meshes are local. Placements and bounding boxes are world.
+
+## The trap
+
+```
+// WRONG — mixes frames.
+dir := sub(e.Verts[3:6], e.Verts[0:3]) // local direction
+pos := midpoint(e.BBoxMin, e.BBoxMax)  // world position
+```
+
+Deriving a direction from `Verts` and a position from the `BBox` mixes the two frames. There is no error, no panic, and no NaN — just a direction expressed in the element's own rotated frame paired with a position in the building's.
+
+## The rule
+
+Use `WorldVerts` for positions and `WorldNormal` for directions.
+
+```
+world := e.WorldVerts()                       // []float32, world X,Y,Z triples
+up := e.WorldNormal([3]float64{0, 0, 1})      // local +Z as a world direction
+```
+
+## Why directions need their own call
+
+`WorldNormal` applies only the 3×3 rotation part of the placement. A direction must not pick up the placement's translation — a face normal does not move when the wall it belongs to moves.
+
+Magnitude is preserved, not normalised: a placement composed from `IfcAxis2Placement3D` is orthonormal and right-handed, so a unit local direction comes back unit-length and a scaled one comes back scaled by the same factor. That orthonormality is also why rotating the direction is the correct transform and no inverse-transpose is needed.
+
+Do **not** derive a direction by differencing two `WorldVerts`. It gives the right answer for a rigid placement, but it rounds through `float32` twice and loses precision that `WorldNormal` keeps in `float64`.
+
+## Precision
+
+`WorldVerts` runs the transform in `float64` and rounds to `float32` on the way out, so its result agrees with `BBoxMin`/`BBoxMax` to `float32` precision — not exactly. That gap grows with distance from the origin, which matters on a georeferenced model whose coordinates are in the hundreds of thousands of metres. Code needing exact world positions there should transform through `Placement` in `float64` itself.
+
+`WorldVerts` also allocates a fresh slice on every call. Hoist it out of a hot loop.
+
+## Edge cases
+
+`Verts` holding fewer than 3 floats returns `nil`. A trailing partial triple is dropped rather than emitted half-transformed.
+
+GLB output is a third frame
+
+`Scene.WriteGLB` writes **Y-up** GLB, because that is what glTF viewers expect. Everything described on this page is IFC-native **Z-up**. The conversion happens inside `WriteGLB` and does not affect any field above.
+
+# The pipeline
+
+`Assemble` runs three stages. Each one is a package you can use on its own.
+
+| Package    | Does                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------- |
+| `step`     | STEP/SPF (ISO 10303-21) tokenizer and entity graph. Schema-agnostic — no EXPRESS.                        |
+| `model`    | Entity graph → semantic `[]Element`. Ports ifcopenshell's `util.element`, `util.placement`, `util.unit`. |
+| `geometry` | Proxy tessellation, derived quantities, plane sections, and a Y-up GLB whose node names are `GlobalId`s. |
+
+```
+bytes ──▶ step.ParseBytes ──▶ *step.File          entity graph, forward + inverse refs
+                                  │
+                                  ▼
+                            model.Extract   ──▶ *model.Result     semantic elements
+                                  │
+                                  ▼
+                            geometry.Build  ──▶ *geometry.Scene   meshes, bboxes, quantities
+                                  │
+                                  ▼
+                            ifc.Assemble    ──▶ *Assembled        elements + scene
+                                  │
+                                  ▼
+                            ifc.BuildImport ──▶ *ImportModel      tree, layers, storey plans
+```
+
+## Why the split matters
+
+**`step` is genuinely standalone.** It parses any STEP file, IFC or not — it knows nothing about walls or storeys, only `#id=KEYWORD(args)` and the reference graph between them. If you have a STEP file from a mechanical CAD tool, this package still works. See [the `step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md).
+
+**`model` is where IFC semantics enter.** It reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities, resolves placements, and normalises units. This is also the layer that carries the schema assumption noted in [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md) — there is no EXPRESS schema behind it.
+
+**`geometry` is the only stage that approximates.** Everything above it is lossless with respect to the file. Tessellation is where proxy meshes and derived, gross quantities come from, and it is why quantities carry a [provenance tag](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md).
+
+# Quantities and provenance
+
+Every element reports where its numbers came from, because the two sources are not equally trustworthy.
+
+| `QuantitySource` | Means                                                         |
+| ---------------- | ------------------------------------------------------------- |
+| `"qto"`          | Authored `IfcElementQuantity`. Net, exact, from the modeller. |
+| `"geometry"`     | Derived from the proxy mesh. Gross — a bounding estimate.     |
+| `"none"`         | Neither available. Never a fabricated `0.0`.                  |
+
+Authored quantities always win. A missing quantity stays missing. If you only trust one tier, filter on the tag.
+
+## How the tiers get applied
+
+`Assemble` chains four stages, and the last two are what produce this tagging:
+
+```
+model.Extract                    authored Qto, where the modeller wrote one
+geometry.Build                   proxy meshes per element
+Scene.DerivedQuantities()        tier-2 GROSS quantities from those meshes
+Result.ApplyDerivedQuantities()  back-fills ONLY where tier 1 is absent
+```
+
+Back-filling never overwrites. An element that arrived with an authored volume keeps it and stays `"qto"`; an element with no authored volume takes the derived one and becomes `"geometry"`; an element with no mesh either stays `"none"`.
+
+## Why tier 2 is gross
+
+On the `"geometry"` tier the extrude path reports the solid, un-subtracted volume. A wall with a window and a door over-reports against IfcOpenShell's net figure.
+
+Netting openings out of extruded geometry needs a real B-rep kernel; the honest answer there is IfcOpenShell. The tag exists so you can tell the two apart and treat tier 2 as a bound.
+
+Do not sum across tiers silently
+
+Adding a `"qto"` volume to a `"geometry"` volume produces a number that is neither net nor gross, and nothing downstream can tell that it happened. If you aggregate, either filter to one tier or carry the split through to whatever reads the total.
+
+## Checking a quantity before you use it
+
+Quantities are pointers precisely so that "absent" is distinguishable from zero:
+
+```
+for i := range a.Result.Elements {
+    e := a.Result.Elements[i]
+    if e.Qto.Volume == nil {
+        continue // genuinely absent — not 0.0
+    }
+    if e.QuantitySource == "geometry" {
+        // a gross bound; fine for sizing, wrong for a bill of quantities
+    }
+    fmt.Printf("%s\t%.3f m³\t(%s)\n", e.Name, *e.Qto.Volume, e.QuantitySource)
+}
+```
+# Guides
+
+# Sections and floor plans
+
+Cut the tessellated model with any plane and get closed 2D rings back, in the plane's own UV coordinates and metres.
+
+```
+p := geometry.HorizontalPlane(3.0) // cut at z = 3 m
+for _, e := range a.Scene.Elements {
+    for _, loop := range e.SectionOn(p) {
+        _ = loop.Points // [][2]float64, outer rings CCW, holes CW
+    }
+}
+```
+
+For a plane that is not horizontal, `PlaneFromNormal` builds one from an origin and a normal:
+
+```
+p, ok := geometry.PlaneFromNormal([3]float64{0, 0, 3}, [3]float64{1, 0, 0})
+if !ok {
+    panic("degenerate normal")
+}
+```
+
+`PlaneFromNormal` does not promise a particular UV orientation
+
+Its `U` is deterministic for a given normal, but *which* in-plane orientation it picks is unspecified and may change between versions — including for a `+Z` normal, where it is **not** guaranteed to match `HorizontalPlane`. If you persist `Points`, or need to match an external convention, build the `Plane` yourself rather than rely on this choice.
+
+## `SectionOn` versus `FootprintOn`
+
+These two differ in exactly one way: what they do when the plane does not cross the solid.
+
+|                                 | `e.SectionOn(p)`            | `geometry.FootprintOn(e, p)`                                |
+| ------------------------------- | --------------------------- | ----------------------------------------------------------- |
+| Plane crosses the solid         | cut rings, tagged `LoopCut` | cut rings, tagged `LoopCut`                                 |
+| Plane misses                    | `nil`                       | silhouette of faces opposing `p.N`, tagged `LoopSilhouette` |
+| Mesh degenerate / no silhouette | `nil`                       | bounding-box rectangle, tagged `LoopSilhouette`             |
+
+**That fallback is a plan-view feature and a section-view bug.** A floor plan wants context geometry for everything on the storey, whether or not the cut height happens to pass through it. A building section wants to know the plane missed — a fabricated rectangle in a section drawing is a lie that renders convincingly.
+
+## Loop roles
+
+```
+const (
+    LoopCut        LoopRole = "cut"   // section poché — the plane crosses the solid
+    LoopSilhouette LoopRole = "below" // light context
+)
+```
+
+The string values are a serialization contract
+
+`LoopSilhouette`'s value is `"below"`, not `"silhouette"`. The constant was renamed in v0.2.0; the wire value deliberately was not, so drawing data already on disk stayed valid. Renderers matching the literal `"below"` need no change. Do not change these values without a coordinated consumer migration.
+
+## Winding and holes
+
+Outer rings are wound CCW. Hole rings — the inner boundary of a hollow or annular section — are wound CW and **share the outer ring's `Role`**. An even-odd or nonzero polygon fill therefore renders them as cutouts with no extra field and no nesting metadata to interpret.
+
+Coordinates come out in the IFC-native orientation. A renderer whose Y axis points down applies its own flip.
+
+## A plane that lies along a solid's edges emits nothing
+
+A triangle only contributes a crossing segment when it has a vertex strictly above *and* one strictly below the plane. A face that merely touches the plane along an edge contributes nothing, so the cut ring cannot close.
+
+This is a known gap with a test pinning it, not an undiagnosed bug. In practice it bites when you cut exactly at a slab's top face — nudge the plane by a millimetre if you hit it.
+
+# Storey plans
+
+`BuildImport` pre-bakes one `StoreyPlan` per `IfcBuildingStorey`, so a renderable floor plan comes out of the import with no second pass over the geometry.
+
+```
+m, err := ifc.BuildImport(f)
+if err != nil {
+    panic(err)
+}
+for _, plan := range m.StoreyPlans {
+    fmt.Printf("storey %s at %.2f m — %d entities\n",
+        plan.StoreyGlobalID, plan.Elevation, len(plan.Entities))
+
+    for _, ent := range plan.Entities {
+        for _, loop := range ent.Loops {
+            _ = ent.GlobalID // your own domain object id
+            _ = ent.IFCClass // "IfcWall", "IfcDoor", ...
+            _ = loop.Role    // LoopCut (poché) or LoopSilhouette (context)
+            _ = loop.Points  // [][2]float64, world XY metres
+        }
+    }
+}
+```
+
+Each [`StoreyPlan`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyPlan) carries its storey's `GlobalID`, an `Elevation`, and the [`StoreyEntity`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyEntity) values that draw on it. Loops are the same `geometry.Loop` described in [sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) — same roles, same winding, same hole convention.
+
+The rest of this page is the part godoc cannot tell you: where the cut height comes from, and which storeys silently produce nothing.
+
+## The cut height
+
+Each storey is cut at **`floorZ + 1.2 m`**, the architectural convention for a plan cut: above the door handles, below the window heads.
+
+`floorZ` is *seeded* from the minimum world Z of the mesh elements spatially contained in that storey. Seeded, not decided — spatial containment picks the band, and then **geometry decides membership**. An element assigned to storey 2 in the IFC hierarchy but physically sitting on storey 1 draws where it actually is. This matters on real exports, where containment is frequently wrong.
+
+## Storeys that get skipped
+
+A storey with no contained mesh element is **omitted from `StoreyPlans` entirely** — there is no reliable way to place its cut plane, so it produces no plan rather than an empty or arbitrarily-placed one.
+
+Do not assume `len(m.StoreyPlans)` equals the number of `IfcBuildingStorey` nodes in the tree. Iterate the plans, or join back on `StoreyGlobalID`.
+
+`Elevation` comes from the storey's own `IfcBuildingStorey` elevation attribute and is `0` when absent — it is for ordering the storeys in a UI, not for positioning geometry. The geometry is already in world coordinates.
+
+## Determinism
+
+Identical input yields an identical slice — same storeys, same order, same entities, same loops. You can golden-diff storey plans across releases and a change in the output means a change in behaviour.
+# Reference
+
+Source
+
+This page is [`step/README.md`](https://github.com/blox-eng/goifc/blob/main/step/README.md) included verbatim — edit that file, not this page.
+
+# `ifc/step` — Go STEP/EXPRESS tokenizer + entity graph
+
+Schema-agnostic STEP/SPF (ISO 10303-21) parser for IFC files, ported from ifcopenshell's parser + `entity_instance` model into idiomatic Go. Parses a `.ifc` file in-process into a navigable entity graph with **forward and inverse** references. No CAD kernel, no Python, no EXPRESS schema.
+
+## Scope: pure SPF, not the schema
+
+A STEP file is purely positional — `#5=IFCWALL('guid',#6,'name',...)` stores attributes by position, never by name. This package exposes exactly what the raw stream yields; naming and type-hierarchy features are a separate schema layer built on top.
+
+| In scope (pure SPF, no schema)                                      | Out of scope (needs the EXPRESS schema)       |
+| ------------------------------------------------------------------- | --------------------------------------------- |
+| attribute by **index** — `inst.Get(i)`, `inst.Args()`               | attribute by **name** — `inst.GlobalId`       |
+| type keyword — `inst.Type()`, `inst.IsA()` (exact)                  | `is_a(supertype)`, `ByType` subtype expansion |
+| forward refs — `Value.Ref` (resolved `#id`)                         | named inverse attrs — `.IsDecomposedBy`       |
+| inverse graph — `File.Inverse` / `InverseIndices` / `TotalInverses` | derived-attribute formulas                    |
+| `Traverse`, `ByID`, `ByType` (exact), `All`                         | `by_guid`, `create_entity` by name            |
+
+`IsA`/`ByType` are exact-type only. `Inverse` exposes the **raw referrer graph**; projecting it into named IFC inverse attributes is the schema layer's job.
+
+## API
+
+```
+f, err := step.ParseFile("model.ifc")   // or ParseBytes([]byte) / Parse(io.Reader)
+f.SchemaID()                             // "IFC2X3"
+f.Len()                                  // instance count
+wall, ok := f.ByID(42)                   // lookup by #id
+walls := f.ByType("IfcWall")             // exact type (case-insensitive)
+placement, ok := wall.Ref(5)             // resolved #id -> *Instance
+referrers := f.Inverse(unit)             // who references this instance
+closure := f.Traverse(project, step.Unbounded, step.DepthFirst) // forward closure
+for inst := range f.All() { _ = inst }   // iterate all instances (no alloc)
+f.Warnings()                             // non-fatal issues (e.g. dangling refs)
+```
+
+Grammar covered: `#id` refs, typed values (`IFCLABEL(...)`), enums (`.MILLI.`), booleans (`.T./.F.`) and logical unknown (`.U.`, distinct from false), `$` (unset) / `*` (derived), integers/reals (including non-conformant leading-dot reals like `.5`), binary, nested lists, complex instances (`#id=(TYPEA(...)TYPEB(...))`), and ISO-10303-21 string escapes (`\X2\`, `\X4\`, `\X\`, `\S\`, `\P`, `''`). Tokenization is a character stream (not line-based), so multi-line records and `/* */` comments parse correctly.
+
+## Design
+
+Eager, two-pass, in-memory (ported from ifcopenshell's default in-memory variant):
+
+```
+ParseBytes(src)
+  pass 1  scan HEADER + every #id=KEYWORD(args); record
+          -> Instance{id, type, []Value}   (refs captured, unresolved)
+          -> byID map, byType index, insertion order
+  pass 2  walk every attribute
+          -> resolve #ref -> *Instance (in place)
+          -> build inverse index (target id -> []{referrer, attrIndex})
+          -> dangling ref = non-fatal warning (ifcopenshell SYN 28 parity)
+```
+
+## Measured — a 28 MB IFC2X3 ArchiCAD export
+
+| Metric         | Value                            |
+| -------------- | -------------------------------- |
+| File size      | 29,558,941 B (~28 MB)            |
+| Instances      | 528,228                          |
+| Entity types   | 93                               |
+| Inverse edges  | 857,962                          |
+| **Parse time** | **~0.48–0.66 s** (i7-14700K)     |
+| **Peak heap**  | **~306 MB**                      |
+| Allocations    | ~500 MB / 3.7 M allocs per parse |
+
+**Memory driver:** peak is dominated by the ~3.7 M `Value` structs (**72 B each ≈ 266 MB**, after field-order packing from 80 B), not string data — so string interning would not move peak. At ~30% of a 1 GB budget there's ample headroom; a columnar/arena `Value` rework is deferred behind this measurement and only worth it if a future input class blows the budget. Size worker limits against ~310 MB peak per 28 MB IFC, scaling roughly linearly with instance count.
+
+## Not in this package
+
+Semantic model (`IFCElement[]`), geometry, quantities, and the EXPRESS schema layer are built on top of this package. This package stops at the navigable graph.
+
+## Also see
+
+- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md) — where `step` sits relative to `model` and `geometry`.
+- [`step` on pkg.go.dev](https://pkg.go.dev/github.com/blox-eng/goifc/step) — the generated API reference.
+
+# Limitations
+
+The edges, stated plainly. Each is a chosen boundary, not an undiagnosed bug.
+
+## Geometry-derived volume is gross, not net
+
+Tier-2 volumes are un-subtracted solids: a wall over-reports by its windows and doors. See [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) — the tag exists so you can tell tier 1 from tier 2 and treat tier 2 as a bound.
+
+## Tessellated geometry is proxy geometry
+
+The meshes in the GLB are simplified representations for visualization. They are not a substitute for a B-rep kernel.
+
+Do not clash-detect with them.
+
+## No EXPRESS schema
+
+The semantic layer reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not reachable this way.
+
+The `step` layer below it is honest about the same boundary: `IsA` and `ByType` are exact-type only, and there is no subtype expansion or attribute-by-name.
+
+## A section plane lying exactly along a solid's edges emits nothing
+
+A triangle only contributes a crossing segment when it has a vertex strictly above and one strictly below. A face that merely touches the plane cannot close a ring.
+
+This is a known gap with a test pinning it. See [sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md).
+
+## Storeys with no contained mesh produce no plan
+
+`BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://blox-eng.github.io/goifc/latest/dev/guides/storey-plans/index.md).
+
+## Scope of hardening
+
+The well-trodden path is `BuildImport` on architectural IFC exports, because that is what Blox's import pipeline exercises. Off that path — MEP-heavy models, structural-analysis exports, non-architectural STEP — expect to find edges.
+
+Finding one is a useful bug report. See [compatibility](https://blox-eng.github.io/goifc/latest/dev/compatibility/index.md) for what is and is not promised.
+
+# Compatibility
+
+## The API is unstable pre-1.0
+
+Expect breaking changes on minor versions. Pin a version.
+
+```
+require github.com/blox-eng/goifc v0.2.0
+```
+
+Breaks are kept to the smallest shape that works, but that is a practice, not a promise. There is no support SLA.
+
+### What a break tends to look like
+
+v0.2.0 renamed `geometry.LoopBelow` to `geometry.LoopSilhouette`. That was a **source-only** break: the serialized string value stayed `"below"`, so stored drawing data was unaffected and renderers matching the literal needed no change. The fix was renaming the identifier at the call site.
+
+Where a change would otherwise touch both the API and data already on disk, the wire format is what gets preserved. Source you can fix with a compiler error to guide you; a silent data migration you cannot.
+
+Every break is written down in the [changelog](https://blox-eng.github.io/goifc/latest/dev/changelog/index.md).
+
+## Serialization contracts
+
+Some string values are load-bearing beyond the Go API, because consumers persist them and match them as literals:
+
+| Values                          | Where                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `"qto"`, `"geometry"`, `"none"` | `QuantitySource` — see [quantities](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) |
+| `"cut"`, `"below"`              | `LoopRole` — see [sections](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)             |
+
+These do not change without a coordinated consumer migration, independently of what the Go identifiers are called.
+
+## Schema support
+
+IFC2X3 and IFC4 core entities, via positional attribute indices that are stable across both. There is no EXPRESS schema — see [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md).
+
+## Go version
+
+The supported Go version is whatever `go.mod` declares. CI builds and tests with `CGO_ENABLED=0`: if a dependency ever introduces a cgo requirement, the build fails loudly instead of silently linking against system libraries.
+
+## "Used in production by Blox" — what that scopes to
+
+Blox's import pipeline is the only consumer this library has been hardened against. Concretely, that means:
+
+- **`BuildImport` on architectural IFC exports** is the exercised path.
+- Formats, entity types and code paths outside that see far less real-world input, regardless of whether they have unit tests.
+
+It is a statement about which bugs have already been found, not a general assurance. Treat it as a map of where the tested ground is.
+
+## Reporting a break
+
+Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
+
+Source
+
+This page is [`CHANGELOG.md`](https://github.com/blox-eng/goifc/blob/main/CHANGELOG.md) included verbatim — edit that file, not this page.
+
+# Changelog
+
+Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on minor versions, as the README states. Releases before v0.2.0 predate this file.
+
+## v0.2.0 — 2026-08-13
+
+### Breaking
+
+- `geometry.LoopBelow` is renamed to `geometry.LoopSilhouette`. The constant's string value is UNCHANGED (`"below"`), so drawing data already on disk stays valid and renderers matching the literal need no change. The fix is source-only: rename the identifier at the call site.
+
+The old name described the only plane the package could cut — a horizontal one, always seen from above. Now that any plane can be cut, "below" is no longer what the role means, but it is still what the wire format says.
+
+### Added
+
+- `geometry.Plane` — a cutting plane as an origin plus an orthonormal right-handed basis (`U`, `V` span the plane; `N` is the normal).
+- `geometry.HorizontalPlane(cutZ)` — the plane `Footprint` has always cut.
+- `geometry.PlaneFromNormal(origin, n)` — derives a valid basis from a normal. `ok == true` guarantees `Valid()`. The in-plane orientation of `U` is deterministic but unspecified; build the `Plane` yourself if you need a particular one.
+- `geometry.Plane.Valid()` — reports whether a basis is finite, orthonormal and right-handed. `SectionOn` and `FootprintOn` emit no rings for a plane that fails it, so a caller that hand-builds a basis can check up front and tell a bad basis apart from a plane that genuinely missed the mesh.
+- `(geometry.Element).SectionOn(p)` — the closed cut rings where an element's mesh crosses `p`, in `p`'s UV coordinates. Cut rings only: it never falls back to a silhouette or a bounding box, so a caller building a section learns that the plane missed rather than receiving a fabricated outline.
+- `geometry.FootprintOn(e, p)` — `Footprint` generalized to any plane, keeping the cut → silhouette → bounding-box fallback ladder.
+
+### Changed
+
+- `geometry.Footprint(e, cutZ)` keeps its signature and behaviour for every finite `cutZ`; it now delegates through `HorizontalPlane`. A non-finite `cutZ` yields nil, where it previously returned a ring built around NaN.
+
+### Fixed
+
+- `PlaneFromNormal` no longer reports success for a finite normal whose squared length overflows to infinity, which left an all-zero basis behind.
+- The bounding-box fallback no longer emits NaN corners for an element whose bounds were never measured.
+
+### Known limitations
+
+- A plane that contains two edges of a solid while bisecting it yields no cut rings. A triangle contributes a crossing segment only when it has a vertex strictly above and one strictly below, so faces meeting the plane along an edge contribute nothing and the ring cannot close. Through `FootprintOn` this degrades further: the cut is returned tagged `LoopSilhouette` rather than `LoopCut`.
+- For a non-closed mesh the silhouette depends on which way `N` points, and one of the two directions can fall through to the bounding-box fallback. For a closed solid the outline is invariant under flipping `N`.

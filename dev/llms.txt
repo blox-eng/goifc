@@ -1,0 +1,35 @@
+# goifc
+
+> Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
+
+Pure-Go IFC/STEP reader. Three stages, each usable alone: `step` (schema-agnostic
+SPF parser, no EXPRESS), `model` (semantic elements, units, placements), `geometry`
+(proxy tessellation, derived quantities, plane sections, Y-up GLB). Quantities carry
+a `QuantitySource` tag — `"qto"` is the modeller's authored net figure, `"geometry"`
+is a GROSS bound derived from the proxy mesh, `"none"` means absent and never 0.
+Meshes are element-local; placements and bounding boxes are world.
+
+
+## Getting started
+
+- [Home](https://blox-eng.github.io/goifc/latest/dev/index.md)
+- [Getting started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md)
+
+## Concepts
+
+- [Local and world frames](https://blox-eng.github.io/goifc/latest/dev/concepts/frames/index.md)
+- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md)
+- [Quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md)
+
+## Guides
+
+- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)
+- [Storey plans](https://blox-eng.github.io/goifc/latest/dev/guides/storey-plans/index.md)
+
+## Reference
+
+- [The step package](https://blox-eng.github.io/goifc/latest/dev/step/index.md)
+- [Limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md)
+- [Compatibility](https://blox-eng.github.io/goifc/latest/dev/compatibility/index.md)
+- [Changelog](https://blox-eng.github.io/goifc/latest/dev/changelog/index.md)
+
