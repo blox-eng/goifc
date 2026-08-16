@@ -50,12 +50,18 @@ func TestLayerAxisDeclinesWithoutDirection(t *testing.T) {
 
 func TestLayerAxisFollowsPlacementRotation(t *testing.T) {
 	e := elemBox(v3{0, 0, 0}, v3{10, 0.3, 3})
-	e.Placement = model.Mat4{0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}
+	// A large, nonzero translation (100, 200, 300) is deliberate: LayerAxis
+	// reports a direction, and a direction must ignore translation entirely.
+	// The classic bug here is applying the full Placement — translation
+	// included — to the local direction; with a huge translation, that bug
+	// would blow the result far outside a unit vector and be unmistakable,
+	// not a rounding-scale wobble a small offset might hide.
+	e.Placement = model.Mat4{0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1, 0, 100, 200, 300, 1}
 	got, ok := LayerAxis(e, model.LayerSet{Direction: "AXIS2", Sense: "POSITIVE"})
 	if !ok {
 		t.Fatal("LayerAxis declined the rotated element")
 	}
-	// Local +Y rotated 90° about Z is world -X.
+	// Local +Y rotated 90° about Z is world -X, translation notwithstanding.
 	if math.Abs(got[0]+1) > 1e-9 || math.Abs(got[1]) > 1e-9 {
 		t.Fatalf("LayerAxis = %v, want world -X", got)
 	}
