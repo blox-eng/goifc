@@ -1,6 +1,9 @@
 package geometry
 
-import "math"
+import (
+	"math"
+	"sort"
+)
 
 // occupancyCell is the slice grid resolution in metres. It is a constant rather
 // than a caller knob because it is the one number that decides this method's
@@ -102,18 +105,23 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		}
 		w := worldPoints(e.Verts, e.Placement)
 
-		// Solid: the actual cross-section at z. Rings, not bounding boxes — an
-		// L-shaped element's box would fill its own concavity and could seal a
-		// courtyard that is really open.
+		// Solid: the actual cross-section at z, filled per element (even-odd
+		// over that element's own rings, so a genuinely hollow element keeps
+		// its hole) — not bounding boxes, which would fill an L-shaped
+		// element's concavity and could seal a courtyard that is really open.
 		if e.BBoxMin[2] <= z && e.BBoxMax[2] >= z {
-			for _, ring := range sectionRings(w, e.Tris, plane) {
-				g.markRing(ring)
+			rings := sectionRings(w, e.Tris, plane)
+			if len(rings) > 0 {
+				g.markFilled(rings)
 				sliced = true
 			}
 		}
 
-		// Covered: the XY footprint of anything wholly above the slice.
-		if e.BBoxMin[2] > z {
+		// Covered: the XY footprint of anything that has any part above the
+		// slice — including an element straddling it, such as a slab whose
+		// underside sits below z. A wall straddling too cannot change its own
+		// reading: its footprint is solid cells, which probe skips over.
+		if e.BBoxMax[2] > z {
 			g.markFootprint(w, e.Tris)
 		}
 	}
@@ -139,14 +147,78 @@ func (g *occupancy) cellOf(x, y float64) (ix, iy int, in bool) {
 	return ix, iy, true
 }
 
-// markRing rasterizes a closed ring's edges as solid. Edges rather than the
-// filled interior: the ring is a barrier to the flood fill, and filling would
-// also fill the inside of a hollow element.
+// markFilled marks one element's cross-section as solid: every ring's edges
+// (so a feature thinner than one cell still blocks the flood fill), plus an
+// even-odd scanline fill over ALL of the element's rings together. Even-odd
+// over the whole set, rather than filling each ring independently, is what
+// keeps a genuinely hollow element hollow — sectionRings returns CCW outer
+// rings and CW holes, and even-odd cancels a hole against its outer ring
+// regardless of winding.
+//
+// Filled per element, not over the union of every element's rings: two
+// elements' rings must never be allowed to cancel one another out.
+func (g *occupancy) markFilled(rings [][][2]float64) {
+	for _, ring := range rings {
+		g.markRing(ring)
+	}
+	g.fillRingsEvenOdd(rings)
+}
+
+// markRing rasterizes a closed ring's edges as solid.
 func (g *occupancy) markRing(ring [][2]float64) {
 	for i := range ring {
 		a := ring[i]
 		b := ring[(i+1)%len(ring)]
 		g.markSegment(a, b)
+	}
+}
+
+// fillRingsEvenOdd fills the interior of a set of rings (an element's
+// cross-section, holes included) using a horizontal-scanline, even-odd point
+// test at each grid row's cell centres.
+func (g *occupancy) fillRingsEvenOdd(rings [][][2]float64) {
+	minY, maxY := math.Inf(1), math.Inf(-1)
+	for _, ring := range rings {
+		for _, p := range ring {
+			minY = math.Min(minY, p[1])
+			maxY = math.Max(maxY, p[1])
+		}
+	}
+	if !(maxY > minY) {
+		return
+	}
+	_, iy0, _ := g.clampCell(g.minX, minY)
+	_, iy1, _ := g.clampCell(g.minX, maxY)
+
+	var xs []float64
+	for iy := iy0; iy <= iy1; iy++ {
+		y := g.minY + (float64(iy)+0.5)*occupancyCell
+		xs = xs[:0]
+		for _, ring := range rings {
+			for i := range ring {
+				a := ring[i]
+				b := ring[(i+1)%len(ring)]
+				// Half-open on the lower endpoint so a vertex lying exactly on
+				// the scanline is never counted by both of its edges.
+				if (a[1] <= y) == (b[1] <= y) {
+					continue
+				}
+				t := (y - a[1]) / (b[1] - a[1])
+				xs = append(xs, a[0]+t*(b[0]-a[0]))
+			}
+		}
+		sort.Float64s(xs)
+		for i := 0; i+1 < len(xs); i += 2 {
+			x0, x1 := xs[i], xs[i+1]
+			ix0, _, _ := g.clampCell(x0, y)
+			ix1, _, _ := g.clampCell(x1, y)
+			for ix := ix0; ix <= ix1; ix++ {
+				px := g.minX + (float64(ix)+0.5)*occupancyCell
+				if px >= x0 && px <= x1 {
+					g.solid[g.idx(ix, iy)] = true
+				}
+			}
+		}
 	}
 }
 
@@ -196,7 +268,7 @@ func (g *occupancy) fillTriangle2D(a, b, c [2]float64) {
 	if math.IsNaN(minX) || math.IsNaN(minY) || math.IsInf(maxX, 0) || math.IsInf(maxY, 0) {
 		return
 	}
-	area := edge2D(a, b, c)
+	area := cross2D(a, b, c)
 	if math.Abs(area) < 1e-15 {
 		return // degenerate in plan
 	}
@@ -207,19 +279,14 @@ func (g *occupancy) fillTriangle2D(a, b, c [2]float64) {
 			px := g.minX + (float64(ix)+0.5)*occupancyCell
 			py := g.minY + (float64(iy)+0.5)*occupancyCell
 			p := [2]float64{px, py}
-			w0 := edge2D(b, c, p) / area
-			w1 := edge2D(c, a, p) / area
-			w2 := edge2D(a, b, p) / area
+			w0 := cross2D(b, c, p) / area
+			w1 := cross2D(c, a, p) / area
+			w2 := cross2D(a, b, p) / area
 			if w0 >= 0 && w1 >= 0 && w2 >= 0 {
 				g.covered[g.idx(ix, iy)] = true
 			}
 		}
 	}
-}
-
-// edge2D is twice the signed area of triangle abc in plan.
-func edge2D(a, b, c [2]float64) float64 {
-	return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
 }
 
 // clampCell maps a point to a cell index clamped into the grid.
