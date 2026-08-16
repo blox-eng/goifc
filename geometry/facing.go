@@ -70,7 +70,12 @@ func BuildFacings(elems []Element) map[string]Facing {
 		key := sliceKey(e)
 		g, built := grids[key]
 		if !built {
-			g = buildOccupancy(elems, sliceHeight(e))
+			// At the height the KEY denotes, never at this element's exact
+			// mid-height: two elements can differ by most of a cell and still
+			// share a key, so building at the first arrival's height makes the
+			// cut plane — and with it every sign on the band — depend on input
+			// order.
+			g = buildOccupancy(elems, float64(key)*occupancyCell)
 			grids[key] = g
 		}
 		if f, ok := facingWithin(e, g); ok {

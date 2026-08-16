@@ -2,6 +2,7 @@ package geometry
 
 import (
 	"math"
+	"math/rand"
 	"testing"
 )
 
@@ -246,6 +247,60 @@ func TestBuildFacingsIsDeterministic(t *testing.T) {
 			if g.Normal != f.Normal || g.FaceArea != f.FaceArea ||
 				g.Exposure != f.Exposure || g.Confidence != f.Confidence {
 				t.Fatalf("run %d, %s: %+v != %+v", run, id, g, f)
+			}
+		}
+	}
+}
+
+// sharedBandFixture is a room whose walls all quantize to ONE slice key (15)
+// while their exact mid-heights differ, plus a blocker filling the south
+// doorway up to z=1.53.
+//
+// The two heights are not equivalent: at 1.51 the blocker still crosses the
+// slice and the room is sealed, so every wall resolves against enclosed air; at
+// 1.549 the blocker is below the cut, the doorway is open, the room floods to
+// the outdoors and every wall degrades to the freestanding coin flip. Build the
+// band at the height of whichever element arrives FIRST and the answer follows
+// input order.
+func sharedBandFixture() []Element {
+	// mid 1.51 -> key 15.
+	south1 := namedWall("s1", v3{0, 0, 0}, v3{2, 0.3, 3.02})
+	south2 := namedWall("s2", v3{2.5, 0, 0}, v3{6, 0.3, 3.02})
+	// mid 1.549 -> key 15 as well, a different cut plane.
+	north := namedWall("n", v3{0, 3.7, 0}, v3{6, 4, 3.098})
+	west := namedWall("w", v3{0, 0, 0}, v3{0.3, 4, 3.098})
+	east := namedWall("e", v3{5.7, 0, 0}, v3{6, 4, 3.098})
+	blocker := namedWall("blk", v3{2, 0, 0}, v3{2.5, 0.3, 1.53})
+	return []Element{south1, south2, north, west, east, blocker}
+}
+
+func TestBuildFacingsIsIndependentOfInputOrder(t *testing.T) {
+	elems := sharedBandFixture()
+	want := BuildFacings(elems)
+
+	// Fixed seed: a reordering that flips a wall's elevation must be
+	// reproducible, not a once-a-week CI mystery.
+	rng := rand.New(rand.NewSource(20260816))
+	for run := 0; run < 50; run++ {
+		shuffled := append([]Element(nil), elems...)
+		rng.Shuffle(len(shuffled), func(i, j int) {
+			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+		})
+
+		got := BuildFacings(shuffled)
+		if len(got) != len(want) {
+			t.Fatalf("run %d classified %d elements, want %d", run, len(got), len(want))
+		}
+		for id, w := range want {
+			g, ok := got[id]
+			if !ok {
+				t.Fatalf("run %d: %s missing after reordering", run, id)
+			}
+			// Bit-identical: a grid built at the arriving element's exact
+			// height rather than the height its key denotes changes which
+			// side of a wall reads as open air, i.e. its elevation.
+			if g != w {
+				t.Fatalf("run %d, %s: %+v != %+v (input order changed the answer)", run, id, g, w)
 			}
 		}
 	}
