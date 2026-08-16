@@ -233,3 +233,46 @@ func TestBuildFacingsNonIdentityPlacementMatchesWorldTwin(t *testing.T) {
 		t.Fatalf("Confidence = %v, want %v", got.Confidence, want.Confidence)
 	}
 }
+
+func TestAzimuth(t *testing.T) {
+	north := [2]float64{0, 1}
+	cases := []struct {
+		name string
+		n    [3]float64
+		want float64
+	}{
+		{"north", [3]float64{0, 1, 0}, 0},
+		{"east", [3]float64{1, 0, 0}, 90},
+		{"south", [3]float64{0, -1, 0}, 180},
+		{"west", [3]float64{-1, 0, 0}, 270},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := Facing{Normal: c.n}.Azimuth(north)
+			if math.Abs(got-c.want) > 1e-9 {
+				t.Fatalf("Azimuth = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestAzimuthShiftsWithTrueNorth(t *testing.T) {
+	// Rotating north by 90° (north becomes +X) shifts every bearing by -90°.
+	got := Facing{Normal: [3]float64{1, 0, 0}}.Azimuth([2]float64{1, 0})
+	if math.Abs(got) > 1e-9 {
+		t.Fatalf("Azimuth = %v, want 0 when the facing IS north", got)
+	}
+}
+
+func TestAzimuthRangeAndDegenerate(t *testing.T) {
+	for _, n := range [][3]float64{{0, 1, 0}, {1, 1, 0}, {-1, -0.001, 0}} {
+		got := Facing{Normal: n}.Azimuth([2]float64{0, 1})
+		if got < 0 || got >= 360 {
+			t.Fatalf("Azimuth = %v, want [0,360)", got)
+		}
+	}
+	// A purely vertical normal has no bearing; 0 is the documented answer.
+	if got := (Facing{Normal: [3]float64{0, 0, 1}}).Azimuth([2]float64{0, 1}); got != 0 {
+		t.Fatalf("Azimuth = %v, want 0 for a vertical normal", got)
+	}
+}

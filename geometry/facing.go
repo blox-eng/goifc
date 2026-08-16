@@ -156,3 +156,34 @@ func resolveSign(pos, neg sideState) (Exposure, bool, float64) {
 		return ExposureInterior, false, signAmbiguous
 	}
 }
+
+// Azimuth returns the compass bearing of f in degrees CLOCKWISE from trueNorth,
+// in [0, 360). Pass model.TrueNorth(file) for a real bearing, or {0,1} for a
+// model-space one.
+//
+// Only the XY part of the normal has a bearing. A normal with no horizontal
+// component — which FacingOf never returns, since it excludes near-vertical
+// faces — has no bearing at all and yields 0.
+func (f Facing) Azimuth(trueNorth [2]float64) float64 {
+	nx, ny := f.Normal[0], f.Normal[1]
+	if math.Hypot(nx, ny) < 1e-12 {
+		return 0
+	}
+	tx, ty := trueNorth[0], trueNorth[1]
+	if math.Hypot(tx, ty) < 1e-12 {
+		tx, ty = 0, 1
+	}
+	// Clockwise from north: the component along north is the cosine, the
+	// component along north-rotated-90°-clockwise is the sine.
+	along := nx*tx + ny*ty
+	right := nx*ty - ny*tx
+	deg := math.Atan2(right, along) * 180 / math.Pi
+	if deg < 0 {
+		deg += 360
+	}
+	// Atan2 can land exactly on 360 after the wrap for a hair-negative angle.
+	if deg >= 360 {
+		deg = 0
+	}
+	return deg
+}
