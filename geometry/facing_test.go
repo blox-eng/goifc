@@ -95,27 +95,21 @@ func TestBuildFacingsSkipsNonFacadeElements(t *testing.T) {
 func courtyardBuilding() []Element {
 	elems := roomWalls(10, 8, 0.3)
 
-	is := elemBox(v3{3.7, 2.7, 0}, v3{6.3, 3, 3}) // inner south, faces court +Y
-	is.GlobalID = "is"
-	in := elemBox(v3{3.7, 5, 0}, v3{6.3, 5.3, 3}) // inner north, faces court -Y
-	in.GlobalID = "in"
-	iw := elemBox(v3{3.7, 2.7, 0}, v3{4, 5.3, 3}) // inner west, faces court +X
-	iw.GlobalID = "iw"
-	ie := elemBox(v3{6, 2.7, 0}, v3{6.3, 5.3, 3}) // inner east, faces court -X
-	ie.GlobalID = "ie"
-	elems = append(elems, is, in, iw, ie)
+	elems = append(elems,
+		namedWall("is", v3{3.7, 2.7, 0}, v3{6.3, 3, 3}), // inner south, faces court +Y
+		namedWall("in", v3{3.7, 5, 0}, v3{6.3, 5.3, 3}), // inner north, faces court -Y
+		namedWall("iw", v3{3.7, 2.7, 0}, v3{4, 5.3, 3}), // inner west, faces court +X
+		namedWall("ie", v3{6, 2.7, 0}, v3{6.3, 5.3, 3}), // inner east, faces court -X
+	)
 
 	// Roof the built band as a picture frame around the courtyard, so the
 	// band reads sideCovered while the courtyard footprint stays open.
-	roofS := elemBox(v3{0, 0, 3}, v3{10, 3, 3.2})
-	roofS.GlobalID = "roofS"
-	roofN := elemBox(v3{0, 5, 3}, v3{10, 8, 3.2})
-	roofN.GlobalID = "roofN"
-	roofW := elemBox(v3{0, 3, 3}, v3{4, 5, 3.2})
-	roofW.GlobalID = "roofW"
-	roofE := elemBox(v3{6, 3, 3}, v3{10, 5, 3.2})
-	roofE.GlobalID = "roofE"
-	elems = append(elems, roofS, roofN, roofW, roofE)
+	elems = append(elems,
+		namedWall("roofS", v3{0, 0, 3}, v3{10, 3, 3.2}),
+		namedWall("roofN", v3{0, 5, 3}, v3{10, 8, 3.2}),
+		namedWall("roofW", v3{0, 3, 3}, v3{4, 5, 3.2}),
+		namedWall("roofE", v3{6, 3, 3}, v3{10, 5, 3.2}),
+	)
 
 	return elems
 }
@@ -148,13 +142,12 @@ func TestBuildFacingsCourtyardWallsFaceEnclosedCourt(t *testing.T) {
 
 func TestBuildFacingsRoofedPartitionIsInterior(t *testing.T) {
 	elems := roomWalls(6, 4, 0.3)
-	roof := elemBox(v3{0, 0, 3}, v3{6, 4, 3.2})
-	roof.GlobalID = "roof"
-	// A partition splitting the roofed room in two: both sides land in the
-	// same covered interior, so neither reaches open air or the sky.
-	partition := elemBox(v3{2.85, 0.3, 0}, v3{3.15, 3.7, 3})
-	partition.GlobalID = "p"
-	elems = append(elems, roof, partition)
+	elems = append(elems,
+		namedWall("roof", v3{0, 0, 3}, v3{6, 4, 3.2}),
+		// A partition splitting the roofed room in two: both sides land in the
+		// same covered interior, so neither reaches open air or the sky.
+		namedWall("p", v3{2.85, 0.3, 0}, v3{3.15, 3.7, 3}),
+	)
 
 	got := BuildFacings(elems)
 	f, ok := got["p"]

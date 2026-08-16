@@ -130,8 +130,15 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 
 		// Covered: the XY footprint of anything that has any part above the
 		// slice — including an element straddling it, such as a slab whose
-		// underside sits below z. A wall straddling too cannot change its own
-		// reading: its footprint is solid cells, which probe skips over.
+		// underside sits below z.
+		//
+		// For a PRISMATIC element straddling the slice this costs nothing: its
+		// covered cells are exactly its solid cells, which probe walks over.
+		// Where the element is not prismatic — a sloped roof, a wall sitting on
+		// a wider footing — the footprint above the cut is wider than the cut
+		// itself, so covered spills past solid by that overhang and a cell just
+		// beside the element can read covered rather than open. At 10 cm cells
+		// that is a real but small bias toward reporting interior.
 		if e.BBoxMax[2] > z {
 			g.markFootprint(w, e.Tris)
 		}
@@ -149,9 +156,12 @@ func (g *occupancy) idx(ix, iy int) int { return iy*g.nx + ix }
 
 // cellOf maps a world XY point to a cell, reporting in=false when it lies off
 // the grid.
+//
+// math.Floor, not an int conversion: truncation rounds toward zero, so a point
+// in [minX-cell, minX) would land on cell 0 and be reported as inside.
 func (g *occupancy) cellOf(x, y float64) (ix, iy int, in bool) {
-	ix = int((x - g.minX) / occupancyCell)
-	iy = int((y - g.minY) / occupancyCell)
+	ix = int(math.Floor((x - g.minX) / occupancyCell))
+	iy = int(math.Floor((y - g.minY) / occupancyCell))
 	if ix < 0 || iy < 0 || ix >= g.nx || iy >= g.ny {
 		return 0, 0, false
 	}
@@ -162,9 +172,8 @@ func (g *occupancy) cellOf(x, y float64) (ix, iy int, in bool) {
 // (so a feature thinner than one cell still blocks the flood fill), plus an
 // even-odd scanline fill over ALL of the element's rings together. Even-odd
 // over the whole set, rather than filling each ring independently, is what
-// keeps a genuinely hollow element hollow — sectionRings returns CCW outer
-// rings and CW holes, and even-odd cancels a hole against its outer ring
-// regardless of winding.
+// keeps a genuinely hollow element hollow: even-odd cancels a hole against its
+// outer ring regardless of the winding sectionRings happens to emit.
 //
 // Filled per element, not over the union of every element's rings: two
 // elements' rings must never be allowed to cancel one another out.
@@ -198,8 +207,7 @@ func (g *occupancy) fillRingsEvenOdd(rings [][][2]float64) {
 	if !(maxY > minY) {
 		return
 	}
-	_, iy0, _ := g.clampCell(g.minX, minY)
-	_, iy1, _ := g.clampCell(g.minX, maxY)
+	iy0, iy1 := g.clampRow(minY), g.clampRow(maxY)
 
 	var xs []float64
 	for iy := iy0; iy <= iy1; iy++ {
@@ -221,8 +229,7 @@ func (g *occupancy) fillRingsEvenOdd(rings [][][2]float64) {
 		sort.Float64s(xs)
 		for i := 0; i+1 < len(xs); i += 2 {
 			x0, x1 := xs[i], xs[i+1]
-			ix0, _, _ := g.clampCell(x0, y)
-			ix1, _, _ := g.clampCell(x1, y)
+			ix0, ix1 := g.clampCol(x0), g.clampCol(x1)
 			for ix := ix0; ix <= ix1; ix++ {
 				px := g.minX + (float64(ix)+0.5)*occupancyCell
 				if px >= x0 && px <= x1 {
@@ -283,8 +290,8 @@ func (g *occupancy) fillTriangle2D(a, b, c [2]float64) {
 	if math.Abs(area) < 1e-15 {
 		return // degenerate in plan
 	}
-	x0, y0, _ := g.clampCell(minX, minY)
-	x1, y1, _ := g.clampCell(maxX, maxY)
+	x0, y0 := g.clampCol(minX), g.clampRow(minY)
+	x1, y1 := g.clampCol(maxX), g.clampRow(maxY)
 	for iy := y0; iy <= y1; iy++ {
 		for ix := x0; ix <= x1; ix++ {
 			px := g.minX + (float64(ix)+0.5)*occupancyCell
@@ -300,28 +307,32 @@ func (g *occupancy) fillTriangle2D(a, b, c [2]float64) {
 	}
 }
 
-// clampCell maps a point to a cell index clamped into the grid.
-func (g *occupancy) clampCell(x, y float64) (ix, iy int, in bool) {
-	ix = int((x - g.minX) / occupancyCell)
-	iy = int((y - g.minY) / occupancyCell)
-	if ix < 0 {
-		ix = 0
-	}
-	if iy < 0 {
-		iy = 0
-	}
-	if ix >= g.nx {
-		ix = g.nx - 1
-	}
-	if iy >= g.ny {
-		iy = g.ny - 1
-	}
-	return ix, iy, true
+// clampCol maps a world X to a column index clamped into the grid, and clampRow
+// a world Y to a row. Separate axes because most callers want one of them, and
+// a combined helper made them pass a dummy coordinate for the other.
+func (g *occupancy) clampCol(x float64) int {
+	return clampIndex(int(math.Floor((x-g.minX)/occupancyCell)), g.nx)
 }
 
-// floodOutside breadth-first fills every empty cell reachable from the grid
+func (g *occupancy) clampRow(y float64) int {
+	return clampIndex(int(math.Floor((y-g.minY)/occupancyCell)), g.ny)
+}
+
+// clampIndex clamps i into [0, n).
+func clampIndex(i, n int) int {
+	if i < 0 {
+		return 0
+	}
+	if i >= n {
+		return n - 1
+	}
+	return i
+}
+
+// floodOutside depth-first fills every empty cell reachable from the grid
 // border. The reached set is open air; empty cells it never reaches are voids
-// the building encloses.
+// the building encloses. Depth or breadth makes no difference to the reached
+// set, and popping from the tail needs no head index.
 func (g *occupancy) floodOutside() {
 	g.outside = make([]bool, g.nx*g.ny)
 	queue := make([]int, 0, g.nx+g.ny)
