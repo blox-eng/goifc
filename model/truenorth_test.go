@@ -57,12 +57,43 @@ func TestTrueNorthDefaults(t *testing.T) {
 
 func TestTrueNorthIgnoresSubContext(t *testing.T) {
 	// A sub-context inherits TrueNorth from its parent and does not restate it;
-	// reading one would yield (0,1) and mask the real north.
-	f := trueNorthFile(t, `#1=IFCDIRECTION((1.,0.));
-#2=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-5,$,#1);
-#3=IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#2,$,.MODEL_VIEW.,$);
+	// reading one would yield the wrong direction and mask the real north.
+	//
+	// #2 is encoded as a STEP complex instance combining both the context and
+	// sub-context parts. This is deliberate: step.File.ByType's exact-match
+	// semantics already exclude an ordinary simple
+	// IfcGeometricRepresentationSubContext instance, so a test built on that
+	// shape would pass even with the IsA guard deleted. Registering #2 under
+	// both part types (see step/parse.go finishComplexInstance) makes it
+	// reachable through ByType("IfcGeometricRepresentationContext"), so this
+	// test only passes if the guard actually filters it out.
+	//
+	// #2 also carries the lower express ID (2 < 5) and a decoy direction
+	// (0,-1): if the guard were removed, lowest-ID selection would pick #2 and
+	// TrueNorth would return (0,-1) instead of the real #5 north (1,0).
+	f := trueNorthFile(t, `#1=IFCDIRECTION((0.,-1.));
+#2=(IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-5,$,#1)IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#2,$,.MODEL_VIEW.,$));
+#4=IFCDIRECTION((1.,0.));
+#5=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-5,$,#4);
 `)
-	if got := TrueNorth(f); math.Abs(got[0]-1) > 1e-12 {
-		t.Fatalf("TrueNorth = %v, want (1,0)", got)
+	got := TrueNorth(f)
+	if math.Abs(got[0]-1) > 1e-12 || math.Abs(got[1]) > 1e-12 {
+		t.Fatalf("TrueNorth = %v, want (1,0) from #5, not the filtered complex sub-context #2", got)
+	}
+}
+
+func TestTrueNorthLowestIDWins(t *testing.T) {
+	// Two top-level contexts, out of file order: #9 is written first but #3 has
+	// the lower express ID and must win regardless. If the ID comparison were
+	// reversed, dropped, or replaced with "first seen", this would return #9's
+	// (0,-1) instead of #3's (1,0).
+	f := trueNorthFile(t, `#7=IFCDIRECTION((0.,-1.));
+#9=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-5,$,#7);
+#1=IFCDIRECTION((1.,0.));
+#3=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-5,$,#1);
+`)
+	got := TrueNorth(f)
+	if math.Abs(got[0]-1) > 1e-12 || math.Abs(got[1]) > 1e-12 {
+		t.Fatalf("TrueNorth = %v, want (1,0) from #3 (lowest ID), not #9", got)
 	}
 }
