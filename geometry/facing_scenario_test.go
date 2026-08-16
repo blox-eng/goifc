@@ -244,7 +244,7 @@ func TestBuildFacingsIsDeterministic(t *testing.T) {
 			// Bit-identical, not approximately equal: any drift here means an
 			// ordering dependency, and it will surface as a wall changing
 			// elevation between two runs on the same file.
-			if g.Normal != f.Normal || g.FaceArea != f.FaceArea ||
+			if g.Normal != f.Normal || g.VoteArea != f.VoteArea ||
 				g.Exposure != f.Exposure || g.Confidence != f.Confidence {
 				t.Fatalf("run %d, %s: %+v != %+v", run, id, g, f)
 			}

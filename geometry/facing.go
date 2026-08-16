@@ -28,11 +28,19 @@ const (
 
 // Facing is an element's outward direction in world space: the area-weighted
 // dominant normal of its vertical faces, signed to point at the exposed side.
+//
+// The sign is resolved by probing outward from the element's BBox CENTRE, so an
+// L-shaped or strongly curved element whose centre falls outside its own body
+// probes from a point that is not in the element at all and degrades to low
+// confidence.
 type Facing struct {
 	// Normal is unit length in world space and points at the exposed side.
 	Normal [3]float64
-	// FaceArea is the m² of vertical face voting for this direction.
-	FaceArea float64
+	// VoteArea is the vertical face area that voted for this axis, in m². It is
+	// NOT the facade area: antipodal faces are folded together, so a
+	// free-standing wall contributes BOTH its faces and reports roughly twice
+	// its outer face. Do not sum it per elevation.
+	VoteArea float64
 	// Exposure is what the Normal side reaches.
 	Exposure Exposure
 	// Confidence is 0..1. Below ~0.5 the sign is a guess; a consumer that would
@@ -132,7 +140,7 @@ func facingWithin(e Element, g *occupancy) (Facing, bool) {
 		return Facing{}, false
 	}
 
-	f := Facing{Normal: dir, FaceArea: area}
+	f := Facing{Normal: dir, VoteArea: area}
 
 	if g == nil {
 		f.Exposure = ExposureExterior

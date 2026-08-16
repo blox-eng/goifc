@@ -69,10 +69,13 @@ const (
 // Facing is an element's outward direction in world space: the area-weighted
 // dominant normal of its vertical faces, signed to point at the exposed side.
 type Facing struct {
-    Normal     [3]float64 // unit, world space; points at the exposed side
-    FaceArea   float64    // m² of faces voting for this direction
-    Exposure   Exposure
-    Confidence float64 // 0..1
+    Normal   [3]float64 // unit, world space; points at the exposed side
+    VoteArea float64    // m² of vertical face that VOTED for this axis — not facade area
+    Exposure Exposure
+    // Confidence is 0..1. The sign is resolved by probing outward from the
+    // element's BBox centre, so an L-shaped or strongly curved element whose
+    // centre falls outside its own body degrades to low confidence.
+    Confidence float64
 }
 
 // FacingOf returns the facing of e, or ok=false when the element has no dominant
@@ -107,6 +110,13 @@ Plus, in `model`, the piece nothing reads today:
 // norths all yield (0,1).
 func TrueNorth(f *step.File) [2]float64
 ```
+
+`VoteArea` is named for what it is. The axis vote folds antipodal faces together — that
+folding is the whole point of the axis stage — so a wall's inner and outer face both
+count toward the winning axis and a 6 m × 3 m free-standing wall reports 36 m², roughly
+twice its facade. No fixed divisor recovers the real number: it is 2× free-standing and
+somewhere between 1× and 2× when the element abuts a neighbour. The field is a diagnostic
+for how decisively the axis won, not a quantity. Facade area is `NetArea`'s job.
 
 `Confidence` stays a single number. An earlier draft split it into axis and sign
 components; naming `Exposure` explicitly makes that unnecessary, because the field a

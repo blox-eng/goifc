@@ -223,8 +223,8 @@ func TestBuildFacingsNonIdentityPlacementMatchesWorldTwin(t *testing.T) {
 			t.Fatalf("Normal = %v, want %v (identity twin)", got.Normal, want.Normal)
 		}
 	}
-	if math.Abs(want.FaceArea-got.FaceArea) > eps {
-		t.Fatalf("FaceArea = %v, want %v", got.FaceArea, want.FaceArea)
+	if math.Abs(want.VoteArea-got.VoteArea) > eps {
+		t.Fatalf("VoteArea = %v, want %v", got.VoteArea, want.VoteArea)
 	}
 	if got.Exposure != want.Exposure {
 		t.Fatalf("Exposure = %v, want %v", got.Exposure, want.Exposure)
