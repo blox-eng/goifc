@@ -26,6 +26,12 @@ func TestFourElevationPartition(t *testing.T) {
 		t.Fatalf("classified %d of 4 walls", len(got))
 	}
 
+	// want pins each wall to the SPECIFIC bin it must land in. The exactly-
+	// one-per-bin loop below is not enough on its own: inverting the sign of
+	// every open-air wall maps N<->S and E<->W, which leaves the histogram
+	// identical (still one per bin) while every elevation is wrong.
+	want := map[string]string{"s": "S", "n": "N", "w": "W", "e": "E"}
+
 	bins := map[string]int{}
 	for id, f := range got {
 		if f.Exposure != ExposureExterior {
@@ -35,7 +41,11 @@ func TestFourElevationPartition(t *testing.T) {
 			t.Fatalf("wall %s Confidence = %v; the fill should resolve a closed room outright",
 				id, f.Confidence)
 		}
-		bins[compass(f.Azimuth([2]float64{0, 1}))]++
+		got := compass(f.Azimuth([2]float64{0, 1}))
+		if got != want[id] {
+			t.Fatalf("wall %s binned %s, want %s", id, got, want[id])
+		}
+		bins[got]++
 	}
 	for _, dir := range []string{"N", "E", "S", "W"} {
 		if bins[dir] != 1 {
@@ -155,6 +165,13 @@ func TestEnclosedCourtyardIsNotAnElevation(t *testing.T) {
 			t.Fatalf("%s Exposure = %v, want enclosed — a sealed court is on no elevation",
 				id, f.Exposure)
 		}
+		// A court wall's sign certainty drops from signCourtyard (0.744) to
+		// signAmbiguous (0.279) if the covered grid is not being consulted at
+		// all; an Exposure- or Normal-only assertion cannot see that loss.
+		if f.Confidence < 0.7 {
+			t.Fatalf("%s Confidence = %v, want >= 0.7 — the roof-vs-court distinction should be decisive",
+				id, f.Confidence)
+		}
 
 		e := elementByID(elems, id)
 		center := v3{
@@ -170,8 +187,28 @@ func TestEnclosedCourtyardIsNotAnElevation(t *testing.T) {
 		}
 	}
 	for _, id := range []string{"outS", "outN", "outW", "outE"} {
-		if f := got[id]; f.Exposure != ExposureExterior {
+		f, ok := got[id]
+		if !ok {
+			t.Fatalf("%s was not classified", id)
+		}
+		if f.Exposure != ExposureExterior {
 			t.Fatalf("%s Exposure = %v, want exterior", id, f.Exposure)
+		}
+		// Mirror of the court-wall check: an outer wall's Normal must point
+		// AWAY from the courtyard centre, into the open air outside the
+		// building. Under the same inverted-sign mutation this catches what
+		// the exposure-only check above cannot.
+		e := elementByID(elems, id)
+		center := v3{
+			(e.BBoxMin[0] + e.BBoxMax[0]) / 2,
+			(e.BBoxMin[1] + e.BBoxMax[1]) / 2,
+			(e.BBoxMin[2] + e.BBoxMax[2]) / 2,
+		}
+		fromCourt := v3{center[0] - courtyardCentre[0], center[1] - courtyardCentre[1], 0}
+		dot := f.Normal[0]*fromCourt[0] + f.Normal[1]*fromCourt[1]
+		if dot <= 0 {
+			t.Fatalf("%s Normal %v does not point away from the courtyard from centre %v (dot=%v)",
+				id, f.Normal, center, dot)
 		}
 	}
 }
