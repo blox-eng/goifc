@@ -1,6 +1,9 @@
 package geometry
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 // Exposure is what the Facing.Normal side of an element reaches.
 type Exposure string
@@ -69,34 +72,54 @@ func FacingOf(e Element) (Facing, bool) {
 // malformed model, and de-duplicating silently would hide it.
 func BuildFacings(elems []Element) map[string]Facing {
 	out := make(map[string]Facing, len(elems))
-	// One grid per distinct slice height, so a storey is rasterized once rather
-	// than once per wall on it.
-	grids := map[int64]*occupancy{}
+
+	// Vote on axes FIRST, then build grids only for the elements that got one.
+	// Rasterizing the whole model for a band whose every element is a slab, a
+	// column or a piece of furniture is pure waste — the sign is never asked
+	// for — and on a real model those elements are most of the file.
+	bands := map[int64][]voted{}
+	var keys []int64
 
 	for i := range elems {
 		e := elems[i]
-		key, keyed := sliceKey(e)
-		if !keyed {
-			if f, ok := facingWithin(e, nil); ok {
-				out[e.GlobalID] = f
-			}
+		dir, area, share, ok := axisOf(e)
+		if !ok {
 			continue
 		}
-		g, built := grids[key]
-		if !built {
-			// At the height the KEY denotes, never at this element's exact
-			// mid-height: two elements can differ by most of a cell and still
-			// share a key, so building at the first arrival's height makes the
-			// cut plane — and with it every sign on the band — depend on input
-			// order.
-			g = buildOccupancy(elems, float64(key)*occupancyCell)
-			grids[key] = g
+		key, keyed := sliceKey(e)
+		if !keyed {
+			out[e.GlobalID] = signFacing(e, dir, area, share, nil)
+			continue
 		}
-		if f, ok := facingWithin(e, g); ok {
-			out[e.GlobalID] = f
+		if _, seen := bands[key]; !seen {
+			keys = append(keys, key)
 		}
+		bands[key] = append(bands[key], voted{e, dir, area, share})
+	}
+
+	// Sorted, never a map range: an iteration order must not be able to reach
+	// the output, even where today's arithmetic happens not to care.
+	slices.Sort(keys)
+	for _, key := range keys {
+		// Built at the height the KEY denotes, never at some member element's
+		// exact mid-height: two elements can differ by most of a cell and still
+		// share a key, so cutting at one arrival's height would make the plane
+		// — and every sign on the band — depend on input order.
+		g := buildOccupancy(elems, float64(key)*occupancyCell)
+		for _, v := range bands[key] {
+			out[v.e.GlobalID] = signFacing(v.e, v.dir, v.area, v.share, g)
+		}
+		// g dies here. One band's grid is live at a time, so peak memory is one
+		// grid rather than one per distinct element mid-height in the model.
 	}
 	return out
+}
+
+// voted is an element whose axis has been decided but whose sign has not.
+type voted struct {
+	e           Element
+	dir         v3
+	area, share float64
 }
 
 // sliceHeight is the height a facing is judged at: the element's mid-height,
@@ -128,24 +151,35 @@ func sliceKey(e Element) (int64, bool) {
 	return int64(q), true
 }
 
+// axisOf runs the unsigned axis vote for e in world space. ok=false means the
+// element has no facade, and so needs no neighbour context at all.
+func axisOf(e Element) (dir v3, area, share float64, ok bool) {
+	if len(e.Tris) == 0 {
+		return v3{}, 0, 0, false
+	}
+	return dominantAxis(worldPoints(e.Verts, e.Placement), e.Tris)
+}
+
 // facingWithin resolves e's facing against grid g. A nil g means no neighbour
 // context — the axis still resolves, the sign does not.
 func facingWithin(e Element, g *occupancy) (Facing, bool) {
-	if len(e.Tris) == 0 {
-		return Facing{}, false
-	}
-	w := worldPoints(e.Verts, e.Placement)
-	dir, area, share, ok := dominantAxis(w, e.Tris)
+	dir, area, share, ok := axisOf(e)
 	if !ok {
 		return Facing{}, false
 	}
+	return signFacing(e, dir, area, share, g), true
+}
 
+// signFacing resolves which of ±dir points at the exposed side, against grid g.
+// A nil g means no neighbour context: the axis stands, the sign is arbitrary
+// and the confidence says so.
+func signFacing(e Element, dir v3, area, share float64, g *occupancy) Facing {
 	f := Facing{Normal: dir, VoteArea: area}
 
 	if g == nil {
 		f.Exposure = ExposureExterior
 		f.Confidence = share * signAmbiguous
-		return f, true
+		return f
 	}
 
 	cx := (e.BBoxMin[0] + e.BBoxMax[0]) / 2
@@ -161,7 +195,7 @@ func facingWithin(e Element, g *occupancy) (Facing, bool) {
 	}
 	f.Exposure = exposure
 	f.Confidence = share * factor
-	return f, true
+	return f
 }
 
 // resolveSign turns the two probe results into an exposure, whether to flip the
