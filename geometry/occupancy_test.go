@@ -1,6 +1,9 @@
 package geometry
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // roomWalls returns four walls enclosing [0,w]x[0,d] with the given thickness,
 // each 3m tall. Each wall gets a distinct GlobalID (south/north/west/east)
@@ -104,6 +107,65 @@ func TestOccupancyNilWhenSliceMissesEverything(t *testing.T) {
 	}
 	if g := buildOccupancy(nil, 1.5); g != nil {
 		t.Fatal("buildOccupancy returned a grid for no elements")
+	}
+}
+
+func TestOccupancyRefusesHugeExtentWithoutPanicking(t *testing.T) {
+	// A file-supplied coordinate this large makes nx*ny overflow int. The wrap
+	// is not monotonic in the coordinate — whether the wrapped product happens
+	// to land above or below occupancyMaxCells depends on the other axis too —
+	// so a product-only guard rejects most magnitudes and panics with
+	// `makeslice: len out of range` on the rest (2e17 here). This library reads
+	// untrusted files, so the sweep is the test, not one lucky number.
+	for _, m := range []float64{1e15, 1e16, 5e16, 1e17, 2e17, 3e17, 7e17, 1e18} {
+		elems := append(roomWalls(6, 4, 0.3), elemBox(v3{0, 0, 0}, v3{m, 0.3, 3}))
+		if g := buildOccupancy(elems, 1.5); g != nil {
+			t.Fatalf("buildOccupancy returned a %dx%d grid for a %g m extent", g.nx, g.ny, m)
+		}
+	}
+}
+
+// nanWall is a wall whose bbox never got measured, which is what a degenerate
+// or unplaced element looks like coming out of the assembler.
+func nanWall(id string) Element {
+	e := elemBox(v3{2, 1, 0}, v3{3, 1.3, 3})
+	e.GlobalID = id
+	nan := math.NaN()
+	e.BBoxMin = [3]float64{nan, nan, nan}
+	e.BBoxMax = [3]float64{nan, nan, nan}
+	return e
+}
+
+func TestOccupancyIgnoresNonFiniteBBoxes(t *testing.T) {
+	// math.Min(x, NaN) is NaN, so folding one unmeasured element into the
+	// extent used to return nil for EVERY band of the model.
+	elems := append(roomWalls(6, 4, 0.3), nanWall("nan"))
+	g := buildOccupancy(elems, 1.5)
+	if g == nil {
+		t.Fatal("one NaN bbox disabled the whole slice")
+	}
+	if got := g.probe(v3two(3, 0.15), [2]float64{0, 1}); got != sideEnclosed {
+		t.Fatalf("room interior = %v, want sideEnclosed — the healthy geometry still rasterized", got)
+	}
+}
+
+func TestBuildFacingsNaNElementDoesNotDegradeNeighbours(t *testing.T) {
+	healthy := BuildFacings(roomWalls(6, 4, 0.3))
+	withNaN := BuildFacings(append(roomWalls(6, 4, 0.3), nanWall("nan")))
+
+	for id, want := range healthy {
+		got, ok := withNaN[id]
+		if !ok {
+			t.Fatalf("%s vanished once a NaN element joined the model", id)
+		}
+		if got != want {
+			t.Fatalf("%s: %+v != %+v — a NaN neighbour changed a healthy wall", id, got, want)
+		}
+	}
+	// The NaN element itself declines to a coin flip rather than claiming an
+	// elevation it cannot have probed for.
+	if f, ok := withNaN["nan"]; ok && f.Confidence >= 0.5 {
+		t.Fatalf("NaN element Confidence = %v, want low", f.Confidence)
 	}
 }
 

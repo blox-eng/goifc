@@ -73,6 +73,12 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		if len(e.Tris) == 0 {
 			continue
 		}
+		// One non-finite bbox must not disable the feature model-wide:
+		// math.Min(x, NaN) is NaN, so folding it into the extent would poison
+		// every band and drop every wall in the model to a coin-flip sign.
+		if !finite3(e.BBoxMin) || !finite3(e.BBoxMax) {
+			continue
+		}
 		// Include everything at or above the slice: geometry below cannot be
 		// overhead, and geometry crossing z contributes solid cells.
 		if e.BBoxMax[2] < z {
@@ -90,7 +96,12 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 	g := &occupancy{minX: minX - pad, minY: minY - pad}
 	g.nx = int((maxX-minX+2*pad)/occupancyCell) + 1
 	g.ny = int((maxY-minY+2*pad)/occupancyCell) + 1
-	if g.nx <= 0 || g.ny <= 0 || g.nx*g.ny > occupancyMaxCells {
+	// Bound each axis BEFORE multiplying. This library parses untrusted files,
+	// so a file-supplied coordinate of 1e17 is reachable input: nx*ny overflows
+	// int and wraps to a small positive number, sailing past a product-only
+	// guard straight into a makeslice panic.
+	if g.nx <= 0 || g.ny <= 0 || g.nx > occupancyMaxCells || g.ny > occupancyMaxCells ||
+		g.nx*g.ny > occupancyMaxCells {
 		return nil
 	}
 	g.solid = make([]bool, g.nx*g.ny)

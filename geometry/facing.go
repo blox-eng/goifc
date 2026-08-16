@@ -67,7 +67,13 @@ func BuildFacings(elems []Element) map[string]Facing {
 
 	for i := range elems {
 		e := elems[i]
-		key := sliceKey(e)
+		key, keyed := sliceKey(e)
+		if !keyed {
+			if f, ok := facingWithin(e, nil); ok {
+				out[e.GlobalID] = f
+			}
+			continue
+		}
 		g, built := grids[key]
 		if !built {
 			// At the height the KEY denotes, never at this element's exact
@@ -90,11 +96,28 @@ func BuildFacings(elems []Element) map[string]Facing {
 // over it.
 func sliceHeight(e Element) float64 { return (e.BBoxMin[2] + e.BBoxMax[2]) / 2 }
 
+// sliceKeyMax bounds a key so the float-to-int64 conversion below is defined.
+// A model reaching it is 9e16 m across at 10 cm; its grid would be refused by
+// occupancyMaxCells anyway.
+const sliceKeyMax = 1 << 62
+
 // sliceKey quantizes a slice height to occupancyCell so elements on one storey
 // share a grid. Quantizing to the grid resolution is exactly as precise as the
 // grid itself, so this costs no accuracy.
-func sliceKey(e Element) int64 {
-	return int64(math.Round(sliceHeight(e) / occupancyCell))
+//
+// ok=false for an element whose bbox is not finite. Such an element declines
+// on its own — no grid, arbitrary sign, low confidence — rather than taking its
+// whole band down with it. Its bbox is also the probe origin, so there is no
+// meaningful answer to give it.
+func sliceKey(e Element) (int64, bool) {
+	if !finite3(e.BBoxMin) || !finite3(e.BBoxMax) {
+		return 0, false
+	}
+	q := math.Round(sliceHeight(e) / occupancyCell)
+	if math.Abs(q) >= sliceKeyMax {
+		return 0, false
+	}
+	return int64(q), true
 }
 
 // facingWithin resolves e's facing against grid g. A nil g means no neighbour
