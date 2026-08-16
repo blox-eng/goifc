@@ -151,20 +151,40 @@ an independently derived 331 m²) and got the other three wrong for precisely th
 
 **Decision: a horizontal-slice occupancy grid with a flood fill from outside.**
 
-For the Z band around an element's mid-height:
+For the Z band around an element's mid-height, **three** bitsets, not two:
 
-1. Rasterize into a 2D bitset, in world XY, every element triangle crossing that band.
-2. Flood-fill *unoccupied* cells inward from the grid border. The reached set is open air.
-3. Probe a cell one step off the element along `+n` and `-n`.
+1. `solid` — rasterize into a 2D bitset, in world XY, every element cross-section
+   crossing that band.
+2. `outside` — flood-fill *unoccupied* cells inward from the grid border. The reached
+   set is open air.
+3. `covered` — the filled XY footprint of everything with any part *above* the band.
+
+The third exists because at one slice height a room and a courtyard are identical:
+both are voids ringed by walls, and only what is overhead tells them apart. It is
+also what resolves the *sign* for a courtyard wall, whose two sides are otherwise
+both "enclosed".
+
+Then probe. The probe does **not** start one step off the element: it starts at the
+element's BBox **centre** and walks along `±n` *through the element's own fabric*
+until it reaches air. Starting outside the element needs a step size that clears the
+element's thickness without clearing a neighbouring gap, and there is no such number;
+walking out from the inside needs none. The cost of the better rule is that an
+L-shaped or strongly curved element whose BBox centre falls outside its own body
+probes from a point that is not in the element, and degrades to low confidence.
 
 | probe | result |
 |---|---|
-| one side open air, the other not | sign resolved, `ExposureExterior` |
-| a side unoccupied but unreachable from the border | `ExposureEnclosed` — a void the building encloses |
+| one side open air, the other not | sign resolved, `ExposureExterior`, full sign certainty |
 | both sides open air | freestanding; `ExposureExterior`, arbitrary sign, low confidence |
-| neither side open air | `ExposureInterior` |
+| one side unreachable and **uncovered** (`sideEnclosed`), the other not | `ExposureEnclosed` — a courtyard or lightwell; sign points at the void |
+| both sides `sideEnclosed` | `ExposureEnclosed`, arbitrary sign, low confidence |
+| neither side open air or open to the sky — i.e. solid or **covered** | `ExposureInterior` |
 
-Two earlier candidates were rejected:
+Note the last two rows: unreachable-and-uncovered and unreachable-and-covered are
+*different* states. Collapsing them, as an earlier draft of this doc did, loses
+exactly the courtyard-versus-room distinction the `covered` bitset was added for.
+
+Three earlier candidates were rejected:
 
 | Strategy | Why not |
 |---|---|
@@ -179,7 +199,16 @@ no `IfcSpace`, no polygon boolean library, and no floating-point boundary cases.
 
 Slicing per Z band rather than projecting the whole building matters: a roof slab
 projected flat would seal every courtyard, and an upper-storey overhang would corrupt the
-storey beneath it. Bands are cached per distinct slice so a storey is rasterized once.
+storey beneath it.
+
+Bands are keyed on **quantized element mid-height**, not on storey — so a model with
+walls, parapets, upstands and slabs at assorted heights produces far more bands than it
+has storeys, and each band re-rasterizes the whole model. Cost is O(bands × elements)
+and that is inherent to the method. Two things keep it survivable: the axis vote runs
+*first*, so a slab or column never triggers a rasterization for a sign nobody will ask
+for, and bands are processed one at a time so exactly one grid is live. Measured on a
+synthetic mixed floor plate spanning ~90 slice keys, 1010 elements classify in 1.8 s
+with a 20 MB peak — down from 2.8 s and 760 MB when every band's grid was retained.
 
 An exact variant — union the per-element `sectionRings` into outer rings plus holes, then
 test point-in-polygon — was considered and rejected. It is the same idea with no
@@ -197,9 +226,17 @@ All of these must exist before this is done:
   rotated by 90°. This is the regression test for the frame bug; without it the function
   passes while being uniformly wrong.
 - **Four-elevation partition** — a closed rectangular room: every wall in exactly one of
-  four bins, all `ExposureExterior`, all bins non-empty, summed face area equal to total
-  exterior vertical face area. This proves the fill *resolves*, as opposed to degrading to
-  low confidence everywhere.
+  four bins, each wall in the *specific* bin it belongs to, all `ExposureExterior`, all
+  bins non-empty. This proves the fill *resolves*, as opposed to degrading to low
+  confidence everywhere.
+
+    An earlier draft of this list also demanded "summed face area equal to total exterior
+    vertical face area". That assertion is **removed, not deferred**: it is false of
+    `VoteArea` and always was. The axis vote folds antipodal faces, so each wall's
+    `VoteArea` counts both its inner and its outer face — roughly twice the elevation
+    area, and not by a fixed factor. `VoteArea` is a vote weight, not a quantity; a
+    partition assertion over it would be asserting the wrong thing. Facade area is
+    `NetArea`'s job, and it is tested there.
 - **Non-convex footprint** — a U-shaped plan where a naive centroid rule misassigns the
   walls flanking the recess. They must resolve correctly, never a confident wrong bin.
 - **Enclosed void** — a ring of walls around a closed courtyard: the inward-facing walls
@@ -239,9 +276,17 @@ alternative is a confident wrong answer.
   glazed storey with no modelled mullions finds no occupancy to enclose it. Those elements
   land in the low-confidence bucket, which is the honest answer, but it is a real coverage
   gap on curtain-walled models.
-- **Cost is linear in cells, not elements.** A 20 × 26 m footprint at 10 cm is ~54k cells
-  per band — trivial — but a large site model at the same resolution is not, and bands are
-  per distinct mid-height. Cache by band and revisit only if it shows up in a profile.
+- **Cost is O(bands × elements).** One band over a 20 × 26 m footprint at 10 cm is ~54k
+  cells — trivial — but bands are per distinct quantized element mid-height, which on a
+  real model is hundreds, and every band re-rasterizes the whole model. Building the grid
+  lazily and holding one band at a time bounds the *memory* (one grid, not one per band)
+  but not the *time*. A model that is both large in plan and rich in distinct mid-heights
+  is the case to profile if this shows up.
+- **Determinism depends on the band height being a function of the key alone.** Two
+  elements can differ in mid-height by most of a cell and still quantize to the same key,
+  so a grid cut at whichever member arrived first makes the answer depend on input order —
+  and it flips signs, not just confidences. Each band is cut at `key × occupancyCell`, and
+  a shuffling test asserts bit-identical output.
 
 ## Follow-on
 
