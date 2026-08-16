@@ -1,6 +1,6 @@
 # Outward-facing classification
 
-Design for issue #4. Status: draft — **one decision open**, see "The outward sign".
+Design for issue #4. Status: **decided** — see "The outward sign".
 
 ## Problem
 
@@ -23,36 +23,80 @@ not re-derive world transforms.
 
 That leaves the split this design is built around: **the axis is easy, the sign is not.**
 
+### The sign has a second consumer
+
+Elevation binning is the visible motivation, but it is not the only thing blocked on the
+sign. `MaterialLayers` reads `IfcMaterialLayerSetUsage.DirectionSense` and deliberately
+does **not** reorder the layer list, because the sense says which way the stack runs from
+the reference line and that is not enough on its own to say which end is outside — that
+needs the element's placement too (`model/materiallayers.go`). So any consumer that wants
+a build-up ordered from the exposed face inward — the near-universal convention for
+describing a wall — currently has to take the declared file order, which is a coin flip
+per element. A reversed stack silently swaps the outer cladding with the inner finish.
+
+The same fact answers a third question: whether an element sits on the weather boundary
+at all, which is what separates an external envelope element from an internal partition.
+
+**So the primitive worth shipping is not "which way does this face" but "which side of
+this element is exposed".** Elevation binning, build-up ordering and envelope-vs-interior
+classification are three consumers of that one fact.
+
 ## Non-goals
 
 - Deciding elevations for a whole building. This classifies one element at a time (with
   its neighbours as context); binning and naming elevations is the consumer's.
 - Exact geometry. Facings come off the proxy mesh, with all the caveats that carries.
 - Netting openings out of anything. Out of scope here as everywhere else in this library.
+- Mapping `Exposure` onto a product vocabulary. The library reports what the geometry
+  says; naming it is the consumer's job, as with `LayerSet.Direction`.
 
 ## API
 
 ```go
+// Exposure is what the Facing.Normal side of an element reaches.
+type Exposure string
+
+const (
+    // ExposureExterior — the side reaches open air outside the building.
+    ExposureExterior Exposure = "exterior"
+    // ExposureEnclosed — the side reaches a void the building encloses: a
+    // courtyard, a lightwell, a shaft. Weather-exposed, but on no elevation.
+    ExposureEnclosed Exposure = "enclosed"
+    // ExposureInterior — no exposed side was found; an internal partition.
+    ExposureInterior Exposure = "interior"
+)
+
 // Facing is an element's outward direction in world space: the area-weighted
-// dominant normal of its exterior-facing vertical faces.
+// dominant normal of its vertical faces, signed to point at the exposed side.
 type Facing struct {
-    Normal     [3]float64 // unit, world space
+    Normal     [3]float64 // unit, world space; points at the exposed side
     FaceArea   float64    // m² of faces voting for this direction
-    Confidence float64    // 0..1; low when no face family dominates, or the sign is doubtful
+    Exposure   Exposure
+    Confidence float64 // 0..1
 }
 
-// FacingOf returns the outward direction of e, or ok=false when the element has no
-// dominant vertical face family (a column, a slab, a degenerate mesh).
+// FacingOf returns the facing of e, or ok=false when the element has no dominant
+// vertical face family (a column, a slab, a degenerate mesh). Outwardness is not a
+// property of one element: with no neighbours both sides reach open air, so an
+// element classified alone gets its axis, ExposureExterior, an arbitrary sign and
+// low confidence. Prefer BuildFacings whenever the neighbours are available.
 func FacingOf(e Element) (Facing, bool)
 
-// BuildFacings classifies every element against the others. Prefer it over FacingOf in
-// a loop: outwardness is not a property of one element, so a lone element cannot have
-// its sign decided and reports low confidence.
+// BuildFacings classifies every element against the others, which is what lets the
+// sign be decided at all.
 func BuildFacings(elems []Element) map[string]Facing
 
 // Azimuth returns the compass bearing of f in degrees clockwise from trueNorth, in
 // [0, 360). Pass model.TrueNorth(file) for a real bearing, {0,1} for a model-space one.
 func (f Facing) Azimuth(trueNorth [2]float64) float64
+
+// LayerAxis returns the world direction ls stacks along, from the first declared
+// layer toward the last, or ok=false when the usage carries no resolvable
+// direction. Compare it against a Facing.Normal to learn whether the declared
+// order already runs from the exposed face inward: a negative dot product means
+// the first declared layer is the outermost. This library reports the direction;
+// reordering is the consumer's decision.
+func LayerAxis(e Element, ls model.LayerSet) ([3]float64, bool)
 ```
 
 Plus, in `model`, the piece nothing reads today:
@@ -64,11 +108,14 @@ Plus, in `model`, the piece nothing reads today:
 func TrueNorth(f *step.File) [2]float64
 ```
 
-`Confidence` is deliberately one number covering two independent doubts — how decisively
-one face family won, and how sure the sign is. A consumer that wants to show
-"unclassified" rather than file a wall under the wrong elevation thresholds on it. In a
-quantity context a wrong bin is a wrong invoice, so the honest failure mode matters more
-than coverage.
+`Confidence` stays a single number. An earlier draft split it into axis and sign
+components; naming `Exposure` explicitly makes that unnecessary, because the field a
+caller would have branched on is now the enum rather than a threshold. One number, one
+question: how much to trust this row.
+
+A consumer that would rather show "unclassified" than file a wall under the wrong
+elevation thresholds on `Confidence` and checks `Exposure`. In a quantity context a wrong
+bin is a wrong invoice, so the honest failure mode matters more than coverage.
 
 ## Implementation
 
@@ -84,7 +131,7 @@ Normals come from `WorldVerts`, so a rotated `Placement` rotates the answer.
 **Determinism.** Bucket merging iterates a slice, never a map, and ties keep the earlier
 bucket. Identical input must yield bit-identical normals.
 
-## The outward sign — THE OPEN DECISION
+## The outward sign
 
 Which of the two opposite directions points away from the building is the hard half, and
 a building-centroid rule is not a correct answer to it: on a non-convex footprint,
@@ -92,78 +139,99 @@ courtyard-facing and re-entrant walls sit on the far side of the centroid from t
 direction they actually face. Issue #4 reproduced one elevation exactly (330.6 m² against
 an independently derived 331 m²) and got the other three wrong for precisely this reason.
 
-Three strategies, in rough order of cost:
+**Decision: a horizontal-slice occupancy grid with a flood fill from outside.**
 
-| Strategy | Needs | Strength | Weakness |
-|---|---|---|---|
-| `IfcRelSpaceBoundary` | `IfcSpace` entities in the model | Authoritative — the model states which side faces which space | Absent from many exports |
-| Ray casting | Nothing beyond the other elements | Robust on non-convex plans | Approximate; cost scales with element count |
-| Centroid | Nothing | Trivial | Wrong on any non-convex footprint |
+For the Z band around an element's mid-height:
 
-**Proposed: ray casting primary, centroid as an explicitly-degraded fallback,
-`IfcRelSpaceBoundary` deferred.** Cast from the element's centre along both candidate
-directions against the other elements' world AABBs; the direction that escapes is
-outward. AABBs rather than triangles because this is a sign decision, not a visibility
-computation — "escapes the building" versus "runs into more building" is all that is
-being asked. When both directions are equally blocked — a courtyard wall, or a lone
-element with no neighbours — return the axis at low confidence rather than a coin flip
-dressed as an answer.
+1. Rasterize into a 2D bitset, in world XY, every element triangle crossing that band.
+2. Flood-fill *unoccupied* cells inward from the grid border. The reached set is open air.
+3. Probe a cell one step off the element along `+n` and `-n`.
 
-Rationale: ray casting needs no `IfcSpace`, and the failure case that motivated the issue
-was a non-convex footprint, which is exactly what it fixes and centroid does not.
-`IfcRelSpaceBoundary` is better where present and can be layered in later behind the same
-`Facing` return without an API change.
+| probe | result |
+|---|---|
+| one side open air, the other not | sign resolved, `ExposureExterior` |
+| a side unoccupied but unreachable from the border | `ExposureEnclosed` — a void the building encloses |
+| both sides open air | freestanding; `ExposureExterior`, arbitrary sign, low confidence |
+| neither side open air | `ExposureInterior` |
 
-**This is not settled.** Anyone picking this up should confirm the strategy before
-implementing the sign; the axis work (and `TrueNorth`, and `Azimuth`) is independent of
-the answer and can proceed regardless.
+Two earlier candidates were rejected:
+
+| Strategy | Why not |
+|---|---|
+| Centroid | Wrong on any non-convex footprint — the failure that motivated the issue |
+| Ray casting to "escape" | Under-specified: for any wall the inward ray also escapes, just later, so the rule collapses into "which direction has less material along it" — the centroid heuristic wearing a local disguise, and it still fails on a thin wing. It also cannot distinguish an enclosed void from the outdoors at all |
+| `IfcRelSpaceBoundary` | Authoritative where present, but spatial nodes carry no geometry today (`model/spatial.go`) and the relation is unparsed, so it is a much larger build. Deferred — it can be layered in behind the same `Facing` return with no API change |
+
+The flood fill is chosen because it answers the actual question — *is this side connected
+to the outdoors?* — rather than approximating it. Non-convexity is simply irrelevant to a
+connectivity search, and `ExposureEnclosed` falls out of the same pass for free. It needs
+no `IfcSpace`, no polygon boolean library, and no floating-point boundary cases.
+
+Slicing per Z band rather than projecting the whole building matters: a roof slab
+projected flat would seal every courtyard, and an upper-storey overhang would corrupt the
+storey beneath it. Bands are cached per distinct slice so a storey is rasterized once.
+
+An exact variant — union the per-element `sectionRings` into outer rings plus holes, then
+test point-in-polygon — was considered and rejected. It is the same idea with no
+resolution artifact, but robust polygon booleans are a classic source of subtle geometry
+bugs, the library has no such code today, and the exactness buys nothing at the 10 cm
+scale real building data is authored at.
 
 ## Testing
 
-Seven cases, from the issue, all of which must exist before this is done:
+All of these must exist before this is done:
 
 - **Opposite-face cancellation** — a wall long in X, thin in Y returns ±Y, asserted on
   both winding orders so the result cannot depend on triangle orientation.
 - **Local vs world** — the same mesh under a 90° `Placement` rotation returns a normal
   rotated by 90°. This is the regression test for the frame bug; without it the function
   passes while being uniformly wrong.
-- **Non-convex footprint** — a U-shaped plan where a naive centroid rule misassigns the
-  courtyard walls. They must resolve correctly or report low confidence, never a
-  confident wrong bin.
 - **Four-elevation partition** — a closed rectangular room: every wall in exactly one of
-  four bins, all bins non-empty, summed face area equal to total exterior vertical face
-  area. This is the test that proves ray casting *works*, as opposed to degrading to low
-  confidence everywhere.
+  four bins, all `ExposureExterior`, all bins non-empty, summed face area equal to total
+  exterior vertical face area. This proves the fill *resolves*, as opposed to degrading to
+  low confidence everywhere.
+- **Non-convex footprint** — a U-shaped plan where a naive centroid rule misassigns the
+  walls flanking the recess. They must resolve correctly, never a confident wrong bin.
+- **Enclosed void** — a ring of walls around a closed courtyard: the inward-facing walls
+  report `ExposureEnclosed`, not `ExposureExterior`, and so do not inflate any elevation.
+- **Interior partition** — a wall inside a closed room reports `ExposureInterior`.
+- **Layer axis** — a wall whose declared stack runs inward returns a `LayerAxis` with a
+  negative dot against its `Facing.Normal`; mirroring the placement flips the sign.
 - **Non-applicable geometry** — column, slab and empty mesh return `ok=false`.
 - **Azimuth** — a +X-facing wall with `trueNorth=(0,1)` gives 90°; a rotated TrueNorth
   shifts it by exactly that rotation.
 - **Determinism** — repeated calls on identical input return bit-identical normals.
 
 Tests live in-package (`package geometry`) so they can use `v3`, `elemBox` and
-`boxMeshWorld`, matching `geometry/section_test.go`.
+`boxMeshWorld`, matching `geometry/section_test.go`. Fixtures are synthetic: the
+behaviour under test is geometric, so a hand-built U-shape is both sufficient and
+readable, and no third-party model needs to ship in the repo.
 
 ## What this does and does not get the caller
 
 It gets: elevation grouping that stops being a per-consumer reimplementation of a problem
-with two well-camouflaged failure modes, a confidence signal to degrade honestly on, and
-a real compass bearing instead of a guessed one.
+with two well-camouflaged failure modes; build-ups that can be ordered from the exposed
+face instead of from declared file order; an envelope-versus-interior signal; a confidence
+signal to degrade honestly on; and a real compass bearing instead of a guessed one.
 
-It does not get: a correct answer on every wall of every model. Courtyards and
-re-entrant geometry will report low confidence, by design, because the alternative is a
-confident wrong answer.
+It does not get: a correct answer on every wall of every model. Freestanding elements and
+geometry below the grid resolution report low confidence, by design, because the
+alternative is a confident wrong answer.
 
 ## Risks
 
-- **Ray casting against AABBs over-blocks.** A wall whose AABB is crossed by an unrelated
-  element's AABB reads as blocked when a triangle-level test would escape. Mitigated by
-  it being a two-way comparison — both directions suffer the same inflation — but a dense
-  model may push more elements into the low-confidence bucket than necessary.
-- **`Confidence` conflates two doubts.** Axis decisiveness and sign certainty multiply
-  into one number, so a caller cannot tell which is weak. Splitting the field later is a
-  breaking change; splitting it now costs nothing. Worth deciding alongside the strategy.
-- **Cost is O(n²) in the naive form.** Every element against every other element's AABB.
-  A real model is ~1,400 elements, so ~2M box tests — fine, but not free, and worth a
-  spatial index if it shows up in a profile.
+- **Grid resolution is the failure mode.** A gap narrower than one cell seals; an element
+  thinner than one cell vanishes. Rasterization is conservative — a cell the footprint
+  touches counts as occupied — so the failure leans toward sealing, which reads as
+  interior at low confidence rather than leaking open air into a room. The cell size is a
+  documented constant, not a caller knob, until a real model argues otherwise.
+- **A model open at the slice height reads as freestanding.** A band taken through a fully
+  glazed storey with no modelled mullions finds no occupancy to enclose it. Those elements
+  land in the low-confidence bucket, which is the honest answer, but it is a real coverage
+  gap on curtain-walled models.
+- **Cost is linear in cells, not elements.** A 20 × 26 m footprint at 10 cm is ~54k cells
+  per band — trivial — but a large site model at the same resolution is not, and bands are
+  per distinct mid-height. Cache by band and revisit only if it shows up in a profile.
 
 ## Follow-on
 
@@ -171,3 +239,6 @@ Issue #6 (`ElevationView`) depends on this: it needs to know which direction eac
 view is built for. Note that #6's stated build step 1 — generalise `belowRings` from −Z to
 an arbitrary direction — is **already done**; `belowRings` has taken a `Plane` since PR #3
 (`geometry/section.go:127`). That issue predates the change.
+
+`IfcRelSpaceBoundary` remains the authoritative source where a model carries spaces, and
+is the natural next increment behind the unchanged `Facing` return.
