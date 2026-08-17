@@ -3,7 +3,94 @@
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on
 minor versions, as the README states. Releases before v0.2.0 predate this file.
 
+<!-- Entries are written under "## Unreleased" by hand as part of each PR.
+     Versions and tags are cut automatically by go-semantic-release from
+     conventional commits on every green CI run on main; when a release
+     happens, the release workflow renames "## Unreleased" to that version's
+     heading and inserts a fresh empty "## Unreleased" above it, then commits
+     CHANGELOG.md back to the repo itself (`docs: promote Unreleased to
+     vX.Y.Z ... [skip ci]`). Generated release notes also live on GitHub
+     Releases. -->
+
 ## Unreleased
+
+### Changed
+
+- `Assembled` gained an unexported field recording the `*step.File` it was
+  built from, so `BuildImportFrom` can reject an assembly paired with a
+  different file rather than silently joining data across models. **Breaking
+  for unkeyed composite literals** — `Assembled{r, s}` no longer compiles;
+  callers using keyed fields (`Assembled{Result: r, Scene: s}`) are
+  unaffected.
+- The projected-polygon union engine now reports a closed boundary or refuses
+  the host outright, rather than silently returning the residual of an
+  unclosed walk. `unionArea2D` and `unionBoundary` gained an `ok` result,
+  `silhouetteRings` returns no rings instead of a wrong one, and `NetAreas`
+  marks such a host untrusted with a reason — the mechanism it already had
+  for exactly this. Fixes a defect where an unclosed boundary's area integral,
+  taken about the world origin, returned the residual scaled by the model's
+  distance from the origin rather than a slightly wrong number (a 0.58 m²
+  panel 47 m out reported 30.69 m²).
+
+### Added
+
+- `(geometry.Element).SilhouetteOn(p)` — the projected-polygon union of the
+  faces opposing `p.N`, as seen from the `+p.N` side, in `p`'s UV coordinates.
+  Unlike `FootprintOn` it never falls back to a bounding box: a caller asking
+  for a projection is asking a question a rectangle does not answer, so an
+  absent outline is reported as absent.
+- `geometry.ElevationPlane(dir)` — the vertical plane an elevation drawn along
+  `dir` uses: world up stays up on the page, unlike `PlaneFromNormal`'s
+  unspecified in-plane orientation. `ok` is false for a non-finite `dir` or one
+  with no horizontal component (straight up or down is a plan, not an
+  elevation).
+- `geometry.ElevationView` / `ElevationEntity` — the orthographic facade view a
+  plane projects: each entity's outline and punched-out openings in the
+  plane's UV coordinates, plus its depth from the viewer. Membership is
+  deliberately narrow — `ExposureExterior` only, outward normal facing the
+  viewer — so a courtyard wall is excluded and a slab, roof or column (no
+  dominant vertical face family, so no `Facing`) never appears. Outline area
+  minus opening area reconciles with that host's `NetAreas` entry when both
+  are measured on the same plane.
+- `(*geometry.Scene).ElevationOn(f, r, p)` — projects the scene onto `p` and
+  returns its elevation, classifying facings on every call.
+- `(*geometry.Scene).Elevations(f, r, planes)` — one view per plane, classifying
+  the scene's facings at most once (on the first valid plane) and sharing that
+  work across the rest, since `BuildFacings` doesn't depend on the plane. An
+  invalid plane yields its zero-value view in that position rather than being
+  dropped, so the result stays index-aligned with `planes`.
+- `ifc.BuildImportFrom(f, a)` — `BuildImport` split into its `Assemble` stage
+  plus the import-contract assembly, so a caller that also wants the `Result`
+  or `Scene` (for an elevation, a net-area check, a GLB) can reuse the
+  tessellation `Assemble` already did instead of paying for it twice.
+  `Assembled` must be paired with the same `*step.File` it was built from
+  (checked by pointer identity) — `BuildImportFrom` rejects a mismatched pair
+  rather than risk an `ExpressID` collision silently joining one model's data
+  onto another's element.
+
+## v0.6.0 — 2026-08-17
+
+### Changed
+
+- `geometry`: an opening now deducts its true projected silhouette from a
+  host's net area, rather than its span. (#23)
+
+## v0.5.0 — 2026-08-17
+
+### Changed
+
+- `geometry`: the silhouette is now computed as a true projected-polygon
+  union, rather than approximated. (#22)
+
+## v0.4.0 — 2026-08-17
+
+### Changed
+
+- `geometry`: net area now deducts the union of a host's opening footprints,
+  rather than their sum — an opening overlapping another no longer gets
+  double-deducted. (#20)
+
+## v0.3.0 — 2026-08-17
 
 ### Added
 

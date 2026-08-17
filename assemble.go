@@ -15,6 +15,22 @@ import (
 type Assembled struct {
 	Result *model.Result
 	Scene  *geometry.Scene
+
+	// file records the *step.File Assemble built this from, so BuildImportFrom
+	// can catch a mismatched pairing before it does silent damage. Downstream
+	// joins key on bare ExpressID integers — f.ByID, forwardParentMap(f),
+	// Scene.NetAreas(f, ...) — and ExpressIDs are small sequential integers
+	// that restart per STEP file. Pair an Assembled built from one file with a
+	// different *step.File and a coincidental ID collision hands an element
+	// another model's type, material, parent or opening data, with no error:
+	// the join still finds an entry, just the wrong one.
+	//
+	// nil when the Assembled was constructed some other way than through
+	// Assemble (tests, or an advanced caller assembling Result and Scene
+	// independently). That caller has already taken the pairing on
+	// themselves, and rejecting it would only punish a legitimate use
+	// BuildImportFrom has no way to tell apart from a mistake.
+	file *step.File
 }
 
 // Assemble runs the full ifc pipeline over a parsed STEP file, in order:
@@ -44,5 +60,5 @@ func Assemble(f *step.File) (*Assembled, error) {
 		return nil, fmt.Errorf("ifc: build geometry: %w", err)
 	}
 	r.ApplyDerivedQuantities(s.DerivedQuantities())
-	return &Assembled{Result: r, Scene: s}, nil
+	return &Assembled{Result: r, Scene: s, file: f}, nil
 }

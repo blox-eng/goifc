@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/blox-eng/goifc/geometry"
+	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
 )
 
@@ -258,5 +259,84 @@ func TestBuildImportTypeLayersEmptyWhenTypeHasNone(t *testing.T) {
 	// Two occurrences of the same type still produce exactly one entry.
 	if len(m.TypeLayers) != 1 {
 		t.Errorf("len(TypeLayers) = %d, want 1; got keys %v", len(m.TypeLayers), keysOf(m.TypeLayers))
+	}
+}
+
+func TestBuildImportFrom_MatchesBuildImport(t *testing.T) {
+	f := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
+
+	want, err := BuildImport(f)
+	if err != nil {
+		t.Fatalf("BuildImport: %v", err)
+	}
+
+	a, err := Assemble(f)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	got, err := BuildImportFrom(f, a)
+	if err != nil {
+		t.Fatalf("BuildImportFrom: %v", err)
+	}
+
+	if len(got.Nodes) != len(want.Nodes) {
+		t.Fatalf("Nodes = %d, want %d", len(got.Nodes), len(want.Nodes))
+	}
+	for i := range want.Nodes {
+		if got.Nodes[i].GlobalID != want.Nodes[i].GlobalID {
+			t.Fatalf("node %d GlobalID = %q, want %q", i, got.Nodes[i].GlobalID, want.Nodes[i].GlobalID)
+		}
+	}
+	if len(got.StoreyPlans) != len(want.StoreyPlans) {
+		t.Fatalf("StoreyPlans = %d, want %d", len(got.StoreyPlans), len(want.StoreyPlans))
+	}
+	if got.Scene != a.Scene {
+		t.Fatalf("Scene is not the assembly's scene")
+	}
+}
+
+func TestBuildImportFrom_RejectsNilAssembly(t *testing.T) {
+	f := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
+
+	for _, tc := range []struct {
+		name string
+		a    *Assembled
+	}{
+		{"nil assembly", nil},
+		{"nil result", &Assembled{Scene: &geometry.Scene{}}},
+		{"nil scene", &Assembled{Result: &model.Result{}}},
+	} {
+		if _, err := BuildImportFrom(f, tc.a); err == nil {
+			t.Fatalf("%s: expected an error, got nil", tc.name)
+		}
+	}
+}
+
+func TestBuildImportFrom_RejectsMismatchedFile(t *testing.T) {
+	f1 := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
+	f2 := parseFixture(t, "testdata/two_storey_spanning.ifc")
+
+	a, err := Assemble(f1)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if _, err := BuildImportFrom(f2, a); err == nil {
+		t.Fatalf("expected an error for an assembly built from a different file")
+	}
+}
+
+func TestBuildImportFrom_AllowsHandBuiltAssembly(t *testing.T) {
+	f := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
+	a, err := Assemble(f)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	// A hand-built Assembled carries no recorded provenance: the caller who
+	// constructed it directly (rather than through Assemble) owns the
+	// pairing, so BuildImportFrom must not reject it.
+	handBuilt := &Assembled{Result: a.Result, Scene: a.Scene}
+	if _, err := BuildImportFrom(f, handBuilt); err != nil {
+		t.Fatalf("BuildImportFrom with an unstamped assembly: %v", err)
 	}
 }

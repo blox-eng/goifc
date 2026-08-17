@@ -12,3 +12,8 @@ coverage.html
 # Agent scratch space. Tracked here rather than in .git/info/exclude, which is
 # per-clone and so silently stops working for everyone else.
 .superpowers/
+
+# Scratch changelog fed to the goreleaser hook by the release workflow's
+# go-semantic-release/action step. Never the real CHANGELOG.md — that's
+# promoted by hand in a separate workflow step.
+/.release-notes.md

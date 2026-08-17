@@ -1,6 +1,8 @@
 package ifc
 
 import (
+	"fmt"
+
 	"github.com/blox-eng/goifc/geometry"
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
@@ -61,9 +63,38 @@ type ImportModel struct {
 	TypeLayers map[string]TypeLayerSet
 }
 
-// BuildImport turns a parsed STEP file into the import contract: spatial
-// containers (SpatialNodes) + physical elements (Assemble) in ONE parents-first
-// ordered tree.
+// BuildImport turns a parsed STEP file into the import contract, assembling the
+// model first. It is [BuildImportFrom] over a fresh [Assemble] — use that
+// directly when you also need the Result or Scene the import was derived from,
+// so the model is tessellated once rather than twice.
+func BuildImport(f *step.File) (*ImportModel, error) {
+	a, err := Assemble(f)
+	if err != nil {
+		return nil, err
+	}
+	return BuildImportFrom(f, a)
+}
+
+// BuildImportFrom turns a parsed STEP file plus its assembly into the import
+// contract: spatial containers (SpatialNodes) + physical elements in ONE
+// parents-first ordered tree.
+//
+// [Assemble] is the expensive stage, and its Result and Scene are worth more
+// than the import contract alone: an elevation, a net-area reconciliation or a
+// GLB all read them. Taking the assembly as an argument is what lets one caller
+// have both without paying for the tessellation twice.
+//
+// f must be the same *step.File the assembly was built from. Below this point
+// everything joins physical elements to spatial containers and geometry by
+// bare ExpressID (forwardParentMap, f.ByID, Scene.NetAreas), and ExpressIDs
+// are small sequential integers that restart per file — a mismatched pair
+// would very plausibly collide rather than miss, handing an element another
+// model's parent, material or opening data with no error at all. An Assembled
+// stamped by [Assemble] is checked by pointer identity against f, on purpose:
+// a re-parse of the same bytes produces an equal-but-distinct *step.File, and
+// that is exactly the mismatch this guards against. An Assembled built some
+// other way carries no stamp and is let through unchecked — that caller
+// assembled Result and Scene itself and already owns the pairing.
 //
 //	parent map  = IfcRelAggregates ∪ IfcRelContainedInSpatialStructure, FORWARD
 //	              (iterate each rel's Related* → RelatingObject/Structure). NEVER
@@ -73,10 +104,15 @@ type ImportModel struct {
 //	              a consumer's parentID[*ParentIndex] lookup never misses.
 //	geometry    = joined to physical nodes by GlobalID (the emitted order is NOT
 //	              index-aligned with Scene.Elements once spatial nodes are interleaved).
-func BuildImport(f *step.File) (*ImportModel, error) {
-	a, err := Assemble(f)
-	if err != nil {
-		return nil, err
+func BuildImportFrom(f *step.File, a *Assembled) (*ImportModel, error) {
+	if f == nil {
+		return nil, fmt.Errorf("ifc: nil step file")
+	}
+	if a == nil || a.Result == nil || a.Scene == nil {
+		return nil, fmt.Errorf("ifc: nil assembly")
+	}
+	if a.file != nil && a.file != f {
+		return nil, fmt.Errorf("ifc: assembly was built from a different step file")
 	}
 
 	// Combined node set: spatial (with authored Qto) + physical (Qto tier-back-filled).
