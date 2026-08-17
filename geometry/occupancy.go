@@ -113,8 +113,13 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 	// so a file-supplied coordinate of 1e17 is reachable input: nx*ny overflows
 	// int and wraps to a small positive number, sailing past a product-only
 	// guard straight into a makeslice panic.
+	// Divide, never multiply, for the product term. Each axis may legally reach
+	// occupancyMaxCells (~4.2e7), so their product reaches ~1.8e15 — fine in a
+	// 64-bit int, but on a 32-bit build (GOARCH=386, arm, wasm) `int` is 32 bits
+	// and it wraps to a small positive number that sails past the cap, straight
+	// into the makeslice panic this guard exists to prevent.
 	if g.nx <= 0 || g.ny <= 0 || g.nx > occupancyMaxCells || g.ny > occupancyMaxCells ||
-		g.nx*g.ny > occupancyMaxCells {
+		g.nx > occupancyMaxCells/g.ny {
 		return nil
 	}
 	g.solid = make([]bool, g.nx*g.ny)
@@ -127,13 +132,22 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		if len(e.Tris) == 0 {
 			continue
 		}
+		// Test the z range before transforming. An element wholly below the
+		// slice marks nothing, yet transforming it costs a full vertex
+		// allocation — and BuildFacings builds one grid per band, so that waste
+		// multiplies by the band count.
+		crosses := e.BBoxMin[2] <= z && e.BBoxMax[2] >= z
+		above := e.BBoxMax[2] > z
+		if !crosses && !above {
+			continue
+		}
 		w := worldPoints(e.Verts, e.Placement)
 
 		// Solid: the actual cross-section at z, filled per element (even-odd
 		// over that element's own rings, so a genuinely hollow element keeps
 		// its hole) — not bounding boxes, which would fill an L-shaped
 		// element's concavity and could seal a courtyard that is really open.
-		if e.BBoxMin[2] <= z && e.BBoxMax[2] >= z {
+		if crosses {
 			rings := sectionRings(w, e.Tris, plane)
 			if len(rings) > 0 {
 				g.markFilled(rings)
@@ -153,7 +167,7 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		// element can read covered rather than open. At 10 cm cells that is a
 		// real but small bias toward reporting interior, and it is honest: there
 		// genuinely is something overhead there.
-		if e.BBoxMax[2] > z {
+		if above {
 			g.markFootprint(w, e.Tris, z)
 		}
 	}

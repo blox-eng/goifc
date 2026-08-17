@@ -55,6 +55,20 @@ func TestTrueNorthDefaults(t *testing.T) {
 	}
 }
 
+func TestTrueNorthRejectsHoledCoordinateList(t *testing.T) {
+	// An unset MIDDLE coordinate. Compacting the list turns (1.,$,0.) into
+	// [1,0] — a confident due-east bearing conjured out of a malformed
+	// direction, where the documented contract is to fall back to (0,1).
+	// Reading coordinates by POSITION is what keeps the two distinguishable.
+	f := trueNorthFile(t, `#1=IFCDIRECTION((1.,$,0.));
+#2=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-5,$,#1);
+`)
+	got := TrueNorth(f)
+	if math.Abs(got[0]) > 1e-12 || math.Abs(got[1]-1) > 1e-12 {
+		t.Fatalf("TrueNorth = %v, want the (0,1) default for a malformed direction", got)
+	}
+}
+
 func TestTrueNorthIgnoresSubContext(t *testing.T) {
 	// A sub-context inherits TrueNorth from its parent and does not restate it;
 	// reading one would yield the wrong direction and mask the real north.

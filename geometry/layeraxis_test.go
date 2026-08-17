@@ -35,6 +35,32 @@ func TestLayerAxisMapsAxisAndSense(t *testing.T) {
 	}
 }
 
+func TestLayerAxisSurvivesExtremePlacementScale(t *testing.T) {
+	// Placements come from untrusted files. At 1e200 the squared length
+	// overflows to +Inf, and dividing a finite vector by an infinite length
+	// gives a ZERO vector — returned with ok=true, which a caller comparing it
+	// against Facing.Normal reads as "perpendicular" rather than "no direction".
+	//
+	// The mirror case: at 1e-200 the squared length underflows to 0, and a
+	// perfectly usable direction is refused as degenerate.
+	for _, s := range []float64{1e200, 1e-200} {
+		e := elemBox(v3{0, 0, 0}, v3{10, 0.3, 3})
+		e.Placement = model.Mat4{s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1}
+
+		got, ok := LayerAxis(e, model.LayerSet{Direction: "AXIS2", Sense: "POSITIVE"})
+		if !ok {
+			t.Fatalf("scale %g: LayerAxis declined a usable direction", s)
+		}
+		l := math.Sqrt(got[0]*got[0] + got[1]*got[1] + got[2]*got[2])
+		if math.Abs(l-1) > 1e-9 {
+			t.Fatalf("scale %g: LayerAxis = %v has length %v, want unit", s, got, l)
+		}
+		if math.Abs(got[1]-1) > 1e-9 {
+			t.Fatalf("scale %g: LayerAxis = %v, want +Y", s, got)
+		}
+	}
+}
+
 func TestLayerAxisDeclinesWithoutDirection(t *testing.T) {
 	e := elemBox(v3{0, 0, 0}, v3{10, 0.3, 3})
 	for _, ls := range []model.LayerSet{

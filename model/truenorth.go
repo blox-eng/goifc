@@ -46,11 +46,10 @@ func TrueNorth(f *step.File) [2]float64 {
 	if !ok || !d.IsA("IfcDirection") {
 		return def
 	}
-	r := coords(d)
-	if len(r) < 2 {
+	x, y, ok := dirXY(d)
+	if !ok {
 		return def
 	}
-	x, y := r[0], r[1]
 	l := math.Hypot(x, y)
 	// A zero-length or non-finite direction carries no bearing. Returning the
 	// default is the honest answer; normalizing would emit NaN and poison every
@@ -65,4 +64,35 @@ func TrueNorth(f *step.File) [2]float64 {
 		return def
 	}
 	return [2]float64{x / l, y / l}
+}
+
+// dirXY returns an IfcDirection's first two coordinates BY POSITION, with
+// ok=false when either is absent or is not a number.
+//
+// Deliberately not coords(): that helper COMPACTS the list, silently dropping
+// non-numeric entries. On IFCDIRECTION((1.,$,0.)) it yields [1,0], so a
+// malformed direction becomes a confident due-east bearing — where this
+// function's documented contract is to fall back to the default. Reading by
+// position is what makes the malformed case distinguishable at all.
+func dirXY(inst *step.Instance) (x, y float64, ok bool) {
+	v, got := inst.Get(attrCoordinates)
+	if !got || v.Kind != step.KindList || len(v.List) < 2 {
+		return 0, 0, false
+	}
+	num := func(e step.Value) (float64, bool) {
+		switch e.Kind {
+		case step.KindFloat:
+			return e.F, true
+		case step.KindInt:
+			return float64(e.I), true
+		}
+		return 0, false
+	}
+	if x, ok = num(v.List[0]); !ok {
+		return 0, 0, false
+	}
+	if y, ok = num(v.List[1]); !ok {
+		return 0, 0, false
+	}
+	return x, y, true
 }

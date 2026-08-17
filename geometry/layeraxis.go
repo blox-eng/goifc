@@ -46,9 +46,25 @@ func LayerAxis(e Element, ls model.LayerSet) ([3]float64, bool) {
 	}
 
 	w := e.WorldNormal(local)
-	l := math.Sqrt(dotv(w, w))
-	if !finite3(w) || l < 1e-12 {
+	if !finite3(w) {
 		return [3]float64{}, false
 	}
-	return v3{w[0] / l, w[1] / l, w[2] / l}, true
+
+	// Scale by the largest component BEFORE squaring. Placements come from
+	// untrusted files, and on a coordinate near 1e200 dotv overflows to +Inf;
+	// dividing a finite w by an infinite length yields a ZERO vector reported
+	// with ok=true, which a caller comparing against Facing.Normal reads as
+	// "perpendicular" rather than "no direction". Scaling first also stops a
+	// legitimately tiny direction from being rejected as degenerate: after the
+	// division the length always lands in [1, sqrt 3].
+	scale := math.Max(math.Abs(w[0]), math.Max(math.Abs(w[1]), math.Abs(w[2])))
+	if !(scale > 0) {
+		return [3]float64{}, false
+	}
+	s := v3{w[0] / scale, w[1] / scale, w[2] / scale}
+	l := math.Sqrt(dotv(s, s))
+	if !(l > 0) {
+		return [3]float64{}, false
+	}
+	return v3{s[0] / l, s[1] / l, s[2] / l}, true
 }
