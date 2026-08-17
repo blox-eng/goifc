@@ -5,6 +5,89 @@ import (
 	"testing"
 )
 
+// steppedPlinth is ONE element shaped like a stem standing on a wider pad: a
+// 4x4 pad from z=0 to 1, and a 1x1 stem from z=1 to 3 rising out of it. Sliced
+// at 1.5 m, only the stem is cross-section — the pad is entirely underfoot.
+func steppedPlinth() Element {
+	e := elemBox(v3{0, 0, 0}, v3{4, 4, 3}) // placement and bbox
+	padW, padT := boxMeshWorld(v3{0, 0, 0}, v3{4, 4, 1})
+	stemW, stemT := boxMeshWorld(v3{1.5, 1.5, 1}, v3{2.5, 2.5, 3})
+
+	var verts []float32
+	for _, p := range append(append([]v3{}, padW...), stemW...) {
+		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
+	}
+	off := uint32(len(padW))
+	tris := append([]uint32{}, padT...)
+	for _, i := range stemT {
+		tris = append(tris, i+off)
+	}
+	e.GlobalID, e.Verts, e.Tris = "plinth", verts, tris
+	return e
+}
+
+func TestMarkFootprintIgnoresGeometryBelowTheCut(t *testing.T) {
+	g := buildOccupancy([]Element{steppedPlinth()}, 1.5)
+	if g == nil {
+		t.Fatal("buildOccupancy returned nil for an element the slice cuts")
+	}
+
+	// (0.5, 0.5) sits over the pad but well clear of the stem. The pad is half a
+	// metre BELOW the cut, so nothing is overhead there. Projecting the whole
+	// mesh marks it roofed, which is what turns a courtyard into a room.
+	ix, iy, in := g.cellOf(0.5, 0.5)
+	if !in {
+		t.Fatal("a point over the pad fell off the grid")
+	}
+	if g.covered[g.idx(ix, iy)] {
+		t.Fatal("a pad below the cut marked the ground beside the stem as covered")
+	}
+
+	// The stem genuinely is overhead at its own footprint.
+	ix, iy, in = g.cellOf(2, 2)
+	if !in {
+		t.Fatal("the stem centre fell off the grid")
+	}
+	if !g.covered[g.idx(ix, iy)] {
+		t.Fatal("geometry above the cut is not marked covered")
+	}
+}
+
+func TestBuildOccupancyExtentFollowsTheCrossSectionOnly(t *testing.T) {
+	// A 1 m cube 20 km away, sitting entirely ABOVE the slice, contributes no
+	// solid cells whatsoever. Sizing the grid to reach it needs ~4e10 cells,
+	// past occupancyMaxCells — so buildOccupancy refuses the slice and every
+	// wall on the band falls back to an arbitrary sign at low confidence,
+	// because of geometry that could never have influenced the answer.
+	elems := roomWalls(6, 4, 0.3)
+	far := elemBox(v3{20000, 20000, 5}, v3{20001, 20001, 6})
+	far.GlobalID = "far"
+	elems = append(elems, far)
+
+	g := buildOccupancy(elems, 1.5)
+	if g == nil {
+		t.Fatal("buildOccupancy refused a 6x4 room because of a distant element above it")
+	}
+	if g.nx > 200 || g.ny > 200 {
+		t.Fatalf("grid is %dx%d cells, want it sized to the room", g.nx, g.ny)
+	}
+
+	// The walls must still resolve decisively, which is the point of the fix.
+	facings := BuildFacings(elems)
+	for _, id := range []string{"s", "n", "w", "e"} {
+		f, ok := facings[id]
+		if !ok {
+			t.Fatalf("wall %q has no facing", id)
+		}
+		if f.Exposure != ExposureExterior {
+			t.Fatalf("wall %q Exposure = %v, want exterior", id, f.Exposure)
+		}
+		if f.Confidence < 0.5 {
+			t.Fatalf("wall %q Confidence = %v, want a resolved sign", id, f.Confidence)
+		}
+	}
+}
+
 // roomWalls returns four walls enclosing [0,w]x[0,d] with the given thickness,
 // each 3m tall. Each wall gets a distinct GlobalID (south/north/west/east)
 // because a later task keys results by GlobalID; elemBox alone would give

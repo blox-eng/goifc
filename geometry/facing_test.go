@@ -255,6 +255,21 @@ func TestBuildFacingsNonIdentityPlacementMatchesWorldTwin(t *testing.T) {
 	}
 }
 
+func TestAzimuthRejectsNaNInputs(t *testing.T) {
+	// A NaN bearing passes every range check downstream — it is neither < 0 nor
+	// >= 360 — so it propagates silently into whatever bins on it.
+	nan := math.NaN()
+
+	f := Facing{Normal: [3]float64{0, 1, 0}}
+	if got := f.Azimuth([2]float64{nan, nan}); got != 0 {
+		t.Fatalf("NaN true north gave bearing %v, want the (0,1) fallback", got)
+	}
+	bad := Facing{Normal: [3]float64{nan, 1, 0}}
+	if got := bad.Azimuth([2]float64{0, 1}); got != 0 {
+		t.Fatalf("NaN normal gave bearing %v, want 0", got)
+	}
+}
+
 func TestAzimuth(t *testing.T) {
 	north := [2]float64{0, 1}
 	cases := []struct {

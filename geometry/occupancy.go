@@ -79,9 +79,22 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		if !finite3(e.BBoxMin) || !finite3(e.BBoxMax) {
 			continue
 		}
-		// Include everything at or above the slice: geometry below cannot be
-		// overhead, and geometry crossing z contributes solid cells.
-		if e.BBoxMax[2] < z {
+		// ONLY the elements the slice actually cuts. The grid exists to answer
+		// "what is on either side of this element at this height", and that is
+		// decided entirely by the cross-section — so the cross-section is what
+		// the extent has to cover.
+		//
+		// Sizing it to everything ABOVE the slice instead lets one far-away
+		// element that contributes no solid cells at all — a site mesh, a
+		// georeferenced terrain surface — stretch the grid past
+		// occupancyMaxCells. buildOccupancy then returns nil and EVERY element
+		// on the band drops to an arbitrary sign at signAmbiguous confidence,
+		// because of geometry that was never going to influence the answer.
+		//
+		// Elements above the slice still mark `covered` below; they just no
+		// longer get a vote on how big the grid is. Their footprints outside it
+		// fall away, which is correct — a roof 20 km away covers nothing here.
+		if e.BBoxMin[2] > z || e.BBoxMax[2] < z {
 			continue
 		}
 		minX, minY = math.Min(minX, e.BBoxMin[0]), math.Min(minY, e.BBoxMin[1])
@@ -128,19 +141,20 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 			}
 		}
 
-		// Covered: the XY footprint of anything that has any part above the
-		// slice — including an element straddling it, such as a slab whose
-		// underside sits below z.
+		// Covered: the XY footprint of anything above the slice — including the
+		// upper part of an element straddling it, such as a slab whose underside
+		// sits below z. markFootprint clips at z, so the part below the cut
+		// contributes nothing.
 		//
 		// For a PRISMATIC element straddling the slice this costs nothing: its
 		// covered cells are exactly its solid cells, which probe walks over.
-		// Where the element is not prismatic — a sloped roof, a wall sitting on
-		// a wider footing — the footprint above the cut is wider than the cut
-		// itself, so covered spills past solid by that overhang and a cell just
-		// beside the element can read covered rather than open. At 10 cm cells
-		// that is a real but small bias toward reporting interior.
+		// Where the element widens ABOVE the cut — a sloped roof, a cantilever —
+		// covered spills past solid by that overhang and a cell just beside the
+		// element can read covered rather than open. At 10 cm cells that is a
+		// real but small bias toward reporting interior, and it is honest: there
+		// genuinely is something overhead there.
 		if e.BBoxMax[2] > z {
-			g.markFootprint(w, e.Tris)
+			g.markFootprint(w, e.Tris, z)
 		}
 	}
 	if !sliced {
@@ -260,21 +274,60 @@ func (g *occupancy) markSegment(a, b [2]float64) {
 	}
 }
 
-// markFootprint marks the filled XY projection of a mesh as covered. Filled,
-// not outlined: "is there a roof over this point" is a question about the
-// interior of the projection.
-func (g *occupancy) markFootprint(w []v3, tris []uint32) {
+// markFootprint marks the filled XY projection of the part of a mesh ABOVE
+// height z as covered. Filled, not outlined: "is there a roof over this point"
+// is a question about the interior of the projection.
+//
+// Clipped at z, not projected whole. The question is what is OVERHEAD, and
+// geometry below the cut is underfoot: projecting a wall's wider footing, or
+// the plinth a facade stands on, marks the ground beside it as roofed. A
+// courtyard ringed by such walls then reads covered — a room — and its walls
+// report ExposureInterior instead of ExposureEnclosed.
+func (g *occupancy) markFootprint(w []v3, tris []uint32, z float64) {
 	for i := 0; i+2 < len(tris); i += 3 {
 		ia, ib, ic := tris[i], tris[i+1], tris[i+2]
 		if int(ia) >= len(w) || int(ib) >= len(w) || int(ic) >= len(w) {
 			continue
 		}
-		g.fillTriangle2D(
-			[2]float64{w[ia][0], w[ia][1]},
-			[2]float64{w[ib][0], w[ib][1]},
-			[2]float64{w[ic][0], w[ic][1]},
-		)
+		poly := clipAboveZ(w[ia], w[ib], w[ic], z)
+		// Fan-triangulate the clipped polygon: the half-space clip of a triangle
+		// is convex and has at most 4 corners, so a fan from the first is exact.
+		for k := 1; k+1 < len(poly); k++ {
+			g.fillTriangle2D(
+				[2]float64{poly[0][0], poly[0][1]},
+				[2]float64{poly[k][0], poly[k][1]},
+				[2]float64{poly[k+1][0], poly[k+1][1]},
+			)
+		}
 	}
+}
+
+// clipAboveZ returns the part of triangle abc at or above height z, as a convex
+// polygon of 0, 3 or 4 corners. Sutherland-Hodgman against one half-space.
+//
+// A vertex at exactly z counts as inside, so a triangle lying flat ON the cut
+// is kept whole rather than collapsing to a degenerate sliver.
+func clipAboveZ(a, b, c v3, z float64) []v3 {
+	src := [3]v3{a, b, c}
+	out := make([]v3, 0, 4)
+	for i := 0; i < 3; i++ {
+		p, q := src[i], src[(i+1)%3]
+		pin, qin := p[2] >= z, q[2] >= z
+		if pin {
+			out = append(out, p)
+		}
+		// Exactly one endpoint inside means the edge crosses z, so q[2] != p[2]
+		// and the division below is safe.
+		if pin != qin {
+			t := (z - p[2]) / (q[2] - p[2])
+			out = append(out, v3{
+				p[0] + t*(q[0]-p[0]),
+				p[1] + t*(q[1]-p[1]),
+				z,
+			})
+		}
+	}
+	return out
 }
 
 // fillTriangle2D marks every cell whose centre lies inside triangle abc.

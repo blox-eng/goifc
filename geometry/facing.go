@@ -244,12 +244,16 @@ func resolveSign(pos, neg sideState) (Exposure, bool, float64) {
 // component — which FacingOf never returns, since it excludes near-vertical
 // faces — has no bearing at all and yields 0.
 func (f Facing) Azimuth(trueNorth [2]float64) float64 {
+	// Negated comparisons, so a NaN coordinate takes the same branch as a
+	// degenerate one. Written the other way round every NaN test is false, the
+	// guards wave it through, and Atan2 returns a NaN bearing that no downstream
+	// range check catches — NaN is neither < 0 nor >= 360.
 	nx, ny := f.Normal[0], f.Normal[1]
-	if math.Hypot(nx, ny) < 1e-12 {
+	if !(math.Hypot(nx, ny) > 1e-12) {
 		return 0
 	}
 	tx, ty := trueNorth[0], trueNorth[1]
-	if math.Hypot(tx, ty) < 1e-12 {
+	if !(math.Hypot(tx, ty) > 1e-12) {
 		tx, ty = 0, 1
 	}
 	// Clockwise from north: the component along north is the cosine, the
