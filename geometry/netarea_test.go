@@ -1,6 +1,7 @@
 package geometry
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -76,13 +77,20 @@ func TestNetAreas_OBBOpening(t *testing.T) {
 	assertUntrusted(t, na, "solid geometry")
 }
 
-// TestNetAreas_Overlap: two openings whose bounding rectangles intersect
-// (Σ well under 95%) — the deduction would be double-counted, so untrusted.
-// This is the review's blind spot.
+// TestNetAreas_Overlap: two 1x1 openings offset by (0.3,0.3) so their bounding
+// rectangles intersect. A plain Σ would double-count the 0.7x0.7 intersection
+// and deduct 2.0; the union deducts each covered square metre ONCE, so the
+// deduction is 2.0 − 0.49 = 1.51. Overlapping voids have a perfectly
+// well-defined combined footprint, so this host is TRUSTED.
 func TestNetAreas_Overlap(t *testing.T) {
 	_, m := buildNetAreas(t, "testdata/synthetic/netarea_overlap.ifc")
 	na := onlyNet(t, m)
-	assertUntrusted(t, na, "overlap")
+	if !na.Trusted {
+		t.Fatalf("want Trusted, got reason %q", na.Reason)
+	}
+	closeAbs(t, "Gross", &na.Gross, 12.0, 1e-6)
+	closeAbs(t, "OpeningDeduction", &na.OpeningDeduction, 1.51, 1e-6)
+	closeAbs(t, "Net", na.Net, 10.49, 1e-6)
 }
 
 // TestNetAreas_MostlyGlass: two non-overlapping bands whose Σ footprint is
@@ -144,14 +152,19 @@ func TestNetAreas_Oblique(t *testing.T) {
 
 // TestNetAreas_MillimetreOverlap: a MILLIMETRE file whose two openings overlap
 // only when the opening LocalPlacement translation is meter-scaled. Without the
-// scale the openings land ~300 m apart, the overlap is missed, and the host is
-// wrongly trusted — so asserting untrusted-overlap is what catches the 1000×
-// placement bug. Gross==12 also proves the mesh scales mm→m (no 1000× error).
+// scale the openings land ~300 m apart, they do NOT overlap, and the union
+// degrades to Σ = 2.0 — so asserting the UNION value 1.51 is what catches the
+// 1000× placement bug (the overlap trust gate used to be the detector; the
+// deduction itself is now the detector, and a sharper one).
+// Gross==12 also proves the mesh scales mm→m (no 1000× error).
 func TestNetAreas_MillimetreOverlap(t *testing.T) {
 	_, m := buildNetAreas(t, "testdata/synthetic/netarea_mm_overlap.ifc")
 	na := onlyNet(t, m)
+	if !na.Trusted {
+		t.Fatalf("want Trusted, got reason %q", na.Reason)
+	}
 	closeAbs(t, "Gross", &na.Gross, 12.0, 1e-6)
-	assertUntrusted(t, na, "overlap")
+	closeAbs(t, "OpeningDeduction", &na.OpeningDeduction, 1.51, 1e-6)
 }
 
 // TestNetAreas_SingleOversize: one opening larger than the wall trips the ≥95%
@@ -160,6 +173,64 @@ func TestNetAreas_SingleOversize(t *testing.T) {
 	_, m := buildNetAreas(t, "testdata/synthetic/netarea_single_oversize.ifc")
 	na := onlyNet(t, m)
 	assertUntrusted(t, na, "95%")
+}
+
+// TestUnionArea covers the geometric configurations the fixture-driven tests
+// above cannot reach individually: containment, coincidence, edge contact, and
+// chains where a naive pairwise correction would double-subtract.
+func TestUnionArea(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		rects []rect
+		want  float64
+	}{
+		{"none", nil, 0},
+		{"single", []rect{{0, 2, 0, 3}}, 6},
+		{"disjoint", []rect{{0, 1, 0, 1}, {5, 6, 5, 6}}, 2},
+		{"partial overlap", []rect{{0, 1, 0, 1}, {0.3, 1.3, 0.3, 1.3}}, 2 - 0.49},
+		// A contained rect must add nothing — Σ would report 5.
+		{"nested", []rect{{0, 2, 0, 2}, {0.5, 1.5, 0.5, 1.5}}, 4},
+		// Coincident duplicates (the same void exported twice) count once.
+		{"identical", []rect{{0, 2, 0, 2}, {0, 2, 0, 2}, {0, 2, 0, 2}}, 4},
+		// Edge contact is neither an overlap nor a gap.
+		{"edge-touching in u", []rect{{0, 1, 0, 1}, {1, 2, 0, 1}}, 2},
+		{"edge-touching in v", []rect{{0, 1, 0, 1}, {0, 1, 1, 2}}, 2},
+		// Spans u but not v: no shared area despite overlapping u-intervals.
+		{"u overlap only", []rect{{0, 2, 0, 1}, {1, 3, 5, 6}}, 4},
+		// A middle rect overlapping BOTH neighbours, which themselves do not
+		// overlap: subtracting pairwise intersections would over-correct.
+		{"chain of three", []rect{{0, 2, 0, 1}, {1, 3, 0, 1}, {2, 4, 0, 1}}, 4},
+		// All three share one square: inclusion-exclusion's hard case.
+		{"triple overlap", []rect{{0, 2, 0, 2}, {1, 3, 0, 2}, {0, 3, 1, 3}}, 3*2 + 3*1},
+		{"degenerate zero width", []rect{{1, 1, 0, 5}}, 0},
+		{"degenerate zero height", []rect{{0, 5, 1, 1}}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := unionArea(tc.rects); math.Abs(got-tc.want) > 1e-9 {
+				t.Errorf("unionArea = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUnionAreaNeverExceedsSum pins the defining relationship to the Σ it
+// replaced: the union is never larger (that would deduct area no void covers)
+// and never smaller than the largest single rect.
+func TestUnionAreaNeverExceedsSum(t *testing.T) {
+	rects := []rect{{0, 3, 0, 2}, {1, 4, 1, 5}, {2, 3, 0, 6}, {-1, 1, -1, 1}}
+	var sum, largest float64
+	for _, r := range rects {
+		a := (r.uMax - r.uMin) * (r.vMax - r.vMin)
+		sum += a
+		largest = math.Max(largest, a)
+	}
+	got := unionArea(rects)
+	if got > sum {
+		t.Errorf("union %v exceeds Σ %v", got, sum)
+	}
+	if got < largest {
+		t.Errorf("union %v is below the largest single rect %v", got, largest)
+	}
 }
 
 // assertUntrusted checks the all-or-nothing untrusted contract: Net nil,
