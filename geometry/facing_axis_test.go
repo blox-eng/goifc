@@ -95,6 +95,74 @@ func TestDominantAxisIsDeterministic(t *testing.T) {
 	}
 }
 
+// wedgeWallMesh returns the two large faces of a wall 10m in X and 3m tall that
+// thickens from 0.30m to 0.302m along its length. The taper is 0.006°, far
+// below any tolerance here — but it gives BOTH faces a small NEGATIVE X normal
+// component while their Y components stay opposite, which is the shape a real
+// float32 vertex buffer produces on a nominally flat wall.
+func wedgeWallMesh() ([]v3, []uint32) {
+	const s = 0.001
+	w := []v3{
+		// Outer face, normal +Y.
+		{0, 0.3, 0}, {10, 0.3 + s, 0}, {10, 0.3 + s, 3}, {0, 0.3, 3},
+		// Inner face, normal -Y.
+		{0, 0, 0}, {10, -s, 0}, {10, -s, 3}, {0, 0, 3},
+	}
+	tris := []uint32{
+		0, 2, 1, 0, 3, 2,
+		4, 5, 6, 4, 6, 7,
+	}
+	return w, tris
+}
+
+func TestDominantAxisFoldsFacesWithMatchingNormalJitter(t *testing.T) {
+	// Both faces of this wall carry the same small -X noise, so a canonical sign
+	// taken from the FIRST non-zero component flips both the same way and leaves
+	// them antipodal: two buckets of 30 m², share 0.5, and the wall reports no
+	// facade. The sign must come from the largest component instead.
+	w, tris := wedgeWallMesh()
+
+	dir, area, share, ok := dominantAxis(w, tris)
+	if !ok {
+		t.Fatalf("dominantAxis declined a wall with jittered normals (share %v)", share)
+	}
+	if math.Abs(math.Abs(dir[1])-1) > 1e-3 {
+		t.Fatalf("dir = %v, want the Y axis", dir)
+	}
+	if share < 0.99 {
+		t.Fatalf("share = %v, want both faces in one bucket", share)
+	}
+	if math.Abs(area-60) > 0.01 {
+		t.Fatalf("area = %v, want both 10x3 faces voting (60)", area)
+	}
+}
+
+func TestCanonAxisFoldsNearAntipodes(t *testing.T) {
+	// Exact antipodes fold under any component-order rule, because negating a
+	// vector flips its leading component too — which is why testing n against -n
+	// proves nothing. The invariant that MATTERS is about near-antipodes: the two
+	// faces of one wall are opposite to within tessellation noise, never exactly,
+	// and they must still land close enough to share a bucket.
+	pairs := [][2]v3{
+		{{-1e-8, 1, 0}, {-1e-8, -1, 0}},     // matching X noise, opposite Y
+		{{1e-8, 1, 0}, {2e-8, -1, 0}},       // matching X noise, differing magnitude
+		{{1, 1e-8, 0}, {-1, 3e-8, 0}},       // an X-facing wall, noise in Y
+		{{1e-9, 1e-9, 1}, {1e-9, 1e-9, -1}}, // a horizontal face pair
+	}
+	for _, p := range pairs {
+		a, b := canonAxis(p[0]), canonAxis(p[1])
+		la := math.Sqrt(dotv(a, a))
+		lb := math.Sqrt(dotv(b, b))
+		if la == 0 || lb == 0 {
+			t.Fatalf("canonAxis zeroed %v or %v", p[0], p[1])
+		}
+		if cos := dotv(a, b) / (la * lb); cos < axisMergeCos {
+			t.Fatalf("canonAxis(%v)=%v and canonAxis(%v)=%v fold apart (cos %v)",
+				p[0], a, p[1], b, cos)
+		}
+	}
+}
+
 func TestDominantAxisEmptyMesh(t *testing.T) {
 	if _, _, _, ok := dominantAxis(nil, nil); ok {
 		t.Fatal("dominantAxis accepted an empty mesh")

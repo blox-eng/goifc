@@ -26,20 +26,27 @@ type axisBucket struct {
 
 // canonAxis folds a direction and its antipode onto a single representative, so
 // a wall's two large opposite faces vote TOGETHER instead of cancelling. The
-// first component whose magnitude clears the epsilon decides the sign.
+// LARGEST-magnitude component decides the sign.
+//
+// Largest, not first: on a wall facing ±Y the X component is float32 vertex
+// noise, and a rule that reads components in order lets that noise pick the
+// sign. The wall's two faces then canonicalize to OPPOSITE representatives,
+// land in antipodal buckets, split the vote below the dominance floor, and the
+// element is silently reported as having no facade. The largest component is
+// the one place jitter cannot reach — it is where the face actually points.
 //
 // Folding is the whole point of the axis stage: summing signed normals makes
 // the winner a floating-point accident, because the inner and outer face of a
 // wall are equal in area and opposite in direction.
 func canonAxis(n v3) v3 {
-	const axisEps = 1e-9
-	for i := 0; i < 3; i++ {
-		if n[i] > axisEps {
-			return n
+	ax := 0
+	for i := 1; i < 3; i++ {
+		if math.Abs(n[i]) > math.Abs(n[ax]) {
+			ax = i
 		}
-		if n[i] < -axisEps {
-			return v3{-n[0], -n[1], -n[2]}
-		}
+	}
+	if n[ax] < 0 {
+		return v3{-n[0], -n[1], -n[2]}
 	}
 	return n
 }
