@@ -1,0 +1,51 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('netarea_pilaster.ifc','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+/* wall with a pilaster standing off its face: both solids face +Z, and the
+   pilaster sits directly in front of part of the wall, so a face-summing gross
+   counts that strip twice */
+#10=IFCAXIS2PLACEMENT3D(#11,$,$);
+#11=IFCCARTESIANPOINT((0.,0.,0.));
+#12=IFCLOCALPLACEMENT($,#10);
+/* wall body: 4.0 (X) x 3.0 (Y) elevational face, 0.2 thick (Z) */
+#13=IFCAXIS2PLACEMENT2D(#14,$);
+#14=IFCCARTESIANPOINT((0.,0.));
+#15=IFCRECTANGLEPROFILEDEF(.AREA.,$,#13,4.,3.);
+#16=IFCAXIS2PLACEMENT3D(#17,$,$);
+#17=IFCCARTESIANPOINT((0.,0.,0.));
+#18=IFCDIRECTION((0.,0.,1.));
+#19=IFCEXTRUDEDAREASOLID(#15,#16,#18,0.2);
+/* pilaster: 1.0 x 3.0 face, standing 0.3 proud of the wall face at z = 0.2 */
+#23=IFCAXIS2PLACEMENT2D(#24,$);
+#24=IFCCARTESIANPOINT((0.,0.));
+#25=IFCRECTANGLEPROFILEDEF(.AREA.,$,#23,1.,3.);
+#26=IFCAXIS2PLACEMENT3D(#27,$,$);
+#27=IFCCARTESIANPOINT((-0.5,0.,0.2));
+#28=IFCDIRECTION((0.,0.,1.));
+#29=IFCEXTRUDEDAREASOLID(#25,#26,#28,0.3);
+#20=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#19,#29));
+#21=IFCPRODUCTDEFINITIONSHAPE($,$,(#20));
+#22=IFCWALL('0GUIDwall0000000000022',$,'W',$,$,#12,#21,$,$);
+/* window opening: 1.0 x 1.0 face, clear of the pilaster, translated (1,0,0) */
+#30=IFCAXIS2PLACEMENT3D(#31,$,$);
+#31=IFCCARTESIANPOINT((1.,0.,0.));
+#32=IFCLOCALPLACEMENT($,#30);
+#33=IFCAXIS2PLACEMENT2D(#34,$);
+#34=IFCCARTESIANPOINT((0.,0.));
+#35=IFCRECTANGLEPROFILEDEF(.AREA.,$,#33,1.,1.);
+#36=IFCAXIS2PLACEMENT3D(#37,$,$);
+#37=IFCCARTESIANPOINT((0.,0.,0.));
+#38=IFCDIRECTION((0.,0.,1.));
+#39=IFCEXTRUDEDAREASOLID(#35,#36,#38,0.2);
+#40=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#39));
+#41=IFCPRODUCTDEFINITIONSHAPE($,$,(#40));
+#42=IFCOPENINGELEMENT('0GUIDopen0000000000042',$,'Win',$,$,#32,#41,$,$);
+#50=IFCRELVOIDSELEMENT('0GUIDrel00000000000050',$,$,$,#22,#42);
+ENDSEC;
+END-ISO-10303-21;

@@ -71,6 +71,22 @@ func TestNetAreas_ArchWindow(t *testing.T) {
 	closeAbs(t, "Net", na.Net, 11.15, 1e-6)
 }
 
+// TestNetAreas_Pilaster: a wall with a pilaster standing 0.3 m proud of its
+// face. Summing the two outward faces reads 12 + 3 = 15, double-counting the
+// strip the pilaster hides; the wall's drawable elevational face is 12. Gross
+// is the projected UNION, so it agrees with the outline a consumer draws and
+// with the deduction it is netted against — one engine, one plane, one number.
+func TestNetAreas_Pilaster(t *testing.T) {
+	_, m := buildNetAreas(t, "testdata/synthetic/netarea_pilaster.ifc")
+	na := onlyNet(t, m)
+	if !na.Trusted {
+		t.Fatalf("want Trusted, got reason %q", na.Reason)
+	}
+	closeAbs(t, "Gross", &na.Gross, 12.0, 1e-6) // 15.0 means the Σ is back
+	closeAbs(t, "OpeningDeduction", &na.OpeningDeduction, 1.0, 1e-6)
+	closeAbs(t, "Net", na.Net, 11.0, 1e-6)
+}
+
 // TestNetAreas_OBBOpening: an opening whose geometry resolves to the OBB
 // fallback (no real solid) makes the whole host untrusted.
 func TestNetAreas_OBBOpening(t *testing.T) {
@@ -177,6 +193,27 @@ func TestNetAreas_SingleOversize(t *testing.T) {
 	assertUntrusted(t, na, "95%")
 }
 
+// mustUnionArea is unionArea2D where a refused (unclosed) boundary is a test
+// failure rather than a tolerated absence.
+func mustUnionArea(t *testing.T, tris [][3][2]float64) float64 {
+	t.Helper()
+	a, ok := unionArea2D(tris)
+	if !ok {
+		t.Fatal("unionArea2D refused: the boundary did not close")
+	}
+	return a
+}
+
+// mustMaxSilhouette is maxSilhouetteAxis with the same contract.
+func mustMaxSilhouette(t *testing.T, w []v3, tris []uint32) (float64, int) {
+	t.Helper()
+	area, axis, ok := maxSilhouetteAxis(w, tris)
+	if !ok {
+		t.Fatal("maxSilhouetteAxis refused: an axis could not be measured")
+	}
+	return area, axis
+}
+
 // rect is a test-only axis-aligned box, split into the two CCW triangles the
 // union engine actually consumes. Rectangles remain the clearest way to state
 // these configurations even though the engine is general.
@@ -225,7 +262,7 @@ func TestUnionArea(t *testing.T) {
 		{"degenerate zero height", []rect{{0, 5, 1, 1}}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := unionArea2D(rectTris(nil, tc.rects...)); math.Abs(got-tc.want) > 1e-9 {
+			if got := mustUnionArea(t, rectTris(nil, tc.rects...)); math.Abs(got-tc.want) > 1e-9 {
 				t.Errorf("unionArea2D = %v, want %v", got, tc.want)
 			}
 		})
@@ -243,7 +280,7 @@ func TestUnionAreaNeverExceedsSum(t *testing.T) {
 		sum += a
 		largest = math.Max(largest, a)
 	}
-	got := unionArea2D(rectTris(nil, rects...))
+	got := mustUnionArea(t, rectTris(nil, rects...))
 	if got > sum {
 		t.Errorf("union %v exceeds Σ %v", got, sum)
 	}
