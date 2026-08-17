@@ -3,12 +3,14 @@
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on
 minor versions, as the README states. Releases before v0.2.0 predate this file.
 
-<!-- Versions and tags are cut automatically by go-semantic-release from
-     conventional commits on every green CI run on main; the generated notes
-     for each release live on GitHub Releases. The release workflow does not
-     commit CHANGELOG.md back to the repo, so this file is maintained by hand
-     and can drift from the tags — reconcile it against `gh release list` /
-     `gh release view <tag>` when it does. -->
+<!-- Entries are written under "## Unreleased" by hand as part of each PR.
+     Versions and tags are cut automatically by go-semantic-release from
+     conventional commits on every green CI run on main; when a release
+     happens, the release workflow renames "## Unreleased" to that version's
+     heading and inserts a fresh empty "## Unreleased" above it, then commits
+     CHANGELOG.md back to the repo itself (`docs: promote Unreleased to
+     vX.Y.Z ... [skip ci]`). Generated release notes also live on GitHub
+     Releases. -->
 
 ## Unreleased
 

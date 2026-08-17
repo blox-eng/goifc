@@ -32,11 +32,32 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Create Release
+        id: release
         uses: go-semantic-release/action@2e9dc4247a6004f8377781bef4cb9dad273a741f # v1.24.1
         with:
           hooks: goreleaser
-          changelog-file: CHANGELOG.md
+          # Throwaway path for the goreleaser hook — never committed. The
+          # real CHANGELOG.md is promoted by hand below, since `prepend`
+          # writes above the file's H1 and intro prose, and this action
+          # never commits the file back to the repo regardless.
+          changelog-file: .release-notes.md
           allow-initial-development-versions: true
           prepend: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote Unreleased changelog section
+        # steps.release.outputs.version is only set when a new version was
+        # actually released (go-semantic-release/action returns early,
+        # without calling setOutput, when there's nothing to release).
+        if: steps.release.outputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          date="$(date -u +%Y-%m-%d)"
+          .github/scripts/promote-changelog.sh "$RELEASE_VERSION" "$date"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md [skip ci]"
+          git push origin HEAD:main
