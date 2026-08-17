@@ -203,3 +203,51 @@ func mustElevationPlane(t *testing.T, dir [3]float64) Plane {
 	}
 	return p
 }
+
+func TestElevations_MatchesElevationOnPerPlane(t *testing.T) {
+	// buildElevation is the fixture helper already in this file; twoWalls is its
+	// const. The fourth return (a view) is not needed here — we build the planes
+	// explicitly below so the singular and plural calls see the same ones.
+	s, f, r, _ := buildElevation(t, twoWalls, [3]float64{0, 1, 0})
+
+	north, ok := ElevationPlane([3]float64{0, 1, 0})
+	if !ok {
+		t.Fatal("ElevationPlane(north): ok=false")
+	}
+	east, ok := ElevationPlane([3]float64{1, 0, 0})
+	if !ok {
+		t.Fatal("ElevationPlane(east): ok=false")
+	}
+	planes := []Plane{north, east}
+
+	got := s.Elevations(f, r, planes)
+	if len(got) != len(planes) {
+		t.Fatalf("Elevations = %d views, want %d", len(got), len(planes))
+	}
+	for i, p := range planes {
+		want := s.ElevationOn(f, r, p)
+		if len(got[i].Entities) != len(want.Entities) {
+			t.Fatalf("view %d: %d entities, want %d", i, len(got[i].Entities), len(want.Entities))
+		}
+		for j := range want.Entities {
+			if got[i].Entities[j].GlobalID != want.Entities[j].GlobalID {
+				t.Fatalf("view %d entity %d: GlobalID %q, want %q",
+					i, j, got[i].Entities[j].GlobalID, want.Entities[j].GlobalID)
+			}
+			if got[i].Entities[j].Depth != want.Entities[j].Depth {
+				t.Fatalf("view %d entity %d: Depth %v, want %v",
+					i, j, got[i].Entities[j].Depth, want.Entities[j].Depth)
+			}
+		}
+		if got[i].Bounds != want.Bounds {
+			t.Fatalf("view %d: Bounds %v, want %v", i, got[i].Bounds, want.Bounds)
+		}
+	}
+}
+
+func TestElevations_NoPlanesIsEmpty(t *testing.T) {
+	s, f, r, _ := buildElevation(t, twoWalls, [3]float64{0, 1, 0})
+	if got := s.Elevations(f, r, nil); len(got) != 0 {
+		t.Fatalf("Elevations(nil planes) = %d views, want 0", len(got))
+	}
+}

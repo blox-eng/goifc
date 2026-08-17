@@ -127,6 +127,9 @@ func (e Element) SilhouetteOn(p Plane) []Loop {
 // ElevationOn projects the scene onto p and returns the elevation drawn from
 // the +p.N side. Mirrors NetAreas: it needs f and r for the same reason, since
 // an element's openings live in IfcRelVoidsElement rather than in its mesh.
+// [Scene.Elevations] is the entry point for a building's several facades: this
+// one classifies the scene on every call, and that classification does not
+// depend on the plane.
 //
 // Deterministic: identical input yields an identical view.
 //
@@ -135,11 +138,42 @@ func (e Element) SilhouetteOn(p Plane) []Loop {
 // untrusted by NetAreas, so the drawing and the quantity agree about what
 // neither could measure.
 func (s *Scene) ElevationOn(f *step.File, r *model.Result, p Plane) ElevationView {
-	view := ElevationView{Plane: p}
 	if !p.Valid() {
-		return view
+		return ElevationView{Plane: p}
+	}
+	return s.elevationOn(f, r, p, BuildFacings(s.Elements))
+}
+
+// Elevations projects the scene onto each of planes and returns one view per
+// plane, in the same order. Identical to calling [Scene.ElevationOn] for each,
+// except that the scene is classified ONCE: BuildFacings rasterizes an
+// occupancy grid over every element per distinct mid-height band, and its
+// result does not depend on the plane. A building has four facades, so asking
+// one at a time repeats that work four times over.
+//
+// An invalid plane yields its zero view in that position rather than being
+// dropped, so the result stays index-aligned with planes.
+//
+// Deterministic: identical input yields identical views.
+func (s *Scene) Elevations(f *step.File, r *model.Result, planes []Plane) []ElevationView {
+	if len(planes) == 0 {
+		return nil
 	}
 	facings := BuildFacings(s.Elements)
+	views := make([]ElevationView, len(planes))
+	for i, p := range planes {
+		if !p.Valid() {
+			views[i] = ElevationView{Plane: p}
+			continue
+		}
+		views[i] = s.elevationOn(f, r, p, facings)
+	}
+	return views
+}
+
+// elevationOn is the projection itself, over a classification the caller owns.
+func (s *Scene) elevationOn(f *step.File, r *model.Result, p Plane, facings map[string]Facing) ElevationView {
+	view := ElevationView{Plane: p}
 
 	class := make(map[string]string, len(r.Elements))
 	expressID := make(map[string]int, len(r.Elements))
