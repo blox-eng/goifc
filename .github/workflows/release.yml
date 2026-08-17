@@ -15,6 +15,22 @@ defaults:
   run:
     shell: bash
 
+env:
+  # go-semantic-release/action (SHA-pinned below) is a thin wrapper: at
+  # runtime it downloads a `semantic-release` executable and runs it with
+  # this job's `contents: write` permission. Pinning the action's SHA does
+  # NOT pin that executable — by default the action fetches whatever is
+  # currently "latest" from registry.go-semantic-release.xyz. We instead
+  # download a specific, checksummed release ourselves and hand the action
+  # that binary via its `bin` input, so nothing here floats.
+  #
+  # To bump: pick the new tag from
+  # https://github.com/go-semantic-release/semantic-release/releases, then
+  # copy the `linux_amd64` line out of that release's own
+  # `semantic-release_<version>_checksums.txt` asset.
+  SEMREL_VERSION: v2.31.0
+  SEMREL_SHA256: b8f518b1aeb1d1742f4e6e91a179b707cea4309a64fe3854f465bf724f04f6d3
+
 jobs:
   release:
     name: Create Release
@@ -31,6 +47,20 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Fetch and verify semantic-release binary
+        id: semrel-bin
+        run: |
+          set -euo pipefail
+          asset="semantic-release_${SEMREL_VERSION}_linux_amd64"
+          url="https://github.com/go-semantic-release/semantic-release/releases/download/${SEMREL_VERSION}/${asset}"
+          dest="${RUNNER_TEMP}/${asset}"
+
+          curl --fail --silent --show-error --location -o "$dest" "$url"
+
+          echo "${SEMREL_SHA256}  ${dest}" | sha256sum -c -
+
+          chmod +x "$dest"
+          echo "path=${dest}" >> "$GITHUB_OUTPUT"
       - name: Create Release
         id: release
         uses: go-semantic-release/action@2e9dc4247a6004f8377781bef4cb9dad273a741f # v1.24.1
@@ -43,6 +73,7 @@ jobs:
           changelog-file: .release-notes.md
           allow-initial-development-versions: true
           prepend: true
+          bin: ${{ steps.semrel-bin.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Promote Unreleased changelog section
