@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual trigger. Release is gated on a SUCCESSFUL CI run on main
+  # (release.yml keys off workflow_run), so a push event GitHub drops during
+  # an Actions incident leaves main permanently unreleased. Re-running an
+  # OLDER run is not a substitute: workflow_run hands release.yml that run's
+  # head SHA, so it would publish from a stale tree. This lets a maintainer
+  # run CI against main's current tip and let the release chain proceed.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
