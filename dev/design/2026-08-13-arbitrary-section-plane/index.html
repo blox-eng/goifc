@@ -16,6 +16,8 @@
         <link rel="prev" href="../">
       
       
+        <link rel="next" href="../2026-08-15-outward-facing-classification/">
+      
       
         
       
@@ -1015,6 +1017,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2026-08-15-outward-facing-classification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outward-facing classification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1209,7 +1239,7 @@ even though the hard parts are already here and are plane-agnostic:
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1">// Plane is a cutting plane: a point on it plus an orthonormal basis. U and V</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1">// span the plane and define the 2D coordinates of emitted rings; N is the</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1">// normal. The basis MUST be orthonormal and right-handed (N == U x V) — see</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1">// &quot;Basis validity&quot; below.</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1">// "Basis validity" below.</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Plane</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nx">Origin</span><span class="w">  </span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="kt">float64</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nx">U</span><span class="p">,</span><span class="w"> </span><span class="nx">V</span><span class="p">,</span><span class="w"> </span><span class="nx">N</span><span class="w"> </span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="kt">float64</span>
@@ -1224,15 +1254,15 @@ even though the hard parts are already here and are plane-agnostic:
 <a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1">// for a zero-length or non-finite n.</span>
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="kd">func</span><span class="w"> </span><span class="nx">PlaneFromNormal</span><span class="p">(</span><span class="nx">origin</span><span class="p">,</span><span class="w"> </span><span class="nx">n</span><span class="w"> </span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="kt">float64</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Plane</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="p">)</span>
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1">// SectionOn returns the closed CUT rings where e&#39;s mesh crosses p, in p&#39;s UV</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1">// SectionOn returns the closed CUT rings where e's mesh crosses p, in p's UV</span>
 <a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1">// coordinates, hole-nested and tagged LoopCut. Empty when the plane misses the</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1">// mesh or p&#39;s basis is invalid. Determinism and winding guarantees match the</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="c1">// mesh or p's basis is invalid. Determinism and winding guarantees match the</span>
 <a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="c1">// horizontal path exactly.</span>
 <a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">e</span><span class="w"> </span><span class="nx">Element</span><span class="p">)</span><span class="w"> </span><span class="nx">SectionOn</span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="nx">Plane</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">Loop</span>
 <a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
 <a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="c1">// FootprintOn is Footprint generalized to p: cut rings if the plane crosses the</span>
-<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="c1">// solid, else the silhouette of faces facing away from N, else the element&#39;s</span>
-<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="c1">// AABB projected into p&#39;s UV.</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="c1">// solid, else the silhouette of faces facing away from N, else the element's</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="c1">// AABB projected into p's UV.</span>
 <a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="kd">func</span><span class="w"> </span><span class="nx">FootprintOn</span><span class="p">(</span><span class="nx">e</span><span class="w"> </span><span class="nx">Element</span><span class="p">,</span><span class="w"> </span><span class="nx">p</span><span class="w"> </span><span class="nx">Plane</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">Loop</span>
 </code></pre></div>
 <p><code>Footprint(e, cutZ)</code> keeps its signature and delegates to
