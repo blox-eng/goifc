@@ -18,6 +18,57 @@ var axisMergeCos = math.Cos(5 * math.Pi / 180)
 // has no facade, so declining is the correct answer rather than a coin flip.
 const axisDominanceMin = 0.6
 
+// sideAreaTol is the dot-product floor for counting a face as belonging to one
+// side. A wall's end caps sit perpendicular to the facing direction at ~0 and
+// are excluded; anything leaning even slightly toward it counts. It matches the
+// tolerance IfcOpenShell's get_side_area applies to the same question.
+const sideAreaTol = 0.01
+
+// sideAreaDir sums the area of the triangles in the WORLD-space mesh (w, tris)
+// whose normal points along dir, in m². It is sideArea generalized off the
+// cardinal axes, and sideArea is now a thin wrapper over it.
+//
+// ONE side only. Unlike the axis vote it does NOT fold antipodes, so a
+// free-standing wall reports its outer face rather than the sum of both. This
+// is the facade quantity: summing it over the elements binned to one elevation
+// gives that elevation's gross area.
+//
+// It reads triangle WINDING, which the axis vote deliberately does not. goifc
+// orients its output outward — brep.go honours IfcFaceBound.Orientation and
+// triangulate.go normalizes extrusion caps — but a source mesh wound inward
+// throughout yields that element's INNER face instead, of equal magnitude on a
+// plain wall and smaller on a stepped one. IfcOpenShell trusts winding here for
+// the same reason: nothing else distinguishes the two faces of a wall.
+func sideAreaDir(w []v3, tris []uint32, dir v3) float64 {
+	l := math.Sqrt(dotv(dir, dir))
+	if !(l > 0) {
+		return 0
+	}
+	u := scalev(dir, 1/l)
+
+	var total float64
+	for i := 0; i+2 < len(tris); i += 3 {
+		ia, ib, ic := tris[i], tris[i+1], tris[i+2]
+		if int(ia) >= len(w) || int(ib) >= len(w) || int(ic) >= len(w) {
+			continue
+		}
+		a, b, c := w[ia], w[ib], w[ic]
+		n := crossv(subv(b, a), subv(c, a))
+		if !finite3(n) {
+			continue
+		}
+		ln := math.Sqrt(dotv(n, n))
+		if ln < 1e-15 {
+			continue // degenerate triangle
+		}
+		if dotv(n, u)/ln <= sideAreaTol {
+			continue // the far side, or edge-on
+		}
+		total += ln / 2
+	}
+	return total
+}
+
 // axisBucket accumulates triangle area for one unsigned direction family.
 type axisBucket struct {
 	dir  v3

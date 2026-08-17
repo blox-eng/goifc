@@ -70,7 +70,7 @@ const (
 // dominant normal of its vertical faces, signed to point at the exposed side.
 type Facing struct {
     Normal   [3]float64 // unit, world space; points at the exposed side
-    VoteArea float64    // m² of vertical face that VOTED for this axis — not facade area
+    FaceArea float64    // m² of face pointing along Normal — ONE side, gross
     Exposure Exposure
     // Confidence is 0..1. The sign is resolved by probing outward from the
     // element's BBox centre, so an L-shaped or strongly curved element whose
@@ -111,12 +111,23 @@ Plus, in `model`, the piece nothing reads today:
 func TrueNorth(f *step.File) [2]float64
 ```
 
-`VoteArea` is named for what it is. The axis vote folds antipodal faces together — that
-folding is the whole point of the axis stage — so a wall's inner and outer face both
-count toward the winning axis and a 6 m × 3 m free-standing wall reports 36 m², roughly
-twice its facade. No fixed divisor recovers the real number: it is 2× free-standing and
-somewhere between 1× and 2× when the element abuts a neighbour. The field is a diagnostic
-for how decisively the axis won, not a quantity. Facade area is `NetArea`'s job.
+`FaceArea` is measured on ONE side, against the resolved `Normal` — not against the
+canonical axis. The distinction matters because the axis vote deliberately folds
+antipodal faces together, so the area that *won* the vote counts a wall's inner face as
+well and a 6 m × 3 m free-standing wall votes with 36 m². That number is a vote weight,
+not a quantity, and no fixed divisor recovers the facade from it: it is 2× free-standing
+and somewhere between 1× and 2× when the element abuts a neighbour. So the vote area is
+not reported at all, and `FaceArea` re-measures the outward side once the sign is known.
+Summed over the elements binned to one elevation, it is that elevation's gross area.
+
+Gross, not net: openings are not subtracted. That is `NetArea`'s job.
+
+One consequence worth stating, because it is the only place this package reads triangle
+winding: `FaceArea` distinguishes a wall's two faces by their normals, so a source mesh
+wound inward throughout reports that element's inner face. On a plain wall the two are
+equal and nothing changes; on a stepped one the inner face is smaller. Nothing else
+distinguishes the two faces of a wall, and IfcOpenShell's `get_side_area` trusts winding
+for the same reason.
 
 `Confidence` stays a single number. An earlier draft split it into axis and sign
 components; naming `Exposure` explicitly makes that unnecessary, because the field a
@@ -230,13 +241,13 @@ All of these must exist before this is done:
   bins non-empty. This proves the fill *resolves*, as opposed to degrading to low
   confidence everywhere.
 
-    An earlier draft of this list also demanded "summed face area equal to total exterior
-    vertical face area". That assertion is **removed, not deferred**: it is false of
-    `VoteArea` and always was. The axis vote folds antipodal faces, so each wall's
-    `VoteArea` counts both its inner and its outer face — roughly twice the elevation
-    area, and not by a fixed factor. `VoteArea` is a vote weight, not a quantity; a
-    partition assertion over it would be asserting the wrong thing. Facade area is
-    `NetArea`'s job, and it is tested there.
+    This list also demands **summed face area equal to total exterior vertical face
+    area**. An earlier draft removed that assertion as false — correctly, of the vote
+    area, which folds antipodal faces and counts every wall twice. It is restored here
+    because `FaceArea` measures one side: the four walls of a 6 m × 4 m room report
+    18 + 18 + 12 + 12 = 60 m², and that is the building's facade. A partition assertion
+    over a folded vote weight would have been asserting the wrong thing; over a
+    one-sided area it is the property that makes per-elevation sums trustworthy.
 - **Non-convex footprint** — a U-shaped plan where a naive centroid rule misassigns the
   walls flanking the recess. They must resolve correctly, never a confident wrong bin.
 - **Enclosed void** — a ring of walls around a closed courtyard: the inward-facing walls

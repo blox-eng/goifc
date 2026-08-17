@@ -194,6 +194,34 @@ func rotatedSouthWall() Element {
 	}
 }
 
+func TestFaceAreaIsOneSideAndElevationsSumToTheFacade(t *testing.T) {
+	// A 6x4 room, 0.3m walls, 3m tall. Each wall presents exactly ONE outward
+	// face: 6x3 south and north, 4x3 west and east — 60 m² of facade in total.
+	//
+	// The axis vote folds antipodes, so the area that WON the vote counts each
+	// wall's inner face too and totals 120. That number is a vote weight and was
+	// never summable per elevation; FaceArea is measured on one side, which is
+	// what makes this sum meaningful at all.
+	facings := BuildFacings(roomWalls(6, 4, 0.3))
+
+	want := map[string]float64{"s": 18, "n": 18, "w": 12, "e": 12}
+	var total float64
+	for _, id := range []string{"s", "n", "w", "e"} {
+		f, ok := facings[id]
+		if !ok {
+			t.Fatalf("wall %q has no facing", id)
+		}
+		if math.Abs(f.FaceArea-want[id]) > 1e-6 {
+			t.Fatalf("wall %q FaceArea = %v, want %v (one side, not both)",
+				id, f.FaceArea, want[id])
+		}
+		total += f.FaceArea
+	}
+	if math.Abs(total-60) > 1e-6 {
+		t.Fatalf("the four elevations sum to %v m², want the 60 m² facade", total)
+	}
+}
+
 func TestBuildFacingsNonIdentityPlacementMatchesWorldTwin(t *testing.T) {
 	identity := roomWalls(6, 4, 0.3)
 	rotated := append([]Element{rotatedSouthWall()}, identity[1:]...)
@@ -216,8 +244,8 @@ func TestBuildFacingsNonIdentityPlacementMatchesWorldTwin(t *testing.T) {
 			t.Fatalf("Normal = %v, want %v (identity twin)", got.Normal, want.Normal)
 		}
 	}
-	if math.Abs(want.VoteArea-got.VoteArea) > eps {
-		t.Fatalf("VoteArea = %v, want %v", got.VoteArea, want.VoteArea)
+	if math.Abs(want.FaceArea-got.FaceArea) > eps {
+		t.Fatalf("FaceArea = %v, want %v", got.FaceArea, want.FaceArea)
 	}
 	if got.Exposure != want.Exposure {
 		t.Fatalf("Exposure = %v, want %v", got.Exposure, want.Exposure)

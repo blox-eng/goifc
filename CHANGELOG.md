@@ -48,12 +48,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   it and reports its walls freestanding, again at low confidence. Threshold on
   `Confidence`: below ~0.5 the sign is a guess, and in a quantity context a
   wrong bin is a wrong invoice.
-- **`Facing.VoteArea` is NOT facade area.** The axis vote folds antipodal faces
-  together, so a free-standing wall contributes BOTH its faces and reports
-  roughly twice its outer face; abutting elements land somewhere between 1× and
-  2×. No fixed divisor recovers the real number. It is a vote weight, useful
-  for judging how decisively the axis won — do not sum it per elevation. For
-  facade quantities use `NetArea`.
+- **`Facing.FaceArea` is the GROSS facade area of one side.** It is measured
+  against the resolved `Normal` after the sign is known, so summing it over the
+  elements binned to one elevation gives that elevation's area. Openings are
+  not subtracted — for net quantities use `NetArea`. It is the only place this
+  package reads triangle winding: a mesh wound inward throughout reports the
+  element's inner face, equal on a plain wall and smaller on a stepped one.
 - The sign is probed outward from the element's bounding-box **centre**, so an
   L-shaped or strongly curved element whose centre falls outside its own body
   degrades to low confidence.

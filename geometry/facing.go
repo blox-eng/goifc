@@ -39,11 +39,12 @@ const (
 type Facing struct {
 	// Normal is unit length in world space and points at the exposed side.
 	Normal [3]float64
-	// VoteArea is the vertical face area that voted for this axis, in m². It is
-	// NOT the facade area: antipodal faces are folded together, so a
-	// free-standing wall contributes BOTH its faces and reports roughly twice
-	// its outer face. Do not sum it per elevation.
-	VoteArea float64
+	// FaceArea is the area of the faces pointing along Normal, in m². ONE side:
+	// the outer face of a wall, not the sum of its two faces, so summing it over
+	// the elements binned to one elevation gives that elevation's gross area.
+	//
+	// Gross, not net — openings are not subtracted here.
+	FaceArea float64
 	// Exposure is what the Normal side reaches.
 	Exposure Exposure
 	// Confidence is 0..1. Below ~0.5 the sign is a guess; a consumer that would
@@ -82,19 +83,19 @@ func BuildFacings(elems []Element) map[string]Facing {
 
 	for i := range elems {
 		e := elems[i]
-		dir, area, share, ok := axisOf(e)
+		dir, share, ok := axisOf(e)
 		if !ok {
 			continue
 		}
 		key, keyed := sliceKey(e)
 		if !keyed {
-			out[e.GlobalID] = signFacing(e, dir, area, share, nil)
+			out[e.GlobalID] = signFacing(e, dir, share, nil)
 			continue
 		}
 		if _, seen := bands[key]; !seen {
 			keys = append(keys, key)
 		}
-		bands[key] = append(bands[key], voted{e, dir, area, share})
+		bands[key] = append(bands[key], voted{e, dir, share})
 	}
 
 	// Sorted, never a map range: an iteration order must not be able to reach
@@ -107,7 +108,7 @@ func BuildFacings(elems []Element) map[string]Facing {
 		// — and every sign on the band — depend on input order.
 		g := buildOccupancy(elems, float64(key)*occupancyCell)
 		for _, v := range bands[key] {
-			out[v.e.GlobalID] = signFacing(v.e, v.dir, v.area, v.share, g)
+			out[v.e.GlobalID] = signFacing(v.e, v.dir, v.share, g)
 		}
 		// g dies here. One band's grid is live at a time, so peak memory is one
 		// grid rather than one per distinct element mid-height in the model.
@@ -117,9 +118,9 @@ func BuildFacings(elems []Element) map[string]Facing {
 
 // voted is an element whose axis has been decided but whose sign has not.
 type voted struct {
-	e           Element
-	dir         v3
-	area, share float64
+	e     Element
+	dir   v3
+	share float64
 }
 
 // sliceHeight is the height a facing is judged at: the element's mid-height,
@@ -153,48 +154,56 @@ func sliceKey(e Element) (int64, bool) {
 
 // axisOf runs the unsigned axis vote for e in world space. ok=false means the
 // element has no facade, and so needs no neighbour context at all.
-func axisOf(e Element) (dir v3, area, share float64, ok bool) {
+func axisOf(e Element) (dir v3, share float64, ok bool) {
 	if len(e.Tris) == 0 {
-		return v3{}, 0, 0, false
+		return v3{}, 0, false
 	}
-	return dominantAxis(worldPoints(e.Verts, e.Placement), e.Tris)
+	// The vote area is deliberately dropped: it folds antipodes, so it is a vote
+	// weight and never a quantity. FaceArea is measured separately, on one side,
+	// once the sign is known.
+	dir, _, share, ok = dominantAxis(worldPoints(e.Verts, e.Placement), e.Tris)
+	return dir, share, ok
 }
 
 // facingWithin resolves e's facing against grid g. A nil g means no neighbour
 // context — the axis still resolves, the sign does not.
 func facingWithin(e Element, g *occupancy) (Facing, bool) {
-	dir, area, share, ok := axisOf(e)
+	dir, share, ok := axisOf(e)
 	if !ok {
 		return Facing{}, false
 	}
-	return signFacing(e, dir, area, share, g), true
+	return signFacing(e, dir, share, g), true
 }
 
 // signFacing resolves which of ±dir points at the exposed side, against grid g.
 // A nil g means no neighbour context: the axis stands, the sign is arbitrary
 // and the confidence says so.
-func signFacing(e Element, dir v3, area, share float64, g *occupancy) Facing {
-	f := Facing{Normal: dir, VoteArea: area}
+func signFacing(e Element, dir v3, share float64, g *occupancy) Facing {
+	f := Facing{Normal: dir}
 
 	if g == nil {
 		f.Exposure = ExposureExterior
 		f.Confidence = share * signAmbiguous
-		return f
+	} else {
+		cx := (e.BBoxMin[0] + e.BBoxMax[0]) / 2
+		cy := (e.BBoxMin[1] + e.BBoxMax[1]) / 2
+		from := [2]float64{cx, cy}
+
+		pos := g.probe(from, [2]float64{dir[0], dir[1]})
+		neg := g.probe(from, [2]float64{-dir[0], -dir[1]})
+
+		exposure, flip, factor := resolveSign(pos, neg)
+		if flip {
+			f.Normal = v3{-dir[0], -dir[1], -dir[2]}
+		}
+		f.Exposure = exposure
+		f.Confidence = share * factor
 	}
 
-	cx := (e.BBoxMin[0] + e.BBoxMax[0]) / 2
-	cy := (e.BBoxMin[1] + e.BBoxMax[1]) / 2
-	from := [2]float64{cx, cy}
-
-	pos := g.probe(from, [2]float64{dir[0], dir[1]})
-	neg := g.probe(from, [2]float64{-dir[0], -dir[1]})
-
-	exposure, flip, factor := resolveSign(pos, neg)
-	if flip {
-		f.Normal = v3{-dir[0], -dir[1], -dir[2]}
-	}
-	f.Exposure = exposure
-	f.Confidence = share * factor
+	// Measured against the RESOLVED normal, never the canonical one: the whole
+	// point of FaceArea is that it names the side the element actually presents,
+	// so it has to be computed after the sign is known.
+	f.FaceArea = sideAreaDir(worldPoints(e.Verts, e.Placement), e.Tris, f.Normal)
 	return f
 }
 
