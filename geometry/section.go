@@ -107,49 +107,6 @@ func sectionRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	return stitchParityRings(segs)
 }
 
-// belowRings is the silhouette of a solid seen along p.N: the boundary of the
-// faces pointing AWAY from p.N, stitched into closed rings in p's UV
-// coordinates. Reuses stitchParityRings.
-//
-// For a CLOSED solid this outline is invariant under flipping p.N — edges shared
-// by two same-facing faces cancel, while each silhouette edge is shared by one
-// front and one back face and survives in either set. A consumer that needs the
-// near face specifically, rather than the outline, must decide that itself.
-//
-// An OPEN mesh has no such symmetry: a one-sided surface opposes exactly one of
-// the two directions and yields nothing for the other. Callers that may hold
-// non-closed geometry must choose p.N deliberately.
-//
-// LIMITATION: true silhouette is the projected-polygon UNION of all such
-// patches. This parity-boundary approach is a lighter approximation — for a
-// non-convex solid whose faces sit at different depths, overlapping projected
-// patches may leave internal boundary edges rather than one filled silhouette.
-func belowRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
-	nv := uint32(len(w))
-
-	var segs [][2][2]float64
-	for t := 0; t+2 < len(tris); t += 3 {
-		i0, i1, i2 := tris[t], tris[t+1], tris[t+2]
-		if i0 >= nv || i1 >= nv || i2 >= nv {
-			continue
-		}
-		n := crossv(subv(w[i1], w[i0]), subv(w[i2], w[i0]))
-		l := math.Sqrt(dotv(n, n))
-		if l == 0 || dotv(n, p.N)/l >= -1e-6 { // keep only faces opposing p.N
-			continue
-		}
-		q0 := projectUV(p, w[i0])
-		q1 := projectUV(p, w[i1])
-		q2 := projectUV(p, w[i2])
-		segs = append(segs,
-			[2][2]float64{q0, q1},
-			[2][2]float64{q1, q2},
-			[2][2]float64{q2, q0},
-		)
-	}
-	return stitchParityRings(segs)
-}
-
 // LoopRole tags a footprint loop as section poché or light context.
 //
 // The string VALUES are a serialization contract: consumers persist them in
@@ -226,7 +183,7 @@ func (e Element) SectionOn(p Plane) []Loop {
 // flipped direction yields no silhouette and falls through to the bounding-box
 // fallback — a rectangle tagged LoopSilhouette in place of the real outline,
 // with no signal. Closed solids are unaffected: their outline is invariant
-// under flipping p.N (see belowRings).
+// under flipping p.N (see silhouetteRings).
 func FootprintOn(e Element, p Plane) []Loop {
 	if !p.Valid() {
 		return nil
@@ -238,7 +195,7 @@ func FootprintOn(e Element, p Plane) []Loop {
 	if cut := sectionRings(w, e.Tris, p); len(cut) > 0 {
 		return nestEvenOdd(cut, LoopCut)
 	}
-	if below := belowRings(w, e.Tris, p); len(below) > 0 {
+	if below := silhouetteRings(w, e.Tris, p); len(below) > 0 {
 		return nestEvenOdd(below, LoopSilhouette)
 	}
 	return aabbFallback(e, p)
@@ -271,7 +228,7 @@ func Footprint(e Element, cutZ float64) []Loop {
 // nestEvenOdd classifies each ring by containment depth and emits Loops: a ring
 // contained by an odd number of others is a HOLE (wound CW, negative area); an
 // even-depth ring stays an outer boundary (CCW). Rings arrive CCW from
-// sectionRings/belowRings; a hollow cut returns the outer AND inner boundary as
+// sectionRings/silhouetteRings; a hollow cut returns the outer AND inner boundary as
 // separate positive rings, so the inner one must be re-wound CW to render as a
 // cutout. Iterates rings in the given (deterministic) order — never ranges a map.
 //
@@ -378,9 +335,19 @@ func aabbRingOn(min, max [3]float64, p Plane) [][2]float64 {
 // keeps odd-parity (unshared/boundary) edges, and walks them into closed rings —
 // canonical (rotated to lex-smallest vertex), CCW, self-intersection-rejected,
 // and deterministically sorted so identical input yields byte-identical output.
-// Shared by sectionRings (cut crossings) and belowRings (edges of faces opposing
-// the plane normal).
+// Shared by sectionRings (cut crossings) and silhouetteRings (the union boundary
+// of the faces opposing the plane normal).
 func stitchParityRings(segs [][2][2]float64) [][][2]float64 {
+	return stitchRings(segs, func(count int) bool { return count%2 == 1 })
+}
+
+// stitchRings is stitchParityRings with the edge-selection rule lifted out: it
+// welds endpoints, counts coincident duplicates, keeps the edges keep() accepts,
+// and walks them into canonical CCW rings. Parity is one such rule (the cut and
+// legacy silhouette paths); the union silhouette keeps every welded edge,
+// because it has already decided which edges bound the union and emits each
+// exactly once.
+func stitchRings(segs [][2][2]float64, keep func(count int) bool) [][][2]float64 {
 	keyToID := map[[2]int64]int{}
 	var pos [][2]float64
 	idOf := func(p [2]float64) int {
@@ -409,13 +376,13 @@ func stitchParityRings(segs [][2][2]float64) [][][2]float64 {
 		segCount[edge{a, b}]++
 	}
 
-	// Build undirected adjacency from odd-parity edges only. Parity cancellation
-	// yields the union outline of multi-solid elements (a face shared by two
-	// solids emits its cut segment twice and cancels), at the cost of erasing a
-	// boundary segment a non-manifold mesh legitimately emits twice.
+	// Build undirected adjacency from the edges keep() accepts. Under parity,
+	// cancellation yields the union outline of multi-solid elements (a face
+	// shared by two solids emits its cut segment twice and cancels), at the cost
+	// of erasing a boundary segment a non-manifold mesh legitimately emits twice.
 	adj := map[int][]int{}
 	for e, cnt := range segCount {
-		if cnt%2 == 0 {
+		if !keep(cnt) {
 			continue
 		}
 		adj[e[0]] = append(adj[e[0]], e[1])

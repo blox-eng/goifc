@@ -237,9 +237,9 @@ func TestSectionRingsCornerTouch(t *testing.T) {
 	}
 }
 
-func TestBelowRingsCube(t *testing.T) {
+func TestSilhouetteRingsCube(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{2, 3, 1})
-	rings := belowRings(w, tris, HorizontalPlane(0))
+	rings := silhouetteRings(w, tris, HorizontalPlane(0))
 	if len(rings) != 1 {
 		t.Fatalf("want 1 silhouette ring, got %d", len(rings))
 	}
@@ -248,10 +248,10 @@ func TestBelowRingsCube(t *testing.T) {
 	}
 }
 
-func TestBelowRingsDeterministic(t *testing.T) {
+func TestSilhouetteRingsDeterministic(t *testing.T) {
 	w, tris := boxMeshWorld(v3{0, 0, 0}, v3{2, 3, 1})
-	if !reflect.DeepEqual(belowRings(w, tris, HorizontalPlane(0)), belowRings(w, tris, HorizontalPlane(0))) {
-		t.Fatal("belowRings not deterministic")
+	if !reflect.DeepEqual(silhouetteRings(w, tris, HorizontalPlane(0)), silhouetteRings(w, tris, HorizontalPlane(0))) {
+		t.Fatal("silhouetteRings not deterministic")
 	}
 }
 
@@ -479,6 +479,178 @@ func TestFootprintOnAabbFallbackUsesPlaneFrame(t *testing.T) {
 	}
 }
 
+// steppedSolid is two boxes at DIFFERENT depths along Z whose XY projections
+// overlap — a set-back upper storey, a projecting bay, a recessed balcony. This
+// is the shape the parity-boundary silhouette gets wrong: the two patches'
+// boundaries do not coincide in UV, so nothing cancels and both survive as
+// internal edges instead of merging into one filled outline.
+//
+//	A = x[0,4] y[0,3] at z[0,1]   -> projects to 12 m2
+//	B = x[2,6] y[1,4] at z[1,2]   -> projects to 12 m2
+//	overlap x[2,4] y[1,3]         -> 4 m2, so the UNION is 20 m2
+func steppedSolid() Element {
+	w1, t1 := boxMeshWorld(v3{0, 0, 0}, v3{4, 3, 1})
+	w2, t2 := boxMeshWorld(v3{2, 1, 1}, v3{6, 4, 2})
+	var verts []float32
+	for _, p := range append(append([]v3{}, w1...), w2...) {
+		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
+	}
+	off := uint32(len(w1))
+	tris := append([]uint32{}, t1...)
+	for _, i := range t2 {
+		tris = append(tris, i+off)
+	}
+	return Element{GlobalID: "stepped", Verts: verts, Tris: tris,
+		Placement: model.Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+		BBoxMin:   [3]float64{0, 0, 0}, BBoxMax: [3]float64{6, 4, 2}}
+}
+
+// TestFootprintOnSteppedSolidIsOneUnionOutline is #16's defining case: the
+// silhouette of overlapping patches at different depths must be ONE filled
+// outline of the true union area, not two overlapping rings whose areas
+// double-count the shared region.
+func TestFootprintOnSteppedSolidIsOneUnionOutline(t *testing.T) {
+	// A plane below both boxes, so no cut ring exists and the silhouette tier runs.
+	loops := FootprintOn(steppedSolid(), HorizontalPlane(-1))
+	if len(loops) != 1 {
+		t.Fatalf("want 1 union outline, got %d loops: %v", len(loops), loops)
+	}
+	if loops[0].Role != LoopSilhouette {
+		t.Fatalf("Role = %q, want %q", loops[0].Role, LoopSilhouette)
+	}
+	if got := math.Abs(polygonArea2D(loops[0].Points)); math.Abs(got-20) > 1e-9 {
+		t.Fatalf("union area = %v, want 20 (12+12-4 overlap); 24 means the "+
+			"overlap was double-counted", got)
+	}
+}
+
+// TestSilhouetteRingsSteppedSolidDeterministic — the union path groups sub-edges
+// in a map, so an unsorted iteration would leak non-determinism into the output.
+// This is the case that would expose it.
+func TestSilhouetteRingsSteppedSolidDeterministic(t *testing.T) {
+	e := steppedSolid()
+	w := worldPoints(e.Verts, e.Placement)
+	first := silhouetteRings(w, e.Tris, HorizontalPlane(-1))
+	for i := 0; i < 8; i++ {
+		if !reflect.DeepEqual(silhouetteRings(w, e.Tris, HorizontalPlane(-1)), first) {
+			t.Fatal("silhouetteRings not deterministic on a stepped solid")
+		}
+	}
+}
+
+// TestSilhouetteRingsDisjointPatchesStaySeparate: patches that do NOT overlap
+// must remain two outlines. A union that merged everything into one hull would
+// pass the stepped-solid test and fail this one.
+func TestSilhouetteRingsDisjointPatchesStaySeparate(t *testing.T) {
+	w1, t1 := boxMeshWorld(v3{0, 0, 0}, v3{2, 2, 1})
+	w2, t2 := boxMeshWorld(v3{5, 0, 1}, v3{7, 2, 2}) // apart in X, different depth
+	w := append(append([]v3{}, w1...), w2...)
+	off := uint32(len(w1))
+	tris := append([]uint32{}, t1...)
+	for _, i := range t2 {
+		tris = append(tris, i+off)
+	}
+	rings := silhouetteRings(w, tris, HorizontalPlane(-1))
+	if len(rings) != 2 {
+		t.Fatalf("want 2 separate outlines, got %d: %v", len(rings), rings)
+	}
+	for i, r := range rings {
+		if a := ringArea(r); math.Abs(a-4) > 1e-9 {
+			t.Fatalf("ring %d area = %v, want 4", i, a)
+		}
+	}
+}
+
+// TestSilhouetteRingsNestedSolidHasNoHole pins a deliberate DIVERGENCE from the
+// section path. hollowBox is an outer box containing an inner SOLID box, not a
+// tube. Cutting it yields outer + hole (see TestFootprintHoleNesting), because
+// the plane crosses both shells. Its SILHOUETTE has no hole: the inner solid's
+// projection lies inside the outer's, so the union is just the outer square.
+// A consumer must not read a silhouette loop count as a section loop count.
+func TestSilhouetteRingsNestedSolidHasNoHole(t *testing.T) {
+	e := hollowBox(v3{0, 0, 0}, v3{4, 4, 1}, v3{1, 1, 0}, v3{3, 3, 1})
+	loops := FootprintOn(e, HorizontalPlane(-1))
+	if len(loops) != 1 {
+		t.Fatalf("want 1 filled outline, got %d loops: %v", len(loops), loops)
+	}
+	if a := ringArea(loops[0].Points); math.Abs(a-16) > 1e-9 {
+		t.Fatalf("area = %v, want 16 (the outer square, inner solid absorbed)", a)
+	}
+}
+
+// TestSilhouetteRingsFrameKeepsHole: four bars around an empty centre project to
+// a genuine annulus. The union must PRESERVE that hole — filling it in is the
+// opposite failure from leaving internal edges, and an outer-boundary-only trace
+// would do exactly that.
+func TestSilhouetteRingsFrameKeepsHole(t *testing.T) {
+	bars := [][2]v3{
+		{{0, 0, 0}, {1, 4, 1}}, // left
+		{{3, 0, 0}, {4, 4, 1}}, // right
+		{{1, 0, 0}, {3, 1, 1}}, // bottom
+		{{1, 3, 0}, {3, 4, 1}}, // top
+	}
+	var w []v3
+	var tris []uint32
+	for _, b := range bars {
+		bw, bt := boxMeshWorld(b[0], b[1])
+		off := uint32(len(w))
+		w = append(w, bw...)
+		for _, i := range bt {
+			tris = append(tris, i+off)
+		}
+	}
+	var verts []float32
+	for _, p := range w {
+		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
+	}
+	e := Element{GlobalID: "frame", Verts: verts, Tris: tris,
+		Placement: model.Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+		BBoxMin:   [3]float64{0, 0, 0}, BBoxMax: [3]float64{4, 4, 1}}
+
+	loops := FootprintOn(e, HorizontalPlane(-1))
+	if len(loops) != 2 {
+		t.Fatalf("want outer + hole, got %d loops: %v", len(loops), loops)
+	}
+	var outer, hole int
+	for _, l := range loops {
+		if polygonArea2D(l.Points) > 0 {
+			outer++
+			if a := ringArea(l.Points); math.Abs(a-16) > 1e-9 {
+				t.Fatalf("outer area = %v, want 16", a)
+			}
+		} else {
+			hole++
+			if a := ringArea(l.Points); math.Abs(a-4) > 1e-9 {
+				t.Fatalf("hole area = %v, want 4 (the empty centre)", a)
+			}
+		}
+	}
+	if outer != 1 || hole != 1 {
+		t.Fatalf("want 1 CCW outer + 1 CW hole, got outer=%d hole=%d", outer, hole)
+	}
+}
+
+// TestSilhouetteRingsCoincidentDuplicateFaces: exporters duplicate coplanar
+// faces. Two identical stacked boxes must yield ONE outline of the single area —
+// parity cancelled the doubled edges and produced nothing at all.
+func TestSilhouetteRingsCoincidentDuplicateFaces(t *testing.T) {
+	w1, t1 := boxMeshWorld(v3{0, 0, 0}, v3{2, 3, 1})
+	w2, t2 := boxMeshWorld(v3{0, 0, 0}, v3{2, 3, 1}) // exact duplicate
+	w := append(append([]v3{}, w1...), w2...)
+	off := uint32(len(w1))
+	tris := append([]uint32{}, t1...)
+	for _, i := range t2 {
+		tris = append(tris, i+off)
+	}
+	rings := silhouetteRings(w, tris, HorizontalPlane(-1))
+	if len(rings) != 1 {
+		t.Fatalf("want 1 outline, got %d: %v", len(rings), rings)
+	}
+	if a := ringArea(rings[0]); math.Abs(a-6) > 1e-9 {
+		t.Fatalf("area = %v, want 6 (counted once, not twice)", a)
+	}
+}
+
 func TestSectionOnDeterministic(t *testing.T) {
 	e := hollowBox(v3{0, 0, 0}, v3{4, 4, 4}, v3{1, 1, 1}, v3{3, 3, 3})
 	p, ok := PlaneFromNormal([3]float64{2, 2, 2}, [3]float64{1, 2, 3})
@@ -501,7 +673,7 @@ func TestLoopRoleWireValuesUnchanged(t *testing.T) {
 	}
 }
 
-// belowRings keeps the faces OPPOSING p.N. Every other silhouette test uses a
+// silhouetteRings keeps the faces OPPOSING p.N. Every other silhouette test uses a
 // closed box, where the front-facing and back-facing parity boundaries are
 // identical, so inverting the predicate is invisible to them. An open mesh is
 // the only input that can tell the two sets apart.
@@ -513,7 +685,7 @@ func TestBelowRingsKeepsOnlyOpposingFaces(t *testing.T) {
 		{0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1},
 	}
 	tris := []uint32{0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7}
-	rings := belowRings(w, tris, HorizontalPlane(0))
+	rings := silhouetteRings(w, tris, HorizontalPlane(0))
 	if len(rings) != 1 {
 		t.Fatalf("want 1 silhouette ring, got %d: %v", len(rings), rings)
 	}
