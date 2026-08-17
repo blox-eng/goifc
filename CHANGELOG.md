@@ -3,6 +3,64 @@
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on
 minor versions, as the README states. Releases before v0.2.0 predate this file.
 
+## Unreleased
+
+### Added
+
+- `geometry.Facing` — an element's outward direction in world space: the
+  area-weighted dominant normal of its vertical faces, signed to point at the
+  exposed side, with an `Exposure` and a `Confidence`.
+- `geometry.Exposure` and its three values — `ExposureExterior` (the side
+  reaches open air outside the building, and the only exposure that belongs on
+  a compass elevation), `ExposureEnclosed` (a void the building encloses with
+  nothing overhead: a courtyard, a lightwell — weather-exposed but on no
+  elevation), `ExposureInterior` (no exposed side; an internal partition).
+- `geometry.FacingOf(e)` — the facing of one element, or `ok == false` when it
+  has no dominant vertical face family (a column, a slab, a degenerate mesh).
+  With no neighbours both sides reach open air, so an element classified alone
+  gets its axis, `ExposureExterior`, an ARBITRARY sign and low confidence.
+- `geometry.BuildFacings(elems)` — classifies every element against the others,
+  keyed by `GlobalID`. This is what lets the sign be decided at all; prefer it
+  to `FacingOf` whenever the neighbours are available. Elements with no facade
+  are absent from the map rather than present with a zero value.
+- `(geometry.Facing).Azimuth(trueNorth)` — the compass bearing in degrees
+  clockwise from `trueNorth`, in `[0, 360)`. Pass `model.TrueNorth(file)` for a
+  real bearing, or `{0,1}` for a model-space one.
+- `geometry.LayerAxis(e, ls)` — the world direction a layer stack runs along,
+  from the first declared layer toward the last. Compare it against a
+  `Facing.Normal` to learn whether the declared order already runs from the
+  exposed face inward: a negative dot product means the first declared layer is
+  the outermost. The library reports the direction; reordering is the
+  consumer's decision.
+- `model.TrueNorth(f)` — the model's north direction in world XY, unit length,
+  off `IfcGeometricRepresentationContext` attribute 5. Absent, malformed and
+  zero-length norths all yield `(0,1)`.
+
+### Known limitations
+
+- **Grid resolution is the failure mode.** The outward sign comes from a
+  horizontal-slice occupancy grid at a fixed 10 cm cell, so a gap narrower than
+  one cell seals and an element thinner than one cell vanishes. Rasterization
+  is conservative — a cell the cross-section touches counts as occupied — so
+  the failure leans toward sealing, which reads as `ExposureInterior` at low
+  confidence rather than leaking open air into a room. A slice taken through a
+  fully glazed storey with no modelled mullions finds no occupancy to enclose
+  it and reports its walls freestanding, again at low confidence. Threshold on
+  `Confidence`: below ~0.5 the sign is a guess, and in a quantity context a
+  wrong bin is a wrong invoice.
+- **`Facing.FaceArea` is the GROSS facade area of one side.** It is measured
+  against the resolved `Normal` after the sign is known, so summing it over the
+  elements binned to one elevation gives that elevation's area. Openings are
+  not subtracted — for net quantities use `NetArea`. It is the only place this
+  package reads triangle winding: a mesh wound inward throughout reports the
+  element's inner face, equal on a plain wall and smaller on a stepped one.
+- The sign is probed outward from the element's bounding-box **centre**, so an
+  L-shaped or strongly curved element whose centre falls outside its own body
+  degrades to low confidence.
+- `BuildFacings` costs O(bands × elements), where a band is a distinct quantized
+  element mid-height rather than a storey. Peak memory is one grid regardless of
+  the band count, but the time is not bounded that way.
+
 ## v0.2.0 — 2026-08-13
 
 ### Breaking

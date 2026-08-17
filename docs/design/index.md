@@ -8,3 +8,6 @@ current and the doc is history.
 - [Section geometry on an arbitrary plane](2026-08-13-arbitrary-section-plane.md)
   — generalising the horizontal-only footprint cut to any plane (issue #3,
   shipped in v0.2.0).
+- [Outward-facing classification](2026-08-15-outward-facing-classification.md)
+  — deciding which way a building element faces, and which of its two sides is
+  the exposed one (issue #4).

@@ -29,24 +29,14 @@ func distv(a, b v3) float64 { d := subv(a, b); return math.Sqrt(dotv(d, d)) }
 
 // sideArea sums the ACTUAL areas of triangles whose unit normal points toward
 // +axis (dot > 0.01, matching ifcopenshell get_side_area at angle 90°).
+//
+// The cardinal-axis case of sideAreaDir, which the facing classifier needs off
+// the axes as well. One implementation, so the two can never drift on the
+// tolerance or on which triangles they reject.
 func sideArea(w []v3, tris []uint32, axis int) float64 {
-	nv := uint32(len(w))
-	var total float64
-	for t := 0; t+2 < len(tris); t += 3 {
-		i0, i1, i2 := tris[t], tris[t+1], tris[t+2]
-		if i0 >= nv || i1 >= nv || i2 >= nv {
-			continue
-		}
-		n := crossv(subv(w[i1], w[i0]), subv(w[i2], w[i0]))
-		l := math.Sqrt(dotv(n, n))
-		if l == 0 {
-			continue
-		}
-		if n[axis]/l > 0.01 {
-			total += 0.5 * l
-		}
-	}
-	return total
+	var dir v3
+	dir[axis] = 1
+	return sideAreaDir(w, tris, dir)
 }
 
 func maxSideArea(w []v3, tris []uint32) float64 {

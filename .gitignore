@@ -8,3 +8,7 @@ coverage.html
 
 # Python venv holding the pinned docs toolchain, created by `make docs-deps`.
 /.venv-docs/
+
+# Agent scratch space. Tracked here rather than in .git/info/exclude, which is
+# per-clone and so silently stops working for everyone else.
+.superpowers/
