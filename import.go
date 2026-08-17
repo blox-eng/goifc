@@ -84,6 +84,18 @@ func BuildImport(f *step.File) (*ImportModel, error) {
 // GLB all read them. Taking the assembly as an argument is what lets one caller
 // have both without paying for the tessellation twice.
 //
+// f must be the same *step.File the assembly was built from. Below this point
+// everything joins physical elements to spatial containers and geometry by
+// bare ExpressID (forwardParentMap, f.ByID, Scene.NetAreas), and ExpressIDs
+// are small sequential integers that restart per file — a mismatched pair
+// would very plausibly collide rather than miss, handing an element another
+// model's parent, material or opening data with no error at all. An Assembled
+// stamped by [Assemble] is checked by pointer identity against f, on purpose:
+// a re-parse of the same bytes produces an equal-but-distinct *step.File, and
+// that is exactly the mismatch this guards against. An Assembled built some
+// other way carries no stamp and is let through unchecked — that caller
+// assembled Result and Scene itself and already owns the pairing.
+//
 //	parent map  = IfcRelAggregates ∪ IfcRelContainedInSpatialStructure, FORWARD
 //	              (iterate each rel's Related* → RelatingObject/Structure). NEVER
 //	              per-node model.Container — Container(storey) self-parents (a storey
@@ -98,6 +110,9 @@ func BuildImportFrom(f *step.File, a *Assembled) (*ImportModel, error) {
 	}
 	if a == nil || a.Result == nil || a.Scene == nil {
 		return nil, fmt.Errorf("ifc: nil assembly")
+	}
+	if a.file != nil && a.file != f {
+		return nil, fmt.Errorf("ifc: assembly was built from a different step file")
 	}
 
 	// Combined node set: spatial (with authored Qto) + physical (Qto tier-back-filled).

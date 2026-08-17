@@ -311,3 +311,32 @@ func TestBuildImportFrom_RejectsNilAssembly(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildImportFrom_RejectsMismatchedFile(t *testing.T) {
+	f1 := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
+	f2 := parseFixture(t, "testdata/two_storey_spanning.ifc")
+
+	a, err := Assemble(f1)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+	if _, err := BuildImportFrom(f2, a); err == nil {
+		t.Fatalf("expected an error for an assembly built from a different file")
+	}
+}
+
+func TestBuildImportFrom_AllowsHandBuiltAssembly(t *testing.T) {
+	f := parseFixture(t, "model/testdata/synthetic/spatial_full.ifc")
+	a, err := Assemble(f)
+	if err != nil {
+		t.Fatalf("Assemble: %v", err)
+	}
+
+	// A hand-built Assembled carries no recorded provenance: the caller who
+	// constructed it directly (rather than through Assemble) owns the
+	// pairing, so BuildImportFrom must not reject it.
+	handBuilt := &Assembled{Result: a.Result, Scene: a.Scene}
+	if _, err := BuildImportFrom(f, handBuilt); err != nil {
+		t.Fatalf("BuildImportFrom with an unstamped assembly: %v", err)
+	}
+}

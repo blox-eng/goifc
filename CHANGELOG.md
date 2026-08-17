@@ -5,6 +5,15 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Changed
+
+- `Assembled` gained an unexported field recording the `*step.File` it was
+  built from, so `BuildImportFrom` can reject an assembly paired with a
+  different file rather than silently joining data across models. **Breaking
+  for unkeyed composite literals** — `Assembled{r, s}` no longer compiles;
+  callers using keyed fields (`Assembled{Result: r, Scene: s}`) are
+  unaffected.
+
 ### Added
 
 - `geometry.Facing` — an element's outward direction in world space: the
