@@ -3,6 +3,7 @@ package geometry
 import (
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
@@ -18,10 +19,6 @@ type NetArea struct {
 	Reason  string // when !Trusted, why (short, human-readable)
 }
 
-// overlapEpsilon lets two openings' bounding rectangles share an edge without
-// counting as an overlap (edge-touching mullions are not an overlap).
-const overlapEpsilon = 1e-6
-
 // overSubtractFraction is the share of gross above which the deduction is
 // distrusted (openings claiming ≥95% of the wall face are treated as suspect).
 const overSubtractFraction = 0.95
@@ -29,17 +26,24 @@ const overSubtractFraction = 0.95
 // NetAreas returns per-host (keyed by GlobalID) reconciliation for every element
 // that has IfcRelVoidsElement openings. Hosts with NO voids are ABSENT from the
 // map. For each voided host it measures the gross max-side-area on the host's
-// winning projection axis, then deducts each opening's footprint measured on
-// that SAME axis (so wall and openings share a plane and bias cancels). Net is
-// emitted only when every opening passes every trust gate (see below); an
-// untrusted host carries gross + a reason and an absent (nil) Net.
+// winning projection axis, then deducts the UNION of the openings' footprints
+// measured on that SAME axis (so wall and openings share a plane and bias
+// cancels). Net is emitted only when every opening passes every trust gate (see
+// below); an untrusted host carries gross + a reason and an absent (nil) Net.
+//
+// Openings that overlap in the host plane are handled, not refused: the
+// deduction is a union, so each covered square metre is deducted exactly once
+// however many voids claim it.
 //
 // EXACTNESS ENVELOPE: Net is EXACT only for a host whose elevational face is
-// axis-aligned. Gross is a summed-face sideArea (rotation-invariant), while the
-// opening deduction is an axis-aligned bounding SPAN — the two coincide only for
-// axis-aligned rectangular geometry. A genuinely tilted host gets an APPROXIMATE
-// net by design (the opening's axis-aligned span over-/under-counts its true
-// in-plane footprint); consumers must not read Net as exact off-axis.
+// axis-aligned AND whose openings project to rectangles. Gross is a summed-face
+// sideArea (rotation-invariant), while each opening's footprint is an
+// axis-aligned bounding SPAN — the two coincide only for axis-aligned
+// rectangular geometry. A tilted host, or an opening whose true profile is not
+// a rectangle (an arch, an L-shaped void), gets an APPROXIMATE net by design:
+// the bounding span over-counts the void, so Net is an UNDER-estimate. Taking
+// the union removes double-counting between openings; it does not tighten any
+// single opening's span. Consumers must not read Net as exact off-axis.
 //
 // SIDE EFFECT: this appends the aggregated orphan-fill warning to s.Warnings.
 // Intended to be called ONCE per Scene — calling it repeatedly duplicates that
@@ -88,12 +92,13 @@ func (s *Scene) NetAreas(f *step.File, r *model.Result) map[string]NetArea {
 	return out
 }
 
-// reconcileHost applies the four trust gates for one voided host and returns its
+// reconcileHost applies the three trust gates for one voided host and returns its
 // NetArea. All-or-nothing: the first gate any opening trips makes the whole host
-// untrusted (Net nil, OpeningDeduction 0). Overlap and footprint are computed in
-// world METERS — an opening's LocalPlacement translation is in RAW file units, so
-// it MUST be meter-scaled (scaleTransformTranslation) before the overlap check,
-// or overlap detection would compare millimetre positions against metre sizes.
+// untrusted (Net nil, OpeningDeduction 0). Footprints are computed in world
+// METERS — an opening's LocalPlacement translation is in RAW file units, so it
+// MUST be meter-scaled (scaleTransformTranslation) before the union, or a
+// millimetre file's openings land ~1000× away from the host and the union
+// silently degrades to a plain Σ (guarded by TestNetAreas_MillimetreOverlap).
 func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis int, unitScale float64) NetArea {
 	na := NetArea{Gross: gross}
 	if gross <= 0 {
@@ -104,9 +109,7 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	}
 	u, v := inPlaneAxes(axis)
 
-	type rect struct{ uMin, uMax, vMin, vMax float64 }
 	rects := make([]rect, 0, len(openings))
-	var deduction float64
 	for _, op := range openings {
 		ov, _, src := elementMesh(f, op.ID(), unitScale)
 		if src == SourceOBB {
@@ -120,20 +123,15 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 		ow := worldPoints(ov, xf)
 		uMin, uMax, vMin, vMax := spanRect(ow, u, v)
 		rects = append(rects, rect{uMin, uMax, vMin, vMax})
-		deduction += (uMax - uMin) * (vMax - vMin)
 	}
 
-	// Overlap gate: two openings whose 2D bounding rectangles intersect would be
-	// double-counted by a plain Σ footprint, so the deduction is untrustworthy.
-	for i := 0; i < len(rects); i++ {
-		for j := i + 1; j < len(rects); j++ {
-			if intervalsOverlap(rects[i].uMin, rects[i].uMax, rects[j].uMin, rects[j].uMax) &&
-				intervalsOverlap(rects[i].vMin, rects[i].vMax, rects[j].vMin, rects[j].vMax) {
-				na.Reason = "openings overlap"
-				return na
-			}
-		}
-	}
+	// UNION, not Σ: overlapping voids (a mullioned assembly, or a door and its
+	// transom exported as two voids) have a perfectly well-defined combined
+	// footprint. Summing rectangles double-counts the intersection, which is a
+	// limitation of the sum rather than of the model — so the deduction is the
+	// exact area covered by the union, and each covered square metre is deducted
+	// once no matter how many openings claim it.
+	deduction := unionArea(rects)
 
 	// Over-subtraction gate: openings claiming ≥95% of gross are implausible
 	// (bad geometry or a mostly-glass curtain wall) — don't emit a near-zero net.
@@ -173,8 +171,68 @@ func spanRect(pts []v3, u, v int) (uMin, uMax, vMin, vMax float64) {
 	return uMin, uMax, vMin, vMax
 }
 
-// intervalsOverlap reports whether [aMin,aMax] and [bMin,bMax] overlap by more
-// than overlapEpsilon (edge-touching is not an overlap).
-func intervalsOverlap(aMin, aMax, bMin, bMax float64) bool {
-	return aMin < bMax-overlapEpsilon && bMin < aMax-overlapEpsilon
+// rect is one opening's axis-aligned footprint in the host's in-plane (u,v)
+// coordinates, in world meters.
+type rect struct{ uMin, uMax, vMin, vMax float64 }
+
+// unionArea returns the EXACT area covered by the union of axis-aligned
+// rectangles — each covered point counted once however many rects contain it.
+//
+// Vertical-slab sweep: the u coordinates of every rect edge cut the plane into
+// slabs within which the set of covering rects cannot change, so each slab's
+// contribution is its width times the union LENGTH of the v-intervals covering
+// it. Exact (no sampling): a slab is classified by its midpoint, which is
+// strictly inside every rect that spans it and strictly outside every rect that
+// does not, because no rect edge falls in a slab's interior by construction.
+//
+// O(n² log n) for n rects. n is the opening count of ONE host, so it is small.
+func unionArea(rects []rect) float64 {
+	if len(rects) == 0 {
+		return 0
+	}
+	us := make([]float64, 0, 2*len(rects))
+	for _, r := range rects {
+		us = append(us, r.uMin, r.uMax)
+	}
+	sort.Float64s(us)
+
+	var total float64
+	spans := make([][2]float64, 0, len(rects))
+	for i := 0; i+1 < len(us); i++ {
+		width := us[i+1] - us[i]
+		if width <= 0 {
+			continue // duplicate coordinate: zero-width slab
+		}
+		mid := us[i] + width/2
+		spans = spans[:0]
+		for _, r := range rects {
+			if r.uMin < mid && mid < r.uMax {
+				spans = append(spans, [2]float64{r.vMin, r.vMax})
+			}
+		}
+		total += width * unionLength(spans)
+	}
+	return total
+}
+
+// unionLength returns the total length covered by the union of 1D intervals.
+// It sorts in place, so the caller must not rely on spans' order afterwards.
+func unionLength(spans [][2]float64) float64 {
+	if len(spans) == 0 {
+		return 0
+	}
+	sort.Slice(spans, func(a, b int) bool { return spans[a][0] < spans[b][0] })
+	var total float64
+	lo, hi := spans[0][0], spans[0][1]
+	for _, s := range spans[1:] {
+		if s[0] > hi { // gap: bank the run just closed and open a new one
+			total += hi - lo
+			lo, hi = s[0], s[1]
+			continue
+		}
+		if s[1] > hi {
+			hi = s[1]
+		}
+	}
+	return total + (hi - lo)
 }
