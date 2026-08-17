@@ -163,6 +163,62 @@ func TestCanonAxisFoldsNearAntipodes(t *testing.T) {
 	}
 }
 
+// angledQuad returns a 1x1 vertical quad anchored at x0 whose normal is rotated
+// thetaDeg about Z.
+func angledQuad(x0, thetaDeg float64) ([]v3, []uint32) {
+	th := thetaDeg * math.Pi / 180
+	tx, ty := math.Cos(th), math.Sin(th)
+	w := []v3{
+		{x0, 0, 0}, {x0 + tx, ty, 0}, {x0 + tx, ty, 1}, {x0, 0, 1},
+	}
+	return w, []uint32{0, 1, 2, 0, 2, 3}
+}
+
+func TestDominantAxisIndependentOfTriangleOrder(t *testing.T) {
+	// Three equal-area faces at 0°, 4° and 8°, against a 5° merge tolerance —
+	// a chain finer than the tolerance is wide, as a curved wall or a faceted
+	// column produces. Greedy first-match bucketing chains them differently
+	// depending on which arrives first: 0,4,8 leaves two buckets and a 2:1
+	// split, while 4,0,8 merges all three. That moves share across the
+	// dominance floor, so the same geometry can return a different normal, or
+	// decline, purely on triangle order.
+	type quad struct {
+		w    []v3
+		tris []uint32
+	}
+	var qs []quad
+	for i, a := range []float64{0, 4, 8} {
+		w, tr := angledQuad(float64(i)*5, a)
+		qs = append(qs, quad{w, tr})
+	}
+	assemble := func(order []int) ([]v3, []uint32) {
+		var w []v3
+		var tris []uint32
+		for _, k := range order {
+			off := uint32(len(w))
+			w = append(w, qs[k].w...)
+			for _, ix := range qs[k].tris {
+				tris = append(tris, ix+off)
+			}
+		}
+		return w, tris
+	}
+
+	orders := [][]int{{0, 1, 2}, {1, 0, 2}, {2, 1, 0}, {0, 2, 1}, {1, 2, 0}, {2, 0, 1}}
+	w0, t0 := assemble(orders[0])
+	wantDir, wantArea, wantShare, wantOK := dominantAxis(w0, t0)
+
+	for _, o := range orders[1:] {
+		w, tr := assemble(o)
+		dir, area, share, ok := dominantAxis(w, tr)
+		if ok != wantOK || dir != wantDir ||
+			math.Abs(area-wantArea) > 1e-9 || math.Abs(share-wantShare) > 1e-9 {
+			t.Fatalf("order %v gave (%v, area %v, share %v, ok %v), want (%v, %v, %v, %v)",
+				o, dir, area, share, ok, wantDir, wantArea, wantShare, wantOK)
+		}
+	}
+}
+
 func TestDominantAxisEmptyMesh(t *testing.T) {
 	if _, _, _, ok := dominantAxis(nil, nil); ok {
 		t.Fatal("dominantAxis accepted an empty mesh")

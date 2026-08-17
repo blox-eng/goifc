@@ -1,6 +1,9 @@
 package geometry
 
-import "math"
+import (
+	"math"
+	"sort"
+)
 
 // verticalCosLimit excludes roof and floor faces from the axis vote: a face
 // whose normal is within 15° of vertical (|n.z| > cos 75°) is horizontal
@@ -113,7 +116,7 @@ func canonAxis(n v3) v3 {
 // ok=false means the element has no facade — no vertical faces at all, or no
 // axis reaching axisDominanceMin.
 func dominantAxis(w []v3, tris []uint32) (dir v3, area, share float64, ok bool) {
-	var buckets []axisBucket
+	var votes []axisBucket
 	var total float64
 
 	for i := 0; i+2 < len(tris); i += 3 {
@@ -136,25 +139,51 @@ func dominantAxis(w []v3, tris []uint32) (dir v3, area, share float64, ok bool) 
 		}
 		triArea := l / 2
 		total += triArea
+		votes = append(votes, axisBucket{dir: canonAxis(u), area: triArea})
+	}
 
-		cu := canonAxis(u)
+	if total == 0 || len(votes) == 0 {
+		return v3{}, 0, 0, false
+	}
+
+	// Sort the votes before bucketing them. Merging is greedy — a vote joins the
+	// FIRST bucket within axisMergeCos — so where normals form a CHAIN finer
+	// than the tolerance is wide (a curved wall, a faceted column: 0°, 4°, 8°
+	// against a 5° tolerance) the bucket boundaries depend on which triangle
+	// arrived first. Arriving 0,4,8 leaves two buckets and a 2:1 split; arriving
+	// 4,0,8 merges all three into one. That moves share across
+	// axisDominanceMin, so the same physical geometry could return a different
+	// normal, or decline outright, purely on triangle order.
+	//
+	// Sorting on the canonical direction makes bucketing a function of the SET
+	// of normals alone. It does not make the chain unambiguous — no
+	// single-pass clustering can — it makes the answer reproducible.
+	sort.Slice(votes, func(i, j int) bool {
+		a, b := votes[i].dir, votes[j].dir
+		if a[0] != b[0] {
+			return a[0] < b[0]
+		}
+		if a[1] != b[1] {
+			return a[1] < b[1]
+		}
+		return a[2] < b[2]
+	})
+
+	var buckets []axisBucket
+	// Iterate the slice, never a map: bucket identity must not depend on
+	// iteration order or the returned normal stops being reproducible.
+	for _, v := range votes {
 		merged := false
-		// Iterate the slice, never a map: bucket identity must not depend on
-		// iteration order or the returned normal stops being reproducible.
 		for j := range buckets {
-			if dotv(buckets[j].dir, cu) >= axisMergeCos {
-				buckets[j].area += triArea
+			if dotv(buckets[j].dir, v.dir) >= axisMergeCos {
+				buckets[j].area += v.area
 				merged = true
 				break
 			}
 		}
 		if !merged {
-			buckets = append(buckets, axisBucket{dir: cu, area: triArea})
+			buckets = append(buckets, v)
 		}
-	}
-
-	if total == 0 || len(buckets) == 0 {
-		return v3{}, 0, 0, false
 	}
 
 	best := 0
