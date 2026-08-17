@@ -55,9 +55,11 @@ func TestNetAreas_RectWindow(t *testing.T) {
 	closeAbs(t, "Net", na.Net, 11.0, 1e-6)
 }
 
-// TestNetAreas_ArchWindow: a polygonal (arched) void is deducted by its
-// axis-aligned bounding span (1.0), NOT its true curved area (~0.85) — assert
-// with tolerance, not an exact curve area.
+// TestNetAreas_ArchWindow: a polygonal (arched) void is deducted by its TRUE
+// projected profile, not by its axis-aligned bounding span. The pentagon
+// (-0.5,-0.5) (0.5,-0.5) (0.5,0.2) (0,0.5) (-0.5,0.2) has shoelace area 0.85,
+// while its bounding span is 1.0 — so 1.0 means the span approximation is back
+// and every non-rectangular void is over-deducted.
 func TestNetAreas_ArchWindow(t *testing.T) {
 	_, m := buildNetAreas(t, "testdata/synthetic/netarea_arch_window.ifc")
 	na := onlyNet(t, m)
@@ -65,8 +67,8 @@ func TestNetAreas_ArchWindow(t *testing.T) {
 		t.Fatalf("want Trusted, got reason %q", na.Reason)
 	}
 	closeAbs(t, "Gross", &na.Gross, 12.0, 1e-6)
-	closeAbs(t, "OpeningDeduction", &na.OpeningDeduction, 1.0, 1e-3) // bounding span, not 0.85
-	closeAbs(t, "Net", na.Net, 11.0, 1e-3)
+	closeAbs(t, "OpeningDeduction", &na.OpeningDeduction, 0.85, 1e-6)
+	closeAbs(t, "Net", na.Net, 11.15, 1e-6)
 }
 
 // TestNetAreas_OBBOpening: an opening whose geometry resolves to the OBB
@@ -175,6 +177,23 @@ func TestNetAreas_SingleOversize(t *testing.T) {
 	assertUntrusted(t, na, "95%")
 }
 
+// rect is a test-only axis-aligned box, split into the two CCW triangles the
+// union engine actually consumes. Rectangles remain the clearest way to state
+// these configurations even though the engine is general.
+type rect struct{ uMin, uMax, vMin, vMax float64 }
+
+func rectTris(dst [][3][2]float64, rs ...rect) [][3][2]float64 {
+	for _, r := range rs {
+		a := [2]float64{r.uMin, r.vMin}
+		b := [2]float64{r.uMax, r.vMin}
+		c := [2]float64{r.uMax, r.vMax}
+		d := [2]float64{r.uMin, r.vMax}
+		dst = appendProjected(dst, a, b, c)
+		dst = appendProjected(dst, a, c, d)
+	}
+	return dst
+}
+
 // TestUnionArea covers the geometric configurations the fixture-driven tests
 // above cannot reach individually: containment, coincidence, edge contact, and
 // chains where a naive pairwise correction would double-subtract.
@@ -206,8 +225,8 @@ func TestUnionArea(t *testing.T) {
 		{"degenerate zero height", []rect{{0, 5, 1, 1}}, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := unionArea(tc.rects); math.Abs(got-tc.want) > 1e-9 {
-				t.Errorf("unionArea = %v, want %v", got, tc.want)
+			if got := unionArea2D(rectTris(nil, tc.rects...)); math.Abs(got-tc.want) > 1e-9 {
+				t.Errorf("unionArea2D = %v, want %v", got, tc.want)
 			}
 		})
 	}
@@ -224,7 +243,7 @@ func TestUnionAreaNeverExceedsSum(t *testing.T) {
 		sum += a
 		largest = math.Max(largest, a)
 	}
-	got := unionArea(rects)
+	got := unionArea2D(rectTris(nil, rects...))
 	if got > sum {
 		t.Errorf("union %v exceeds Σ %v", got, sum)
 	}

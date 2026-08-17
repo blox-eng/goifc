@@ -63,18 +63,37 @@ func projectedFacing(w []v3, tris []uint32, p Plane) [][3][2]float64 {
 		if l == 0 || dotv(n, p.N)/l >= -1e-6 { // keep only faces opposing p.N
 			continue
 		}
-		tri := [3][2]float64{
-			projectUV(p, w[i0]), projectUV(p, w[i1]), projectUV(p, w[i2]),
-		}
-		if signedArea2(tri) == 0 {
-			continue // projects to a segment — covers no area
-		}
-		if signedArea2(tri) < 0 {
-			tri[1], tri[2] = tri[2], tri[1]
-		}
-		out = append(out, tri)
+		out = appendProjected(out, projectUV(p, w[i0]), projectUV(p, w[i1]), projectUV(p, w[i2]))
 	}
 	return out
+}
+
+// appendProjected adds a projected triangle oriented CCW, skipping one that
+// projects to zero area (seen edge-on): it covers nothing, and orienting it is
+// meaningless.
+func appendProjected(dst [][3][2]float64, a, b, c [2]float64) [][3][2]float64 {
+	tri := [3][2]float64{a, b, c}
+	switch s := signedArea2(tri); {
+	case s == 0:
+		return dst
+	case s < 0:
+		tri[1], tri[2] = tri[2], tri[1]
+	}
+	return append(dst, tri)
+}
+
+// unionArea2D returns the EXACT area covered by the union of the given
+// triangles, counting each covered point once however many triangles contain
+// it. It integrates the union boundary directly (Green's theorem) rather than
+// assembling rings: unionBoundary directs every edge with the covered side on
+// its LEFT, so an enclosed void's boundary runs the other way and subtracts
+// itself without needing to be identified as a hole.
+func unionArea2D(tris [][3][2]float64) float64 {
+	var twice float64
+	for _, s := range unionBoundary(tris) {
+		twice += s[0][0]*s[1][1] - s[1][0]*s[0][1]
+	}
+	return math.Abs(twice) / 2
 }
 
 // unionBoundary returns the sub-edges lying on the boundary of the union of the
