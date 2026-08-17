@@ -12,8 +12,13 @@ import (
 const paramEps = 1e-12
 
 // subEdge is one directed segment of a projected triangle's CCW boundary, so
-// the triangle that emitted it always lies to its LEFT.
-type subEdge struct{ a, b [2]float64 }
+// the triangle that emitted it always lies to its LEFT. tri is the index of
+// that triangle, carried through splitting so the coverage test can tell a
+// triangle's own boundary from a triangle genuinely covering the segment.
+type subEdge struct {
+	a, b [2]float64
+	tri  int
+}
 
 // silhouetteRings returns the projected-polygon UNION of the faces opposing
 // p.N, in p's UV coordinates. Unlike the parity-boundary approach it replaces,
@@ -37,8 +42,10 @@ func silhouetteRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
 	if len(facing) == 0 {
 		return nil
 	}
-	segs := unionBoundary(facing)
-	if len(segs) == 0 {
+	// An outline the boundary walk could not close is not returned at all: a
+	// partial ring set would render as a torn drawing and measure as nonsense.
+	segs, ok := unionBoundary(facing)
+	if !ok || len(segs) == 0 {
 		return nil
 	}
 	// Each boundary sub-edge is emitted exactly once, so no parity cancellation:
@@ -69,9 +76,27 @@ func projectedFacing(w []v3, tris []uint32, p Plane) [][3][2]float64 {
 }
 
 // appendProjected adds a projected triangle oriented CCW, skipping one that
-// projects to zero area (seen edge-on): it covers nothing, and orienting it is
-// meaningless.
+// covers nothing: a triangle seen edge-on, or one too small for the weld
+// quantum to represent.
+//
+// The weld test is not a size filter, it is a CONSISTENCY requirement. The
+// boundary is stitched on vertices welded at 1e-5 m, so a triangle whose
+// corners do not weld to three DISTINCT points is a segment there, not a
+// triangle. Admitted anyway, its edges weld into phantom directed pairs that
+// cancel the boundary edges of the real triangles beside it, and the outline
+// opens — after which the area integral is unbounded garbage rather than a
+// slightly-off number. Tessellators emit exactly this: a real 29 MB ArchiCAD
+// IFC2X3 export carries slivers with corners 2e-7 m apart, a fiftieth of the
+// quantum, alongside the genuine faces they belong to.
+//
+// The area given up is bounded by the quantum times the triangle's longest
+// edge, which is below the resolution at which the boundary can be stated at
+// all.
 func appendProjected(dst [][3][2]float64, a, b, c [2]float64) [][3][2]float64 {
+	ka, kb, kc := weldUV(a), weldUV(b), weldUV(c)
+	if ka == kb || kb == kc || ka == kc {
+		return dst
+	}
 	tri := [3][2]float64{a, b, c}
 	switch s := signedArea2(tri); {
 	case s == 0:
@@ -82,18 +107,114 @@ func appendProjected(dst [][3][2]float64, a, b, c [2]float64) [][3][2]float64 {
 	return append(dst, tri)
 }
 
+// silhouetteAreaAxis returns the area of the projected-polygon UNION of the
+// faces pointing toward +axis, measured on the plane perpendicular to axis
+// (0 = YZ, 1 = XZ, 2 = XY) — the same face family and the same plane as
+// sideArea, counted once per covered square metre instead of once per face.
+//
+// The two agree on any solid whose faces do not hide one another along the
+// axis, which is every prismatic wall. They diverge exactly where a Σ is wrong:
+// a pilaster, a projecting bay or a brise-soleil puts one outward face in front
+// of another, and only the union reports the area you can actually draw.
+//
+// The plane's in-plane basis is left to PlaneFromNormal: an area is invariant
+// under rotation within the plane, so the choice cannot reach the result.
+func silhouetteAreaAxis(w []v3, tris []uint32, axis int) (float64, bool) {
+	// projectedFacing keeps the faces OPPOSING the normal, so aim it inward to
+	// select the same outward family sideArea sums.
+	var inward [3]float64
+	inward[axis] = -1
+	p, ok := PlaneFromNormal([3]float64{}, inward)
+	if !ok {
+		return 0, false
+	}
+	return unionArea2D(projectedFacing(w, tris, p))
+}
+
+// maxSilhouetteAxis is maxSideAreaAxis measured as a union: the largest
+// projected silhouette over the three world axes, and the DROPPED coordinate
+// index of that winning projection.
+//
+// The axis is voted on by union area too, not just measured that way. A Σ vote
+// is swayed by depth — a stack of fins reads as five faces along the axis they
+// hide one another on — and would hand back a plane that shows less than
+// another one does.
+//
+// Ties break by lowest axis index, deterministically, so a host and its
+// openings measured separately always agree on the winning plane.
+// ok is false when an axis could not be measured AND could still have been the
+// winner. A refused axis is only ignorable when something already bounds it
+// below the best axis that did measure — sideArea is exactly that bound, since
+// a union can never exceed the Σ of the same faces. Without that, refusing is
+// the honest answer: reporting the best of the axes that happened to work would
+// silently under-report a host whose true winner is the one that failed.
+func maxSilhouetteAxis(w []v3, tris []uint32) (area float64, axis int, ok bool) {
+	var refused [3]bool
+	have := false
+	for i := 0; i < 3; i++ {
+		a, measured := silhouetteAreaAxis(w, tris, i)
+		if !measured {
+			refused[i] = true
+			continue
+		}
+		if !have || a > area { // ties keep the lowest axis index
+			area, axis, have = a, i, true
+		}
+	}
+	if !have {
+		return 0, 0, false
+	}
+	for i := 0; i < 3; i++ {
+		if refused[i] && sideArea(w, tris, i) > area {
+			return 0, 0, false
+		}
+	}
+	return area, axis, true
+}
+
 // unionArea2D returns the EXACT area covered by the union of the given
 // triangles, counting each covered point once however many triangles contain
 // it. It integrates the union boundary directly (Green's theorem) rather than
 // assembling rings: unionBoundary directs every edge with the covered side on
 // its LEFT, so an enclosed void's boundary runs the other way and subtracts
 // itself without needing to be identified as a hole.
-func unionArea2D(tris [][3][2]float64) float64 {
+// ok is false when the boundary did not close, in which case there is NO area
+// to report — see unionBoundary. A caller must not substitute zero: zero is a
+// measurement, and this is the absence of one.
+func unionArea2D(tris [][3][2]float64) (area float64, ok bool) {
+	segs, ok := unionBoundary(tris)
+	if !ok {
+		return 0, false
+	}
 	var twice float64
-	for _, s := range unionBoundary(tris) {
+	for _, s := range segs {
 		twice += s[0][0]*s[1][1] - s[1][0]*s[0][1]
 	}
-	return math.Abs(twice) / 2
+	return math.Abs(twice) / 2, true
+}
+
+// boundaryCloses reports whether every vertex of the directed boundary has as
+// many segments leaving it as arriving, which is what lets the segments
+// decompose into closed rings.
+//
+// This check is load-bearing rather than defensive. The area integral below is
+// taken about the WORLD ORIGIN, so on an unclosed boundary it does not return a
+// slightly wrong number — it returns the residual multiplied by the model's
+// distance from the origin. A 0.58 m² facade panel 47 m out reports 30.69 m²,
+// and every consumer downstream believes it. Refusing is the only honest answer
+// available until the boundary walk is exact on real coordinates.
+func boundaryCloses(segs [][2][2]float64) bool {
+	degree := make(map[[2]int64]int, 2*len(segs))
+	for _, s := range segs {
+		degree[weldUV(s[0])]++
+		degree[weldUV(s[1])]--
+	}
+	for _, d := range degree {
+		if d != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // unionBoundary returns the sub-edges lying on the boundary of the union of the
@@ -103,19 +224,27 @@ func unionArea2D(tris [][3][2]float64) float64 {
 // at least one triangle and the other by none. Because every edge has already
 // been split at every intersection, no triangle boundary crosses a sub-edge's
 // interior, so each side is uniformly covered and one sample settles it.
-func unionBoundary(tris [][3][2]float64) [][2][2]float64 {
+//
+// That argument is exact in real arithmetic, and only there. The inputs are
+// float32-derived world coordinates carrying tessellation noise, and the
+// endpoints are welded at 1e-5 m, so on real geometry the classification can
+// disagree with itself and leave the boundary open. ok reports whether it
+// closed; when it did not, no segments are returned, because a partial boundary
+// is worse than none — see boundaryCloses.
+func unionBoundary(tris [][3][2]float64) ([][2][2]float64, bool) {
 	edges := make([]subEdge, 0, 3*len(tris))
-	for _, t := range tris {
+	for i, t := range tris {
 		edges = append(edges,
-			subEdge{t[0], t[1]}, subEdge{t[1], t[2]}, subEdge{t[2], t[0]})
+			subEdge{t[0], t[1], i}, subEdge{t[1], t[2], i}, subEdge{t[2], t[0], i})
 	}
 	split := splitAtIntersections(edges)
 
 	// Group coincident sub-edges, counting how many run each way. A triangle
 	// covers the side its CCW edge faces, so direction IS the coverage record.
 	type tally struct {
-		a, b             [2]float64 // canonical (lexicographically ordered)
-		along, against   int
+		a, b           [2]float64 // canonical (lexicographically ordered)
+		along, against int
+		owners         map[int]bool // triangles with an edge ALONG this sub-edge
 	}
 	groups := map[[2][2]int64]*tally{}
 	for _, e := range split {
@@ -127,9 +256,10 @@ func unionBoundary(tris [][3][2]float64) [][2][2]float64 {
 		k := [2][2]int64{weldUV(a), weldUV(b)}
 		g := groups[k]
 		if g == nil {
-			g = &tally{a: a, b: b}
+			g = &tally{a: a, b: b, owners: map[int]bool{}}
 			groups[k] = g
 		}
+		g.owners[e.tri] = true
 		if along {
 			g.along++
 		} else {
@@ -161,9 +291,26 @@ func unionBoundary(tris [][3][2]float64) [][2][2]float64 {
 		g := groups[k]
 		mid := [2]float64{(g.a[0] + g.b[0]) / 2, (g.a[1] + g.b[1]) / 2}
 		// Triangles strictly containing the midpoint cover BOTH sides.
+		//
+		// A triangle whose own edge runs ALONG this sub-edge is excluded, and the
+		// exclusion is what makes the test robust rather than an optimization. Such
+		// a triangle has the midpoint ON its boundary, so strictlyInsideCCW must
+		// return false — but that answer rests on an orientation cross-product
+		// evaluating to an exact zero, which only happens when the midpoint is
+		// exactly representable on its own edge's line. At real world coordinates
+		// it is not: the sign becomes rounding noise, and on a sliver triangle all
+		// three signs can agree, so the triangle swallows its own boundary edge and
+		// the edge is dropped as interior. The union then leaks through the gap.
+		//
+		// Skipping them costs nothing, because along/against ALREADY records
+		// exactly which side each of them covers. And no OTHER triangle's boundary
+		// can pass through the midpoint — splitAtIntersections guarantees nothing
+		// crosses a sub-edge's interior — so for every triangle still tested the
+		// midpoint sits at a real distance from its boundary and the predicate is
+		// well conditioned.
 		var both int
 		triGrid.query(mid[0], mid[1], mid[0], mid[1], func(i int) {
-			if strictlyInsideCCW(mid, tris[i]) {
+			if !g.owners[i] && strictlyInsideCCW(mid, tris[i]) {
 				both++
 			}
 		})
@@ -177,7 +324,10 @@ func unionBoundary(tris [][3][2]float64) [][2][2]float64 {
 			out = append(out, [2][2]float64{g.b, g.a})
 		}
 	}
-	return out
+	if !boundaryCloses(out) {
+		return nil, false
+	}
+	return out, true
 }
 
 // splitAtIntersections cuts every edge at every point where another edge meets
@@ -211,7 +361,7 @@ func splitAtIntersections(edges []subEdge) []subEdge {
 			if ps[k+1]-ps[k] <= paramEps {
 				continue
 			}
-			out = append(out, subEdge{lerp2(e, ps[k]), lerp2(e, ps[k+1])})
+			out = append(out, subEdge{lerp2(e, ps[k]), lerp2(e, ps[k+1]), e.tri})
 		}
 	}
 	return out

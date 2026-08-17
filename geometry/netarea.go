@@ -9,8 +9,16 @@ import (
 
 // NetArea is one host element's gross→net elevational reconciliation.
 type NetArea struct {
-	Gross            float64  // host max-side-area, m² (== DerivedQuantities Area)
-	OpeningDeduction float64  // Σ opening footprint on the host axis, m² (0 when untrusted)
+	// Gross is the host's largest projected silhouette, m² — the outward faces
+	// on the winning axis counted once per covered square metre.
+	//
+	// This is NOT DerivedQuantities Area, which is the ifcopenshell-parity
+	// get_max_side_area Σ. The two agree on any host whose outward faces do not
+	// hide one another (every prismatic wall) and diverge on a pilaster,
+	// projecting bay or brise-soleil, where only the union is drawable. Parity
+	// is that quantity's job; exactness is this one's.
+	Gross            float64
+	OpeningDeduction float64  // union of the opening footprints on the host axis, m² (0 when untrusted)
 	Net              *float64 // net area, m² — populated ONLY when Trusted; nil otherwise.
 	// Never fabricated (matches the engine's pos()/nil-means-absent contract).
 	Trusted bool
@@ -23,11 +31,16 @@ const overSubtractFraction = 0.95
 
 // NetAreas returns per-host (keyed by GlobalID) reconciliation for every element
 // that has IfcRelVoidsElement openings. Hosts with NO voids are ABSENT from the
-// map. For each voided host it measures the gross max-side-area on the host's
+// map. For each voided host it measures the gross silhouette on the host's
 // winning projection axis, then deducts the UNION of the openings' footprints
 // measured on that SAME axis (so wall and openings share a plane and bias
 // cancels). Net is emitted only when every opening passes every trust gate (see
 // below); an untrusted host carries gross + a reason and an absent (nil) Net.
+//
+// Gross and the deduction are BOTH unions from the same engine on the same
+// plane, so Net is the exact net area of that projection — and equals the area
+// of the host's Element.SilhouetteOn outline minus its openings, which is what
+// makes the drawing and the number the same fact.
 //
 // Openings that overlap in the host plane are handled, not refused: the
 // deduction is a union, so each covered square metre is deducted exactly once
@@ -37,9 +50,9 @@ const overSubtractFraction = 0.95
 // winning plane — every triangle of the void's solid projected there and
 // unioned — so an arch, an L-shaped void or any other non-rectangular profile
 // is measured at its true projected area rather than at a bounding box around
-// it. Gross is measured on that same plane (a summed-face sideArea IS the
-// projected area), so gross and deduction share one projection and Net is the
-// exact net area OF THAT PROJECTION.
+// it. Gross is the host's silhouette on that same plane, so gross and deduction
+// share one projection AND one measure, and Net is the exact net area OF THAT
+// PROJECTION.
 //
 // What that does NOT mean: for a host whose face is tilted relative to the
 // winning axis, the projection foreshortens gross and deduction by the same
@@ -86,7 +99,13 @@ func (s *Scene) NetAreas(f *step.File, r *model.Result) map[string]NetArea {
 			continue
 		}
 		hw := worldPoints(host.Verts, host.Placement)
-		gross, axis := maxSideAreaAxis(hw, host.Tris)
+		gross, axis, ok := maxSilhouetteAxis(hw, host.Tris)
+		if !ok {
+			// No gross to reconcile against. Emitting the Σ instead would look like
+			// a measurement and net against a union deduction, mixing two measures.
+			out[el.GlobalID] = NetArea{Reason: "host outline did not close"}
+			continue
+		}
 		out[el.GlobalID] = reconcileHost(f, openings, gross, axis, r.UnitScale)
 	}
 	// One aggregated warning for filled-but-void-less openings (never per host —
@@ -110,7 +129,7 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	if gross <= 0 {
 		// A degenerate host has no elevational face to net against; the
 		// over-subtraction branch below would otherwise mislabel this "≥95%".
-		na.Reason = "degenerate host (no max-side area)"
+		na.Reason = "degenerate host (no silhouette area)"
 		return na
 	}
 	u, v := inPlaneAxes(axis)
@@ -149,7 +168,13 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	// limitation of the sum rather than of the model — so the deduction is the
 	// exact area covered by the union, and each covered square metre is deducted
 	// once no matter how many openings claim it.
-	deduction := unionArea2D(footprints)
+	deduction, ok := unionArea2D(footprints)
+	if !ok {
+		// Deducting a partial footprint would over-state Net by whatever the
+		// boundary lost, and nothing downstream could tell.
+		na.Reason = "opening outline did not close"
+		return na
+	}
 
 	// Over-subtraction gate: openings claiming ≥95% of gross are implausible
 	// (bad geometry or a mostly-glass curtain wall) — don't emit a near-zero net.
@@ -177,4 +202,3 @@ func inPlaneAxes(axis int) (u, v int) {
 		return 0, 1
 	}
 }
-
