@@ -251,3 +251,21 @@ func TestElevations_NoPlanesIsEmpty(t *testing.T) {
 		t.Fatalf("Elevations(nil planes) = %d views, want 0", len(got))
 	}
 }
+
+// TestElevations_AllInvalidPlanesStayIndexAligned: a slice of nothing but
+// invalid planes still yields one zero view per plane, in position — the
+// classification skip must not disturb index alignment.
+func TestElevations_AllInvalidPlanesStayIndexAligned(t *testing.T) {
+	s, f, r, _ := buildElevation(t, twoWalls, [3]float64{0, 1, 0})
+	planes := []Plane{{}, {}}
+	got := s.Elevations(f, r, planes)
+	if len(got) != len(planes) {
+		t.Fatalf("Elevations = %d views, want %d", len(got), len(planes))
+	}
+	for i, p := range planes {
+		want := ElevationView{Plane: p}
+		if !reflect.DeepEqual(got[i], want) {
+			t.Errorf("view %d = %+v, want zero view %+v", i, got[i], want)
+		}
+	}
+}

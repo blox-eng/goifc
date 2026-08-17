@@ -146,25 +146,30 @@ func (s *Scene) ElevationOn(f *step.File, r *model.Result, p Plane) ElevationVie
 
 // Elevations projects the scene onto each of planes and returns one view per
 // plane, in the same order. Identical to calling [Scene.ElevationOn] for each,
-// except that the scene is classified ONCE: BuildFacings rasterizes an
-// occupancy grid over every element per distinct mid-height band, and its
-// result does not depend on the plane. A building has four facades, so asking
-// one at a time repeats that work four times over.
+// except that the scene is classified AT MOST ONCE, on the first valid plane,
+// and shared across the rest: BuildFacings rasterizes an occupancy grid over
+// every element per distinct mid-height band, and its result does not depend
+// on the plane. A building has four facades, so asking one at a time repeats
+// that work four times over.
 //
 // An invalid plane yields its zero view in that position rather than being
-// dropped, so the result stays index-aligned with planes.
+// dropped, so the result stays index-aligned with planes, and — matching
+// [Scene.ElevationOn] — never triggers BuildFacings on its own.
 //
 // Deterministic: identical input yields identical views.
 func (s *Scene) Elevations(f *step.File, r *model.Result, planes []Plane) []ElevationView {
 	if len(planes) == 0 {
 		return nil
 	}
-	facings := BuildFacings(s.Elements)
+	var facings map[string]Facing
 	views := make([]ElevationView, len(planes))
 	for i, p := range planes {
 		if !p.Valid() {
 			views[i] = ElevationView{Plane: p}
 			continue
+		}
+		if facings == nil {
+			facings = BuildFacings(s.Elements)
 		}
 		views[i] = s.elevationOn(f, r, p, facings)
 	}
