@@ -796,6 +796,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#changed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -807,7 +818,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#added" class="md-nav__link">
+  <a href="#added_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -919,7 +930,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#added_1" class="md-nav__link">
+  <a href="#added_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -969,7 +980,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#added_2" class="md-nav__link">
+  <a href="#added_3" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1215,6 +1226,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#changed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1226,7 +1248,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#added" class="md-nav__link">
+  <a href="#added_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1338,7 +1360,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#added_1" class="md-nav__link">
+  <a href="#added_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1388,7 +1410,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#added_2" class="md-nav__link">
+  <a href="#added_3" class="md-nav__link">
     <span class="md-ellipsis">
       
         Added
@@ -1482,6 +1504,20 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.<
      Releases. -->
 
 <h2 id="unreleased">Unreleased<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>NetArea.OpeningPerimeter</code> — the boundary length, in metres, of the same
+  opening union <code>OpeningDeduction</code> measures the area of. Facade trades bill
+  reveals (the returns around a window or door) per linear metre, and the length
+  they follow is the union's outline rather than the sum of the individual
+  voids' perimeters: where two footprints merge, the seam between them is
+  interior to the union, and it belongs to the outline no more than the shared
+  area belongs to the deduction twice. It is <code>0</code> when the host is untrusted,
+  exactly like <code>OpeningDeduction</code>, and both numbers come from one boundary walk
+  so they can never describe different shapes. On a real ArchiCAD export it
+  agrees to within 0.1 m with an independent per-void bounding-box measurement,
+  and every host satisfies <code>perimeter² &gt;= 4·pi·area</code>.</li>
+</ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>Assembled</code> gained an unexported field recording the <code>*step.File</code> it was
@@ -1500,7 +1536,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.<
   distance from the origin rather than a slightly wrong number (a 0.58 m²
   panel 47 m out reported 30.69 m²).</li>
 </ul>
-<h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
+<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>(geometry.Element).SilhouetteOn(p)</code> — the projected-polygon union of the
   faces opposing <code>p.N</code>, as seen from the <code>+p.N</code> side, in <code>p</code>'s UV coordinates.
@@ -1556,7 +1592,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.<
   double-deducted. (#20)</li>
 </ul>
 <h2 id="v030-2026-08-17">v0.3.0 — 2026-08-17<a class="headerlink" href="#v030-2026-08-17" title="Permanent link">&para;</a></h2>
-<h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
+<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>geometry.Facing</code> — an element's outward direction in world space: the
   area-weighted dominant normal of its vertical faces, signed to point at the
@@ -1623,7 +1659,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.<
 <p>The old name described the only plane the package could cut — a horizontal one,
   always seen from above. Now that any plane can be cut, "below" is no longer
   what the role means, but it is still what the wire format says.</p>
-<h3 id="added_2">Added<a class="headerlink" href="#added_2" title="Permanent link">&para;</a></h3>
+<h3 id="added_3">Added<a class="headerlink" href="#added_3" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>geometry.Plane</code> — a cutting plane as an origin plus an orthonormal
   right-handed basis (<code>U</code>, <code>V</code> span the plane; <code>N</code> is the normal).</li>
