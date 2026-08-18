@@ -14,6 +14,20 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- `NetArea.OpeningPerimeter` — the boundary length, in metres, of the same
+  opening union `OpeningDeduction` measures the area of. Facade trades bill
+  reveals (the returns around a window or door) per linear metre, and the length
+  they follow is the union's outline rather than the sum of the individual
+  voids' perimeters: where two footprints merge, the seam between them is
+  interior to the union, and it belongs to the outline no more than the shared
+  area belongs to the deduction twice. It is `0` when the host is untrusted,
+  exactly like `OpeningDeduction`, and both numbers come from one boundary walk
+  so they can never describe different shapes. On a real ArchiCAD export it
+  agrees to within 0.1 m with an independent per-void bounding-box measurement,
+  and every host satisfies `perimeter² >= 4·pi·area`.
+
 ### Changed
 
 - `Assembled` gained an unexported field recording the `*step.File` it was

@@ -182,15 +182,35 @@ func maxSilhouetteAxis(w []v3, tris []uint32) (area float64, axis int, ok bool) 
 // to report — see unionBoundary. A caller must not substitute zero: zero is a
 // measurement, and this is the absence of one.
 func unionArea2D(tris [][3][2]float64) (area float64, ok bool) {
+	area, _, ok = unionMeasure2D(tris)
+	return area, ok
+}
+
+// unionMeasure2D returns both measures of one union boundary: the area it
+// encloses and the length of the boundary itself.
+//
+// They are deliberately computed from the SAME segments in one pass. A caller
+// that needs both must never take them from two walks — the boundary walk is
+// not guaranteed to classify identically twice on real coordinates, so two
+// walks can disagree about what the outline is and yield an area and a
+// perimeter describing different shapes.
+//
+// perimeter counts the union boundary, which is what an outline is: where two
+// footprints merge, the seam between them is interior and carries no boundary
+// segment, so it is excluded — exactly as the shared area is counted once.
+// ok carries unionBoundary's verdict for both numbers; neither is meaningful
+// when the boundary did not close.
+func unionMeasure2D(tris [][3][2]float64) (area, perimeter float64, ok bool) {
 	segs, ok := unionBoundary(tris)
 	if !ok {
-		return 0, false
+		return 0, 0, false
 	}
 	var twice float64
 	for _, s := range segs {
 		twice += s[0][0]*s[1][1] - s[1][0]*s[0][1]
+		perimeter += math.Hypot(s[1][0]-s[0][0], s[1][1]-s[0][1])
 	}
-	return math.Abs(twice) / 2, true
+	return math.Abs(twice) / 2, perimeter, true
 }
 
 // boundaryCloses reports whether every vertex of the directed boundary has as
