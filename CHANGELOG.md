@@ -14,6 +14,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.8.1 — 2026-08-18
+
 ### Added
 
 - `ImportNode.OpeningPerimeter` — the opening union's boundary length (m) on the
