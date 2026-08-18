@@ -39,6 +39,9 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      # The changelog promote opens a PR instead of pushing to main, which the
+      # branch ruleset forbids.
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,15 +83,54 @@ jobs:
         # steps.release.outputs.version is only set when a new version was
         # actually released (go-semantic-release/action returns early,
         # without calling setOutput, when there's nothing to release).
+        #
+        # This opens a PR rather than pushing to main. The main ruleset requires
+        # a pull request and 5 status checks with no bypass actors, so the direct
+        # push this used to do was rejected outright (GH013) — the tag and the
+        # GitHub Release were created and only the changelog commit was lost, so
+        # the job failed AFTER releasing and the drift was silent. Granting the
+        # bot a bypass would have fixed it by letting every workflow in the repo
+        # push to main unreviewed, which is a poor trade for a docs commit.
         if: steps.release.outputs.version != ''
         env:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           date="$(date -u +%Y-%m-%d)"
           .github/scripts/promote-changelog.sh "$RELEASE_VERSION" "$date"
 
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG.md unchanged — nothing to promote."
+            exit 0
+          fi
+
+          branch="chore/changelog-v${RELEASE_VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
           git add CHANGELOG.md
-          git commit -m "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md [skip ci]"
-          git push origin HEAD:main
+          git commit -m "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md"
+          git push origin "$branch"
+
+          # --fill would reuse the commit message; the body is worth spelling
+          # out because whoever sees this PR did not run the release. Built with
+          # printf so the text is not indented by this block's YAML indentation.
+          body="$(printf '%s\n' \
+            "Automated by the Release workflow after cutting v${RELEASE_VERSION}." \
+            "" \
+            "Moves the \`## Unreleased\` section under a \`## v${RELEASE_VERSION}\` heading." \
+            "The tag and GitHub Release already exist; this only records them in" \
+            "the changelog, so merging is safe whenever convenient.")"
+
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md" \
+            --body "$body"
+
+          # Auto-merge so the changelog does not drift while PRs queue up. It
+          # merges once the required checks pass; if auto-merge is disabled on
+          # the repo, say so and leave the PR open rather than failing a release
+          # that has already succeeded.
+          gh pr merge "$branch" --squash --auto \
+            || echo "::warning::Could not enable auto-merge; merge the changelog PR by hand."

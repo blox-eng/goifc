@@ -25,6 +25,12 @@ type ImportNode struct {
 	Material       string   // model.Element.Material; "" when none
 	IsExternal     *bool    // *Common.IsExternal tri-state; nil when unknown
 	NetArea        *float64 // trusted net area (m²) from Scene.NetAreas; nil when absent/untrusted
+	// OpeningPerimeter is the boundary length (m) of the opening union whose
+	// area NetArea already nets out — the length facade trades bill reveals
+	// along. Present exactly when NetArea is: both come from one trusted
+	// reconciliation, so a consumer can never read a confident perimeter beside
+	// an absent net.
+	OpeningPerimeter *float64
 
 	// TypeGlobalID / TypeName / TypeClass identify the element's IfcTypeObject.
 	// Empty when the element carries no IfcRelDefinesByType — most elements do.
@@ -231,6 +237,12 @@ func BuildImportFrom(f *step.File, a *Assembled) (*ImportModel, error) {
 		}
 		if na, ok := nets[e.GlobalID]; ok {
 			n.NetArea = na.Net // already nil when untrusted
+			if na.Net != nil {
+				// Gated on Net rather than on Trusted directly, so the two
+				// fields cannot disagree: an untrusted host publishes neither.
+				p := na.OpeningPerimeter
+				n.OpeningPerimeter = &p
+			}
 		}
 		nodes[i] = n
 	}
