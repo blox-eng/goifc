@@ -18,7 +18,14 @@ type NetArea struct {
 	// projecting bay or brise-soleil, where only the union is drawable. Parity
 	// is that quantity's job; exactness is this one's.
 	Gross            float64
-	OpeningDeduction float64  // union of the opening footprints on the host axis, m² (0 when untrusted)
+	OpeningDeduction float64 // union of the opening footprints on the host axis, m² (0 when untrusted)
+	// OpeningPerimeter is the boundary length of that SAME union, in metres
+	// (0 when untrusted). Reveals — the returns around a window or door — are
+	// billed per linear metre in facade trades, and the length they follow is
+	// this outline, not the Σ of the individual voids' perimeters: where two
+	// footprints merge, the seam between them is interior, and it belongs to
+	// the outline no more than the shared area belongs to the deduction twice.
+	OpeningPerimeter float64
 	Net              *float64 // net area, m² — populated ONLY when Trusted; nil otherwise.
 	// Never fabricated (matches the engine's pos()/nil-means-absent contract).
 	Trusted bool
@@ -168,7 +175,7 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	// limitation of the sum rather than of the model — so the deduction is the
 	// exact area covered by the union, and each covered square metre is deducted
 	// once no matter how many openings claim it.
-	deduction, ok := unionArea2D(footprints)
+	deduction, perimeter, ok := unionMeasure2D(footprints)
 	if !ok {
 		// Deducting a partial footprint would over-state Net by whatever the
 		// boundary lost, and nothing downstream could tell.
@@ -186,6 +193,7 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	net := gross - deduction
 	na.Net = &net
 	na.OpeningDeduction = deduction
+	na.OpeningPerimeter = perimeter
 	na.Trusted = true
 	return na
 }
