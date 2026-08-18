@@ -16,6 +16,16 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Added
 
+- `ImportNode.OpeningPerimeter` — the opening union's boundary length (m) on the
+  import contract, so the measurement v0.8.0 added is actually reachable by
+  consumers, which read `ImportNode` rather than `NetArea`. Present exactly when
+  `NetArea` is: both are published from one trusted reconciliation, so a
+  consumer can never read a confident perimeter beside an absent net.
+
+## v0.8.0 — 2026-08-18
+
+### Added
+
 - `NetArea.OpeningPerimeter` — the boundary length, in metres, of the same
   opening union `OpeningDeduction` measures the area of. Facade trades bill
   reveals (the returns around a window or door) per linear metre, and the length
@@ -27,6 +37,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   so they can never describe different shapes. On a real ArchiCAD export it
   agrees to within 0.1 m with an independent per-void bounding-box measurement,
   and every host satisfies `perimeter² >= 4·pi·area`.
+
+## v0.7.0 — 2026-08-17
 
 ### Changed
 
