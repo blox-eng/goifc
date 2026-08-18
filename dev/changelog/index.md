@@ -10,7 +10,15 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ### Added
 
+- `ImportNode.OpeningPerimeter` — the opening union's boundary length (m) on the import contract, so the measurement v0.8.0 added is actually reachable by consumers, which read `ImportNode` rather than `NetArea`. Present exactly when `NetArea` is: both are published from one trusted reconciliation, so a consumer can never read a confident perimeter beside an absent net.
+
+## v0.8.0 — 2026-08-18
+
+### Added
+
 - `NetArea.OpeningPerimeter` — the boundary length, in metres, of the same opening union `OpeningDeduction` measures the area of. Facade trades bill reveals (the returns around a window or door) per linear metre, and the length they follow is the union's outline rather than the sum of the individual voids' perimeters: where two footprints merge, the seam between them is interior to the union, and it belongs to the outline no more than the shared area belongs to the deduction twice. It is `0` when the host is untrusted, exactly like `OpeningDeduction`, and both numbers come from one boundary walk so they can never describe different shapes. On a real ArchiCAD export it agrees to within 0.1 m with an independent per-void bounding-box measurement, and every host satisfies `perimeter² >= 4·pi·area`.
+
+## v0.7.0 — 2026-08-17
 
 ### Changed
 
