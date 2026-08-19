@@ -158,10 +158,47 @@ func (s *Scene) ElevationOn(f *step.File, r *model.Result, p Plane) ElevationVie
 //
 // Deterministic: identical input yields identical views.
 func (s *Scene) Elevations(f *step.File, r *model.Result, planes []Plane) []ElevationView {
+	return s.elevations(f, r, planes, nil)
+}
+
+// ElevationsWith is [Scene.Elevations] over a classification the caller already
+// holds, so the two never pay for it twice.
+//
+// [BuildFacings] dominates the cost of drawing a set of elevations — on a
+// ~1,900-element model it is roughly 15s of a 17s call — and its result is
+// worth more than the drawing alone: FaceArea binned by Azimuth is the sound
+// way to total a facade, precisely because summing the sheets is not. An
+// element with two exposed sides is drawn on two perpendicular sheets, so
+// per-sheet totals double-count it; Azimuth bins it to exactly one direction.
+// A caller wanting both the drawings and the quantities would otherwise
+// classify the same scene twice.
+//
+// facings must have been built from THIS scene's elements — pass
+// BuildFacings(s.Elements) to get exactly what [Scene.Elevations] computes.
+// An element absent from the map is unclassified, and a nil or empty map is
+// taken at face value rather than as a request to build one: silently doing
+// the 15s build here would defeat the only reason to call this instead of
+// [Scene.Elevations].
+//
+// Deterministic: identical input yields identical views.
+func (s *Scene) ElevationsWith(f *step.File, r *model.Result, planes []Plane, facings map[string]Facing) []ElevationView {
+	if facings == nil {
+		// A nil map reads the same as an empty one on lookup, but the shared
+		// loop uses nil as its "build it lazily" signal. Normalize so a caller
+		// passing nil gets the unclassified scene they asked for, not a
+		// surprise classification.
+		facings = map[string]Facing{}
+	}
+	return s.elevations(f, r, planes, facings)
+}
+
+// elevations is the shared loop. A nil facings means "build it lazily on the
+// first valid plane" — the [Scene.Elevations] contract, under which a set of
+// planes that are all invalid never triggers BuildFacings at all.
+func (s *Scene) elevations(f *step.File, r *model.Result, planes []Plane, facings map[string]Facing) []ElevationView {
 	if len(planes) == 0 {
 		return nil
 	}
-	var facings map[string]Facing
 	views := make([]ElevationView, len(planes))
 	for i, p := range planes {
 		if !p.Valid() {
