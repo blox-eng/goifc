@@ -75,10 +75,64 @@ func TestBuildImport_UntrustedHostPublishesNoDeduction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildImport: %v", err)
 	}
+	var sawUntrusted int
 	for _, n := range m.Nodes {
 		if n.OpeningDeduction != nil || n.ProjectedGross != nil {
 			t.Errorf("node %q: untrusted host published deduction=%v gross=%v, want both absent",
 				n.Name, n.OpeningDeduction, n.ProjectedGross)
 		}
+		if n.HasOpenings {
+			sawUntrusted++
+			// The discriminator that makes the absence above readable. Without
+			// it a consumer sees the same nils a solid wall produces and nets
+			// this fully-glazed host at its whole gross.
+			if n.NetArea != nil {
+				t.Errorf("node %q: HasOpenings with a trusted net; fixture is meant to be refused", n.Name)
+			}
+		}
+	}
+	if sawUntrusted == 0 {
+		t.Fatal("fixture produced no host with openings; the untrusted path was never exercised")
+	}
+}
+
+// TestBuildImport_UnvoidedHostIsDistinguishableFromUntrusted is the whole point
+// of HasOpenings. Both a solid wall and a refused reconciliation publish nil in
+// all three area fields, and they are OPPOSITE answers: the solid wall's net
+// equals its gross, the refused one's net is unknown. A consumer totalling a
+// facade has to branch on something, and this is the only thing to branch on.
+func TestBuildImport_UnvoidedHostIsDistinguishableFromUntrusted(t *testing.T) {
+	// A wall WITH a trusted window: HasOpenings, and every area field present.
+	var voided int
+	for _, n := range buildImport(t, "geometry/testdata/synthetic/netarea_rect_window.ifc").Nodes {
+		if !n.HasOpenings {
+			continue
+		}
+		voided++
+		if n.NetArea == nil {
+			t.Errorf("node %q: HasOpenings but no net; this fixture's window is trusted", n.Name)
+		}
+	}
+	if voided == 0 {
+		t.Error("rect_window produced no host with openings; the true branch went untested")
+	}
+
+	// A wall with NO openings: not in the reconciliation at all, so every area
+	// field is nil — the same nils the untrusted fixture produces above. Only
+	// HasOpenings separates "its net IS its gross" from "its net is unknown".
+	var unvoided int
+	for _, n := range buildImport(t, "model/testdata/synthetic/wall_no_openings.ifc").Nodes {
+		if n.HasOpenings {
+			t.Errorf("node %q: HasOpenings on a fixture with no voids", n.Name)
+			continue
+		}
+		unvoided++
+		if n.NetArea != nil || n.OpeningDeduction != nil || n.ProjectedGross != nil {
+			t.Errorf("node %q: !HasOpenings yet published net=%v deduction=%v gross=%v",
+				n.Name, n.NetArea, n.OpeningDeduction, n.ProjectedGross)
+		}
+	}
+	if unvoided == 0 {
+		t.Error("wall_no_openings produced no nodes; the false branch went untested")
 	}
 }

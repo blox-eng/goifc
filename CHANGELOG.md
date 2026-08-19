@@ -39,6 +39,13 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   is not merely uncorrected, it is invisible. Present exactly when `NetArea` is,
   so an untrusted host never publishes a zero deduction that would read as "this
   wall has no openings".
+- `ImportNode.HasOpenings` — whether the element carries `IfcRelVoidsElement`
+  openings at all. This is the fact the nil-able area fields cannot express:
+  they are absent for two OPPOSITE reasons — the host has none, so its net
+  equals its gross; or its reconciliation was refused, so its net is unknown.
+  Reading absence as "no openings" reports a fully-glazed wall as solid;
+  reading it as "unknown" drops every solid wall from a facade total. Always
+  meaningful, so a plain bool rather than a third nil-able field.
 
 ## v0.8.1 — 2026-08-18
 

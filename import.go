@@ -55,6 +55,17 @@ type ImportNode struct {
 	// host whose openings measured zero, never an untrusted one.
 	OpeningDeduction *float64
 	ProjectedGross   *float64
+	// HasOpenings reports whether this element carries IfcRelVoidsElement
+	// openings at all, which is the fact the three nil-able fields above CANNOT
+	// express. They are absent for two opposite reasons — the host has no
+	// openings, so its net equals its gross; or its reconciliation was refused,
+	// so its net is unknown — and a consumer netting a total must tell those
+	// apart. Reading absence as "no openings" reports a fully-glazed wall as
+	// solid; reading it as "unknown" drops every solid wall from the total.
+	//
+	// Unlike the others this is always meaningful, so it is a plain bool: there
+	// is no third state to encode.
+	HasOpenings bool
 
 	// TypeGlobalID / TypeName / TypeClass identify the element's IfcTypeObject.
 	// Empty when the element carries no IfcRelDefinesByType — most elements do.
@@ -260,6 +271,9 @@ func BuildImportFrom(f *step.File, a *Assembled) (*ImportModel, error) {
 			n.BBoxMax = ge.BBoxMax
 		}
 		if na, ok := nets[e.GlobalID]; ok {
+			// Presence in the map IS the openings fact: NetAreas keys only the
+			// hosts that have them.
+			n.HasOpenings = true
 			n.NetArea = na.Net // already nil when untrusted
 			if na.Net != nil {
 				// Gated on Net rather than on Trusted directly, so the fields
