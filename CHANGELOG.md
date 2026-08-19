@@ -34,9 +34,9 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   Netting a total means subtracting the DEDUCTION from the gross being totalled.
   `ProjectedGross` comes with it because both are measured on the host's winning
   projection axis, which foreshortens gross and deduction by the same factor — so
-  a caller netting an unforeshortened gross (`Facing.FaceArea`) must scale the
-  deduction by their ratio rather than subtracting it raw. Without it that bias
-  is not merely uncorrected, it is invisible. Present exactly when `NetArea` is,
+  a caller netting an unforeshortened gross (`Facing.FaceArea`) subtracts
+  `OpeningDeduction * (FaceArea / ProjectedGross)`, not `OpeningDeduction` raw.
+  Without `ProjectedGross` that bias is not merely uncorrected, it is invisible. Present exactly when `NetArea` is,
   so an untrusted host never publishes a zero deduction that would read as "this
   wall has no openings".
 - `ImportNode.HasOpenings` — whether the element carries `IfcRelVoidsElement`

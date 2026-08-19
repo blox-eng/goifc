@@ -44,11 +44,16 @@ type ImportNode struct {
 	//
 	// That matters most when the gross being netted is measured differently.
 	// [geometry.Facing].FaceArea is the true on-face area and does not
-	// foreshorten, while these two are a projection and do; the projection
-	// foreshortens gross and deduction by the SAME factor, so a caller netting
-	// an on-face gross should scale the deduction by ProjectedGross's ratio to
-	// it rather than subtracting it raw. Without ProjectedGross that bias is
-	// not merely uncorrected, it is invisible.
+	// foreshorten, while these two are a projection and do. The projection
+	// foreshortens gross and deduction by the SAME factor, so that factor is
+	// recoverable as FaceArea/ProjectedGross and a caller netting an on-face
+	// gross computes:
+	//
+	//	net = FaceArea - OpeningDeduction*(FaceArea/ProjectedGross)
+	//
+	// NOT FaceArea - OpeningDeduction, which under-deducts by that factor.
+	// Without ProjectedGross the bias is not merely uncorrected, it is
+	// invisible.
 	//
 	// Present exactly when NetArea is, for the reason OpeningPerimeter is: all
 	// four come from one trusted reconciliation. A zero deduction here means a
