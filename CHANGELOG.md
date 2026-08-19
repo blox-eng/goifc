@@ -16,6 +16,38 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Added
 
+- `Scene.ElevationsWith(f, r, planes, facings)` — `Scene.Elevations` over a
+  classification the caller already holds. `BuildFacings` dominates the cost of
+  drawing a facade set (on a ~1,900-element model, roughly 15s of a 17s call),
+  and its result is worth more than the drawing: `Facing.FaceArea` binned by
+  `Facing.Azimuth` is the sound way to total a facade, because summing the
+  sheets is not — an element with two exposed sides is drawn on two
+  perpendicular sheets, so per-sheet totals double-count it. A caller wanting
+  both the drawings and the quantities previously had to classify the same scene
+  twice. A nil or empty map is taken at face value, not as a request to build
+  one: silently classifying there would restore the exact cost the call exists
+  to avoid, invisibly, because the drawing would still look right.
+- `ImportNode.OpeningDeduction` and `ImportNode.ProjectedGross` — the two halves
+  `NetArea` is the difference of, on the import contract. `NetArea` alone cannot
+  be aggregated: a host with no `IfcRelVoidsElement` is ABSENT from the
+  reconciliation, so summing nets over a facade silently drops every solid wall.
+  Netting a total means subtracting the DEDUCTION from the gross being totalled.
+  `ProjectedGross` comes with it because both are measured on the host's winning
+  projection axis, which foreshortens gross and deduction by the same factor — so
+  a caller netting an unforeshortened gross (`Facing.FaceArea`) must scale the
+  deduction by their ratio rather than subtracting it raw. Without it that bias
+  is not merely uncorrected, it is invisible. Present exactly when `NetArea` is,
+  so an untrusted host never publishes a zero deduction that would read as "this
+  wall has no openings".
+
+## v0.8.1 — 2026-08-18
+
+<!-- Restored by hand: v0.8.1 tagged and shipped without renaming its section,
+     so its entry sat under "Unreleased" on main and the next release would have
+     promoted it under the wrong version heading. -->
+
+### Added
+
 - `ImportNode.OpeningPerimeter` — the opening union's boundary length (m) on the
   import contract, so the measurement v0.8.0 added is actually reachable by
   consumers, which read `ImportNode` rather than `NetArea`. Present exactly when

@@ -31,6 +31,30 @@ type ImportNode struct {
 	// reconciliation, so a consumer can never read a confident perimeter beside
 	// an absent net.
 	OpeningPerimeter *float64
+	// OpeningDeduction is the area (m²) of that same opening union, and
+	// ProjectedGross is the host's own silhouette on the same plane — the two
+	// halves NetArea is the difference of. Both are measured on the host's
+	// winning projection axis, which is what makes them a matched pair.
+	//
+	// They are published because NetArea alone cannot be aggregated: hosts with
+	// no IfcRelVoidsElement are ABSENT from the reconciliation entirely, so
+	// summing NetArea over a facade silently drops every solid wall. Netting a
+	// total therefore means subtracting the DEDUCTION from whatever gross the
+	// caller is totalling, not summing the nets.
+	//
+	// That matters most when the gross being netted is measured differently.
+	// [geometry.Facing].FaceArea is the true on-face area and does not
+	// foreshorten, while these two are a projection and do; the projection
+	// foreshortens gross and deduction by the SAME factor, so a caller netting
+	// an on-face gross should scale the deduction by ProjectedGross's ratio to
+	// it rather than subtracting it raw. Without ProjectedGross that bias is
+	// not merely uncorrected, it is invisible.
+	//
+	// Present exactly when NetArea is, for the reason OpeningPerimeter is: all
+	// four come from one trusted reconciliation. A zero deduction here means a
+	// host whose openings measured zero, never an untrusted one.
+	OpeningDeduction *float64
+	ProjectedGross   *float64
 
 	// TypeGlobalID / TypeName / TypeClass identify the element's IfcTypeObject.
 	// Empty when the element carries no IfcRelDefinesByType — most elements do.
@@ -238,10 +262,14 @@ func BuildImportFrom(f *step.File, a *Assembled) (*ImportModel, error) {
 		if na, ok := nets[e.GlobalID]; ok {
 			n.NetArea = na.Net // already nil when untrusted
 			if na.Net != nil {
-				// Gated on Net rather than on Trusted directly, so the two
-				// fields cannot disagree: an untrusted host publishes neither.
+				// Gated on Net rather than on Trusted directly, so the fields
+				// cannot disagree: an untrusted host publishes none of them.
 				p := na.OpeningPerimeter
 				n.OpeningPerimeter = &p
+				d := na.OpeningDeduction
+				n.OpeningDeduction = &d
+				g := na.Gross
+				n.ProjectedGross = &g
 			}
 		}
 		nodes[i] = n
