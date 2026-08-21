@@ -14,6 +14,48 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- `Scene.Elevations` / `Scene.ElevationsWith` / `Scene.ElevationOn` no longer admit a
+  host to the two sheets perpendicular to it (#28). The membership test was
+  `dot(normal, plane.N) > 0` — anything not pointing away. A wall perpendicular to a
+  sheet has a dot of zero in exact arithmetic and a hair above it once a real
+  placement transform has been through the normal, so it was admitted; and because
+  `SilhouetteOn` projects the whole solid, an edge-on wall admitted on a rounding
+  error still drew its full thickness by height. On kb645 that put 913 of 950 drawn
+  hosts — and all 87 of 87 ETICS hosts — on two perpendicular sheets, with the
+  secondary carrying 10-50% of the dominant sheet's area.
+
+  Membership is now a bearing test against a documented threshold: both vectors are
+  flattened to horizontal, renormalized, and compared against cos(45°) — the same
+  quantity `Facing.Azimuth` bins by, which is the point, since the elevation
+  membership test disagreeing with the engine's own orientation classifier is what
+  #28 is. Against a four-sheet compass set an unambiguous host is now drawn exactly
+  once; a host at a true 45° is genuinely diagonal and lands on both, a documented
+  tie rather than an accident. On kb645: 914 of 914 drawn hosts on exactly one sheet,
+  87 of 87 ETICS hosts on exactly one sheet.
+
+  The threshold carries a documented `1e-12` tolerance, and it is not decoration.
+  Normalizing the everyday diagonal `[1, 1, 0]` lands one ULP BELOW `cos(45°)`, so a
+  bare `>=` rejects it on both sheets and deletes the wall from the drawing — exactly
+  the failure the `>=` exists to prevent, reintroduced by rounding. 1e-12 clears one
+  ULP by four orders of magnitude while costing ~8e-11 of a degree of angular slack.
+
+  Flattening to horizontal is load-bearing rather than tidiness. A raw 3-D dot
+  conflates "pointing the wrong way" with "tilted off vertical", so a wall leaning
+  45° while squarely facing east has its dot dragged under the threshold by the Z
+  term and is dropped from every sheet — which, measured on kb645, silently deleted
+  45 exterior proxies from the drawing. A wall nobody draws is worse than a wall
+  drawn twice, because nobody checks it.
+
+  **Behaviour change worth reading before you upgrade.** 36 fewer hosts are drawn on
+  kb645 (950 → 914). Every one of them was previously drawn ONLY as an edge-on sliver
+  on a perpendicular sheet: their own facade admits them, but `SilhouetteOn` returns
+  an empty outline there, so they never appeared on the elevation they belong to.
+  That empty face-on silhouette is a separate, pre-existing defect and is not
+  addressed here. This release stops drawing the sliver; it does not yet draw the
+  wall.
+
 ### Added
 
 - `Scene.ElevationsWith(f, r, planes, facings)` — `Scene.Elevations` over a
