@@ -224,6 +224,15 @@ func (s *Scene) elevations(f *step.File, r *model.Result, planes []Plane, facing
 // genuinely diagonal and lands on both — a documented tie, not an accident.
 const elevationFacingMin = math.Sqrt2 / 2
 
+// facingEpsilon absorbs the rounding around the 45-degree tie.
+//
+// A bearing normalized from an exact diagonal does not land exactly on
+// cos(45 degrees): [1, 1, 0] over Hypot(1, 1) comes out one ULP low. One ULP at
+// this magnitude is ~1.1e-16, so 1e-12 clears it by four orders of magnitude
+// while costing ~8e-11 of a degree of angular slack — far below any tolerance
+// the geometry it classifies was authored to.
+const facingEpsilon = 1e-12
+
 // facesSheet reports whether a host's outward normal faces p closely enough to
 // belong on p's sheet.
 //
@@ -243,9 +252,13 @@ const elevationFacingMin = math.Sqrt2 / 2
 // bearing to bin. It belongs on no vertical elevation, and says so by
 // returning false rather than by landing somewhere arbitrary.
 //
-// The comparison is >=, and that matters. At a true 45 degrees two sheets sit
-// exactly AT the threshold: with > the host would be admitted to NEITHER and
-// vanish. The tie admits it to both.
+// The comparison is >= against a threshold relaxed by facingEpsilon, and both
+// halves matter. At a true 45 degrees two sheets sit exactly AT the cutoff, so
+// with > the host would be admitted to NEITHER and vanish. And exactly-at is
+// not reliably representable: the everyday diagonal [1, 1, 0] normalizes to one
+// ULP BELOW math.Sqrt2/2, so a bare >= rejects it on both sheets and deletes it
+// from the drawing — the very failure the >= is there to prevent, reintroduced
+// by rounding. The epsilon closes that gap.
 //
 // The bar this replaces was "> 0", which admitted a host to any sheet its
 // normal did not point away from — including the two perpendicular ones, where
@@ -263,7 +276,7 @@ func facesSheet(n, pn [3]float64) bool {
 	if !ok {
 		return false
 	}
-	return nx*px+ny*py >= elevationFacingMin
+	return nx*px+ny*py >= elevationFacingMin-facingEpsilon
 }
 
 // horizontalUnit is v flattened to the horizontal plane and renormalized.

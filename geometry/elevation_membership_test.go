@@ -94,3 +94,58 @@ func TestElevationFacing_Threshold(t *testing.T) {
 		})
 	}
 }
+
+// TestElevationFacing_TheExactDiagonalSurvivesRounding is the case the
+// trig-generated table above cannot reach.
+//
+// [1, 1, 0] is the diagonal a modeller actually authors, and normalizing it
+// lands one ULP BELOW math.Sqrt2/2 — so a bare `>= math.Sqrt2/2` rejects it on
+// BOTH sheets and the wall disappears from the drawing entirely. That is the
+// exact failure the >= exists to prevent, reintroduced by rounding.
+//
+// nudged(north, 45) goes through Cos/Sin and happens to land on the other side
+// of the boundary, which is why the boundary table passes either way. Exact
+// integer vectors are the only ones that pin this.
+func TestElevationFacing_TheExactDiagonalSurvivesRounding(t *testing.T) {
+	diagonals := map[string][3]float64{
+		"northeast": {1, 1, 0},
+		"southeast": {1, -1, 0},
+		"southwest": {-1, -1, 0},
+		"northwest": {-1, 1, 0},
+	}
+	compass := map[string][3]float64{
+		"north": {0, 1, 0},
+		"east":  {1, 0, 0},
+		"south": {0, -1, 0},
+		"west":  {-1, 0, 0},
+	}
+	for name, n := range diagonals {
+		t.Run(name, func(t *testing.T) {
+			on := 0
+			for _, p := range compass {
+				if facesSheet(n, p) {
+					on++
+				}
+			}
+			// Two: a true diagonal is genuinely ambiguous and belongs on both
+			// the sheets it faces. Zero is the rounding bug and means the wall
+			// is drawn nowhere at all.
+			if on != 2 {
+				t.Errorf("%v lands on %d sheets, want 2 (0 means rounding deleted it)", n, on)
+			}
+		})
+	}
+}
+
+// TestElevationFacing_EpsilonDoesNotWidenTheCut guards the other side: the
+// tolerance absorbs one ULP, it does not quietly admit a fifth sheet. 1e-12 of
+// cosine is ~8e-11 of a degree, so anything a hair past the tie must still be
+// rejected.
+func TestElevationFacing_EpsilonDoesNotWidenTheCut(t *testing.T) {
+	north := [3]float64{0, 1, 0}
+	for _, deg := range []float64{45.000001, 46, 50, 89} {
+		if facesSheet(nudged(north, deg), north) {
+			t.Errorf("%v deg admitted; the epsilon has widened the cut, not absorbed rounding", deg)
+		}
+	}
+}

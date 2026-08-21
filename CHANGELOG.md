@@ -35,6 +35,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   tie rather than an accident. On kb645: 914 of 914 drawn hosts on exactly one sheet,
   87 of 87 ETICS hosts on exactly one sheet.
 
+  The threshold carries a documented `1e-12` tolerance, and it is not decoration.
+  Normalizing the everyday diagonal `[1, 1, 0]` lands one ULP BELOW `cos(45°)`, so a
+  bare `>=` rejects it on both sheets and deletes the wall from the drawing — exactly
+  the failure the `>=` exists to prevent, reintroduced by rounding. 1e-12 clears one
+  ULP by four orders of magnitude while costing ~8e-11 of a degree of angular slack.
+
   Flattening to horizontal is load-bearing rather than tidiness. A raw 3-D dot
   conflates "pointing the wrong way" with "tilted off vertical", so a wall leaning
   45° while squarely facing east has its dot dragged under the threshold by the Z
