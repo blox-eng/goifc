@@ -8,6 +8,14 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.9.0 — 2026-08-19
+
+### Added
+
+- `Scene.ElevationsWith(f, r, planes, facings)` — `Scene.Elevations` over a classification the caller already holds. `BuildFacings` dominates the cost of drawing a facade set (on a ~1,900-element model, roughly 15s of a 17s call), and its result is worth more than the drawing: `Facing.FaceArea` binned by `Facing.Azimuth` is the sound way to total a facade, because summing the sheets is not — an element with two exposed sides is drawn on two perpendicular sheets, so per-sheet totals double-count it. A caller wanting both the drawings and the quantities previously had to classify the same scene twice. A nil or empty map is taken at face value, not as a request to build one: silently classifying there would restore the exact cost the call exists to avoid, invisibly, because the drawing would still look right.
+- `ImportNode.OpeningDeduction` and `ImportNode.ProjectedGross` — the two halves `NetArea` is the difference of, on the import contract. `NetArea` alone cannot be aggregated: a host with no `IfcRelVoidsElement` is ABSENT from the reconciliation, so summing nets over a facade silently drops every solid wall. Netting a total means subtracting the DEDUCTION from the gross being totalled. `ProjectedGross` comes with it because both are measured on the host's winning projection axis, which foreshortens gross and deduction by the same factor — so a caller netting an unforeshortened gross (`Facing.FaceArea`) subtracts `OpeningDeduction * (FaceArea / ProjectedGross)`, not `OpeningDeduction` raw. Without `ProjectedGross` that bias is not merely uncorrected, it is invisible. Present exactly when `NetArea` is, so an untrusted host never publishes a zero deduction that would read as "this wall has no openings".
+- `ImportNode.HasOpenings` — whether the element carries `IfcRelVoidsElement` openings at all. This is the fact the nil-able area fields cannot express: they are absent for two OPPOSITE reasons — the host has none, so its net equals its gross; or its reconciliation was refused, so its net is unknown. Reading absence as "no openings" reports a fully-glazed wall as solid; reading it as "unknown" drops every solid wall from a facade total. Always meaningful, so a plain bool rather than a third nil-able field.
+
 ## v0.8.1 — 2026-08-18
 
 ### Added
