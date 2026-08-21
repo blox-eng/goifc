@@ -8,6 +8,16 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.9.2 — 2026-08-21
+
+### Fixed
+
+- An elevation outline left open by ONE short seam is now closed across it and drawn, instead of the element being discarded whole (#37). The boundary walk is exact in real arithmetic only; on float32-derived world coordinates it can classify a sub-edge inconsistently and leave the ring open, and the all-or-nothing verdict then threw away everything. On kb645 that lost **45 exterior elements**, every one of them to a single open chain with a gap between 0.9 mm and 9.1 mm — in one case 56 segments of correct outline discarded for one 9.1 mm seam. 914 entities drawn before, 959 after, 45 of them bridged.
+
+The repair is deliberately the narrowest thing that recovers that case: EXACTLY one vertex short by one and one long by one — two loose ends, so one open chain — and a gap of at most 10 mm. Several chains, a vertex unbalanced by more than one, or a longer gap is a torn outline rather than a seam that failed to weld, and is refused exactly as before.
+
+New `ElevationEntity.OutlineBridged` and `Element.SilhouetteBridgedOn` report it, and reporting is the point: a bridged outline is a drawing that is right and a measurement that is invented, because the bridging segment is area no face in the mesh accounts for. **Quantities are unaffected** — `unionMeasure2D`, and every other measurement path, still goes through `unionBoundary` and its unchanged strict gate. Total a facade with `Facing.FaceArea` or `NetAreas`, never by integrating an outline.
+
 ## v0.9.1 — 2026-08-21
 
 ### Fixed
