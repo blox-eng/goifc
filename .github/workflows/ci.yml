@@ -29,6 +29,62 @@ defaults:
     shell: bash
 
 jobs:
+  # A CHANGELOG or docs-only PR cannot break the Go build, but it used to spend
+  # four runners proving it. This job decides once, and the Go jobs below gate
+  # on it.
+  #
+  # Why a job and not `paths-ignore:` on the workflow itself: Lint, Test,
+  # Vulnerability Scan and Conventional Commits Check are REQUIRED checks on
+  # main (ruleset 20694555). A workflow that never starts never reports them,
+  # and the PR sits un-mergeable forever. A job skipped by `if:` DOES report —
+  # GitHub counts a skipped required check as passing — so the filter has to
+  # live inside a workflow that always runs.
+  #
+  # CodeQL is deliberately left alone: its required "CodeQL" context comes from
+  # the github-advanced-security app when results are uploaded, not from a job
+  # name, so nothing we can skip would still report it.
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Reading the PR's file list goes through the pulls API, which the
+      # workflow-wide contents: read alone does not cover on a fork PR.
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Classify the changed files
+        id: filter
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.number }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+          elif [ -n "${BEFORE:-}" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            files=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" --jq '.files[].filename')
+          else
+            files=''
+          fi
+          # An empty list means we could not tell what changed (force push, new
+          # branch, truncated compare). Run everything — the filter is an
+          # optimisation and must never be the reason a break slips through.
+          if [ -z "$files" ] || grep -qvE '(\.md$|^docs/|^mkdocs\.yml$|^requirements-docs\.txt$)' <<< "$files"; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "Code changed — running the full suite."
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "Docs-only change — skipping the Go jobs."
+          fi
+          echo "$files" | sed 's/^/  /'
+
   conventional-commits:
     name: Conventional Commits Check
     runs-on: ubuntu-latest
@@ -43,7 +99,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    needs: conventional-commits
+    needs: [conventional-commits, changes]
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,7 +124,8 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [lint, changes]
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -106,7 +164,8 @@ jobs:
   govulncheck:
     name: Vulnerability Scan
     runs-on: ubuntu-latest
-    needs: conventional-commits
+    needs: [conventional-commits, changes]
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -134,7 +193,8 @@ jobs:
   fuzz:
     name: Fuzz Smoke
     runs-on: ubuntu-latest
-    needs: conventional-commits
+    needs: [conventional-commits, changes]
+    if: needs.changes.outputs.code == 'true'
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
