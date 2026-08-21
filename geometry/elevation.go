@@ -158,10 +158,49 @@ func (s *Scene) ElevationOn(f *step.File, r *model.Result, p Plane) ElevationVie
 //
 // Deterministic: identical input yields identical views.
 func (s *Scene) Elevations(f *step.File, r *model.Result, planes []Plane) []ElevationView {
+	return s.elevations(f, r, planes, nil)
+}
+
+// ElevationsWith is [Scene.Elevations] over a classification the caller already
+// holds, so the two never pay for it twice.
+//
+// [BuildFacings] dominates the cost of drawing a set of elevations — on a
+// ~1,900-element model it is roughly 15s of a 17s call — and its result is
+// worth more than the drawing alone: FaceArea binned by Azimuth is the sound
+// way to total a facade, and summing the sheets is still not, even now that a
+// host lands on one sheet rather than two (#28). A sheet outline is a
+// PROJECTION — foreshortened by the cosine between the host's normal and the
+// sheet — while FaceArea is the face itself; and a host at a true 45 degrees is
+// deliberately drawn on both its sheets, so per-sheet totals would count it
+// twice. A caller wanting both the drawings and the quantities would otherwise
+// classify the same scene twice.
+//
+// facings must have been built from THIS scene's elements — pass
+// BuildFacings(s.Elements) to get exactly what [Scene.Elevations] computes.
+// An element absent from the map is unclassified, and a nil or empty map is
+// taken at face value rather than as a request to build one: silently doing
+// the 15s build here would defeat the only reason to call this instead of
+// [Scene.Elevations].
+//
+// Deterministic: identical input yields identical views.
+func (s *Scene) ElevationsWith(f *step.File, r *model.Result, planes []Plane, facings map[string]Facing) []ElevationView {
+	if facings == nil {
+		// A nil map reads the same as an empty one on lookup, but the shared
+		// loop uses nil as its "build it lazily" signal. Normalize so a caller
+		// passing nil gets the unclassified scene they asked for, not a
+		// surprise classification.
+		facings = map[string]Facing{}
+	}
+	return s.elevations(f, r, planes, facings)
+}
+
+// elevations is the shared loop. A nil facings means "build it lazily on the
+// first valid plane" — the [Scene.Elevations] contract, under which a set of
+// planes that are all invalid never triggers BuildFacings at all.
+func (s *Scene) elevations(f *step.File, r *model.Result, planes []Plane, facings map[string]Facing) []ElevationView {
 	if len(planes) == 0 {
 		return nil
 	}
-	var facings map[string]Facing
 	views := make([]ElevationView, len(planes))
 	for i, p := range planes {
 		if !p.Valid() {
@@ -174,6 +213,85 @@ func (s *Scene) Elevations(f *step.File, r *model.Result, planes []Plane) []Elev
 		views[i] = s.elevationOn(f, r, p, facings)
 	}
 	return views
+}
+
+// elevationFacingMin is cos(45 degrees): a host belongs on the sheet whose
+// direction is within 45 degrees of its outward BEARING.
+//
+// 45 degrees is where the geometry turns over, not a tuned constant. Against a
+// four-sheet compass set every bearing is within 45 degrees of exactly one
+// sheet, so an unambiguous host is drawn once. A host at a true 45 degrees is
+// genuinely diagonal and lands on both — a documented tie, not an accident.
+const elevationFacingMin = math.Sqrt2 / 2
+
+// facingEpsilon absorbs the rounding around the 45-degree tie.
+//
+// A bearing normalized from an exact diagonal does not land exactly on
+// cos(45 degrees): [1, 1, 0] over Hypot(1, 1) comes out one ULP low. One ULP at
+// this magnitude is ~1.1e-16, so 1e-12 clears it by four orders of magnitude
+// while costing ~8e-11 of a degree of angular slack — far below any tolerance
+// the geometry it classifies was authored to.
+const facingEpsilon = 1e-12
+
+// facesSheet reports whether a host's outward normal faces p closely enough to
+// belong on p's sheet.
+//
+// Both vectors are flattened to the horizontal plane and renormalized first,
+// so the test is on BEARING alone — the same quantity [Facing.Azimuth] bins by,
+// and deliberately so: the elevation membership test disagreeing with the
+// engine's own orientation classifier is what goifc#28 is about.
+//
+// Flattening is load-bearing, not tidiness. A raw 3-D dot conflates "pointing
+// the wrong way" with "tilted off vertical": a wall leaning 45 degrees but
+// squarely facing east has its dot dragged under any threshold by the Z term
+// and would be dropped from every sheet. On kb645 that silently deleted 45
+// exterior proxies from the drawing entirely — a worse failure than the
+// double-draw, because a wall nobody drew is a wall nobody checks.
+//
+// A host with no meaningful horizontal component — a flat roof face — has no
+// bearing to bin. It belongs on no vertical elevation, and says so by
+// returning false rather than by landing somewhere arbitrary.
+//
+// The comparison is >= against a threshold relaxed by facingEpsilon, and both
+// halves matter. At a true 45 degrees two sheets sit exactly AT the cutoff, so
+// with > the host would be admitted to NEITHER and vanish. And exactly-at is
+// not reliably representable: the everyday diagonal [1, 1, 0] normalizes to one
+// ULP BELOW math.Sqrt2/2, so a bare >= rejects it on both sheets and deletes it
+// from the drawing — the very failure the >= is there to prevent, reintroduced
+// by rounding. The epsilon closes that gap.
+//
+// The bar this replaces was "> 0", which admitted a host to any sheet its
+// normal did not point away from — including the two perpendicular ones, where
+// the dot is zero in exact arithmetic and a hair positive once a real placement
+// transform has been through it. SilhouetteOn projects the whole solid, so an
+// edge-on wall admitted on a rounding error still draws its full thickness by
+// height. On kb645 that put 913 of 950 drawn hosts — and all 87 of 87 ETICS
+// hosts — on two perpendicular sheets.
+func facesSheet(n, pn [3]float64) bool {
+	nx, ny, ok := horizontalUnit(n)
+	if !ok {
+		return false
+	}
+	px, py, ok := horizontalUnit(pn)
+	if !ok {
+		return false
+	}
+	return nx*px+ny*py >= elevationFacingMin-facingEpsilon
+}
+
+// horizontalUnit is v flattened to the horizontal plane and renormalized.
+// ok=false when v is too near-vertical to carry a bearing.
+//
+// The guard is written as a negated comparison so a NaN coordinate takes the
+// same branch as a degenerate one, matching [Facing.Azimuth]: written the other
+// way round every NaN test is false, the guard waves it through, and a NaN dot
+// compares false against the threshold in a way no downstream check reports.
+func horizontalUnit(v [3]float64) (x, y float64, ok bool) {
+	h := math.Hypot(v[0], v[1])
+	if !(h > 1e-12) {
+		return 0, 0, false
+	}
+	return v[0] / h, v[1] / h, true
 }
 
 // elevationOn is the projection itself, over a classification the caller owns.
@@ -190,7 +308,7 @@ func (s *Scene) elevationOn(f *step.File, r *model.Result, p Plane, facings map[
 	for i := range s.Elements {
 		e := &s.Elements[i]
 		facing, ok := facings[e.GlobalID]
-		if !ok || facing.Exposure != ExposureExterior || dotv(facing.Normal, p.N) <= 0 {
+		if !ok || facing.Exposure != ExposureExterior || !facesSheet(facing.Normal, p.N) {
 			continue
 		}
 		outline := e.SilhouetteOn(p)
