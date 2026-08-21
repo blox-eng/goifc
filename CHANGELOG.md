@@ -3,7 +3,23 @@
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on
 minor versions, as the README states. Releases before v0.2.0 predate this file.
 
-<!-- Entries are written under "## Unreleased
+<!-- Entries are written under "## Unreleased" by hand as part of each PR.
+     Versions and tags are cut automatically by go-semantic-release from
+     conventional commits on every green CI run on main; when a release
+     happens, the release workflow renames "## Unreleased" to that version's
+     heading and inserts a fresh empty "## Unreleased" above it, then opens a
+     PR ("docs: promote Unreleased to vX.Y.Z in CHANGELOG.md") because the
+     main ruleset forbids the bot pushing straight to main. Generated release
+     notes also live on GitHub Releases.
+
+     Write the entry BELOW this comment, under the "## Unreleased" heading —
+     never inside it. An entry added after the first "## Unreleased" the eye
+     lands on ends up in here, invisible on the rendered page, which is how
+     the v0.9.2 entry was lost until this commit. -->
+
+## Unreleased
+
+## v0.9.2 — 2026-08-21
 
 ### Fixed
 
@@ -28,16 +44,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   mesh accounts for. **Quantities are unaffected** — `unionMeasure2D`, and every other
   measurement path, still goes through `unionBoundary` and its unchanged strict gate.
   Total a facade with `Facing.FaceArea` or `NetAreas`, never by integrating an
-  outline." by hand as part of each PR.
-     Versions and tags are cut automatically by go-semantic-release from
-     conventional commits on every green CI run on main; when a release
-     happens, the release workflow renames "## Unreleased" to that version's
-     heading and inserts a fresh empty "## Unreleased" above it, then commits
-     CHANGELOG.md back to the repo itself (`docs: promote Unreleased to
-     vX.Y.Z ... [skip ci]`). Generated release notes also live on GitHub
-     Releases. -->
-
-## Unreleased
+  outline.
 
 ## v0.9.1 — 2026-08-21
 
