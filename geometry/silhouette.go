@@ -38,19 +38,36 @@ type subEdge struct {
 // yields nothing for the other, so callers holding non-closed geometry must
 // choose p.N deliberately.
 func silhouetteRings(w []v3, tris []uint32, p Plane) [][][2]float64 {
+	rings, _ := silhouetteRingsRepaired(w, tris, p, false)
+	return rings
+}
+
+// silhouetteRingsRepaired is silhouetteRings, optionally allowing the outline to
+// be closed across ONE short gap. repair=false is the historical all-or-nothing
+// behaviour and is what every measurement path uses; only the elevation DRAWING
+// asks for the repair. See bridgeOpenBoundary.
+func silhouetteRingsRepaired(w []v3, tris []uint32, p Plane, repair bool) (rings [][][2]float64, bridged bool) {
 	facing := projectedFacing(w, tris, p)
 	if len(facing) == 0 {
-		return nil
+		return nil, false
 	}
 	// An outline the boundary walk could not close is not returned at all: a
 	// partial ring set would render as a torn drawing and measure as nonsense.
-	segs, ok := unionBoundary(facing)
+	// One short gap is the exception, and only because it is repairable and
+	// reported — see bridgeOpenBoundary.
+	var segs [][2][2]float64
+	var ok bool
+	if repair {
+		segs, bridged, ok = bridgeOpenBoundary(unionBoundarySegs(facing))
+	} else {
+		segs, ok = unionBoundary(facing)
+	}
 	if !ok || len(segs) == 0 {
-		return nil
+		return nil, false
 	}
 	// Each boundary sub-edge is emitted exactly once, so no parity cancellation:
 	// keeping every welded edge IS the union outline.
-	return stitchRings(segs, func(count int) bool { return count >= 1 })
+	return stitchRings(segs, func(count int) bool { return count >= 1 }), bridged
 }
 
 // projectedFacing keeps the triangles whose normal opposes p.N, projects them
@@ -252,6 +269,21 @@ func boundaryCloses(segs [][2][2]float64) bool {
 // closed; when it did not, no segments are returned, because a partial boundary
 // is worse than none — see boundaryCloses.
 func unionBoundary(tris [][3][2]float64) ([][2][2]float64, bool) {
+	out := unionBoundarySegs(tris)
+	if !boundaryCloses(out) {
+		return nil, false
+	}
+	return out, true
+}
+
+// unionBoundarySegs is unionBoundary without the closure verdict: the directed
+// sub-edges as classified, open or not.
+//
+// Split out so the DRAWING path can inspect an outline that did not close and
+// decide whether it is repairable, while every MEASUREMENT path keeps going
+// through unionBoundary and its all-or-nothing gate. A bridged outline must
+// never reach an area or a perimeter — see bridgeOpenBoundary.
+func unionBoundarySegs(tris [][3][2]float64) [][2][2]float64 {
 	edges := make([]subEdge, 0, 3*len(tris))
 	for i, t := range tris {
 		edges = append(edges,
@@ -344,10 +376,93 @@ func unionBoundary(tris [][3][2]float64) ([][2][2]float64, bool) {
 			out = append(out, [2][2]float64{g.b, g.a})
 		}
 	}
-	if !boundaryCloses(out) {
-		return nil, false
+	return out
+}
+
+// silhouetteBridgeMax is the longest gap a silhouette outline may be closed
+// across, in meters.
+//
+// 10 mm is chosen against the drawing this feeds, not fitted to a dataset. An
+// elevation is read at 1:50 or smaller, where 10 mm is 0.2 mm on the sheet —
+// thinner than the line drawing the wall. It is also a thousand times the 1e-5 m
+// weld quantum, so it is a real gap being bridged rather than rounding, and the
+// bridge is reported for exactly that reason.
+const silhouetteBridgeMax = 0.01
+
+// bridgeOpenBoundary closes a silhouette outline left open by ONE short gap, and
+// refuses everything else.
+//
+// The union boundary is exact in real arithmetic. On float32-derived world
+// coordinates carrying tessellation noise it can classify a sub-edge
+// inconsistently and leave the ring open, and the strict verdict then discards
+// the whole element: an outline 56 segments long with two loose ends is thrown
+// away entirely, and the wall is drawn nowhere. Measured on a 29.5 MB ArchiCAD
+// IFC2X3 export, 45 exterior elements were lost that way, every one of them to
+// exactly ONE open chain with a gap between 0.9 mm and 9.1 mm.
+//
+// So the repair is deliberately the narrowest thing that recovers that case:
+//
+//   - EXACTLY one vertex with one edge too few and one with one too many. Two
+//     loose ends is one open chain. Anything else — several chains, a vertex
+//     unbalanced by more than one — is a torn outline, not a seam that failed to
+//     weld, and is refused as before.
+//   - The gap between them at most silhouetteBridgeMax.
+//
+// bridged reports that a segment the input did not contain was added. It is
+// plumbed out to [ElevationEntity.OutlineBridged] rather than swallowed,
+// because a repaired outline is a drawing that is right and a measurement that
+// is invented: bridging a 9 mm gap fabricates up to 9 mm times the local extent
+// of area that no face in the mesh accounts for. Nothing in this package feeds
+// a bridged outline to an area or a perimeter — unionMeasure2D goes through
+// unionBoundary, whose gate is unchanged — and no consumer should either.
+func bridgeOpenBoundary(segs [][2][2]float64) (out [][2][2]float64, bridged, ok bool) {
+	if boundaryCloses(segs) {
+		return segs, false, true
 	}
-	return out, true
+	degree := make(map[[2]int64]int, 2*len(segs))
+	point := make(map[[2]int64][2]float64, 2*len(segs))
+	for _, s := range segs {
+		degree[weldUV(s[0])]++
+		degree[weldUV(s[1])]--
+		point[weldUV(s[0])] = s[0]
+		point[weldUV(s[1])] = s[1]
+	}
+	// Deterministic: the loose ends are found by scanning sorted keys, never by
+	// map order, so an outline bridges the same way on every run.
+	keys := make([][2]int64, 0, len(degree))
+	for k, d := range degree {
+		if d != 0 {
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) != 2 {
+		return nil, false, false
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i][0] != keys[j][0] {
+			return keys[i][0] < keys[j][0]
+		}
+		return keys[i][1] < keys[j][1]
+	})
+	// One end needs an outgoing edge (deficit), the other an incoming one.
+	var from, to [2]int64
+	switch {
+	case degree[keys[0]] == -1 && degree[keys[1]] == 1:
+		from, to = keys[0], keys[1]
+	case degree[keys[0]] == 1 && degree[keys[1]] == -1:
+		from, to = keys[1], keys[0]
+	default:
+		return nil, false, false
+	}
+	a, b := point[from], point[to]
+	if math.Hypot(b[0]-a[0], b[1]-a[1]) > silhouetteBridgeMax {
+		return nil, false, false
+	}
+	out = append(append(make([][2][2]float64, 0, len(segs)+1), segs...), [2][2]float64{a, b})
+	if !boundaryCloses(out) {
+		return nil, false, false
+	}
+	return out, true, true
 }
 
 // splitAtIntersections cuts every edge at every point where another edge meets

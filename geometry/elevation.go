@@ -23,6 +23,16 @@ type ElevationEntity struct {
 	// Depth is the distance from the view plane along −N to the element's
 	// NEAREST point, meters. Smaller is nearer the viewer.
 	Depth float64
+	// OutlineBridged reports that Outline exists only because a gap of at most
+	// 10 mm was closed across — a segment no face in the mesh accounts for.
+	//
+	// The drawing is right; a measurement taken off this outline is not. Up to
+	// the gap length times its local extent of area is invented, so total a
+	// facade with Facing.FaceArea or NetAreas, never by integrating Outline.
+	// Without the repair the element is not drawn AT ALL: on a 29.5 MB ArchiCAD
+	// export 45 exterior elements were being discarded whole for one sub-
+	// centimetre seam apiece. See bridgeOpenBoundary.
+	OutlineBridged bool
 }
 
 // ElevationView is the orthographic view of a set of elements from one
@@ -114,14 +124,31 @@ func ElevationPlane(dir [3]float64) (Plane, bool) {
 // directions and yields nothing for the other — so a caller holding non-closed
 // geometry must choose p.N deliberately.
 func (e Element) SilhouetteOn(p Plane) []Loop {
+	loops, _ := e.silhouetteOn(p)
+	return loops
+}
+
+// SilhouetteBridgedOn is [Element.SilhouetteOn] plus whether the outline had to
+// be closed across a short gap to exist at all.
+//
+// bridged=true means the drawing is right and a measurement taken off it would
+// not be: a segment no face in the mesh accounts for was added, so up to the
+// gap length times the local extent of the area is invented. Measure with
+// NetAreas or Facing.FaceArea, never off a bridged outline. See
+// bridgeOpenBoundary for the bound and why the repair exists.
+func (e Element) SilhouetteBridgedOn(p Plane) (loops []Loop, bridged bool) {
+	return e.silhouetteOn(p)
+}
+
+func (e Element) silhouetteOn(p Plane) ([]Loop, bool) {
 	if !p.Valid() || len(e.Tris) < 3 || len(e.Verts) < 9 {
-		return nil
+		return nil, false
 	}
-	rings := silhouetteRings(worldPoints(e.Verts, e.Placement), e.Tris, p)
+	rings, bridged := silhouetteRingsRepaired(worldPoints(e.Verts, e.Placement), e.Tris, p, true)
 	if len(rings) == 0 {
-		return nil
+		return nil, false
 	}
-	return nestEvenOdd(rings, LoopSilhouette)
+	return nestEvenOdd(rings, LoopSilhouette), bridged
 }
 
 // ElevationOn projects the scene onto p and returns the elevation drawn from
@@ -311,16 +338,17 @@ func (s *Scene) elevationOn(f *step.File, r *model.Result, p Plane, facings map[
 		if !ok || facing.Exposure != ExposureExterior || !facesSheet(facing.Normal, p.N) {
 			continue
 		}
-		outline := e.SilhouetteOn(p)
+		outline, bridged := e.SilhouetteBridgedOn(p)
 		if len(outline) == 0 {
 			continue
 		}
 		view.Entities = append(view.Entities, ElevationEntity{
-			GlobalID: e.GlobalID,
-			IFCClass: class[e.GlobalID],
-			Outline:  outline,
-			Openings: openingLoopsOn(f, expressID[e.GlobalID], r.UnitScale, p, outline),
-			Depth:    depthOn(p, worldPoints(e.Verts, e.Placement)),
+			GlobalID:       e.GlobalID,
+			IFCClass:       class[e.GlobalID],
+			Outline:        outline,
+			OutlineBridged: bridged,
+			Openings:       openingLoopsOn(f, expressID[e.GlobalID], r.UnitScale, p, outline),
+			Depth:          depthOn(p, worldPoints(e.Verts, e.Placement)),
 		})
 	}
 
