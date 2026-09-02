@@ -65,6 +65,21 @@ type occupancy struct {
 // Returns nil when the slice misses all geometry, or when the extent would need
 // more than occupancyMaxCells.
 func buildOccupancy(elems []Element, z float64) *occupancy {
+	return buildOccupancyWith(elems, z, newWorldCache(elems))
+}
+
+// bandGridDims sizes the grid for the model's cross-section at height z WITHOUT
+// allocating it, returning the padded grid origin and its extent in cells.
+//
+// buildOccupancyWith uses it to build the grid; BuildFacings uses bandGridCells
+// to learn what a band will cost BEFORE deciding how many bands may be in flight
+// at once. Those two answers have to agree — a scheduler working from a copy of
+// this arithmetic would silently stop bounding memory the moment either copy
+// changed — so there is one implementation and both call it.
+//
+// ok is false when the slice misses all geometry, or when the extent would need
+// more than occupancyMaxCells.
+func bandGridDims(elems []Element, z float64) (originX, originY float64, nx, ny int, ok bool) {
 	minX, minY := math.Inf(1), math.Inf(1)
 	maxX, maxY := math.Inf(-1), math.Inf(-1)
 	any := false
@@ -102,13 +117,13 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		any = true
 	}
 	if !any || !finite3(v3{minX, minY, 0}) || !finite3(v3{maxX, maxY, 0}) {
-		return nil
+		return 0, 0, 0, 0, false
 	}
 
 	pad := occupancyPad * occupancyCell
-	g := &occupancy{minX: minX - pad, minY: minY - pad}
-	g.nx = int((maxX-minX+2*pad)/occupancyCell) + 1
-	g.ny = int((maxY-minY+2*pad)/occupancyCell) + 1
+	originX, originY = minX-pad, minY-pad
+	nx = int((maxX-minX+2*pad)/occupancyCell) + 1
+	ny = int((maxY-minY+2*pad)/occupancyCell) + 1
 	// Bound each axis BEFORE multiplying. This library parses untrusted files,
 	// so a file-supplied coordinate of 1e17 is reachable input: nx*ny overflows
 	// int and wraps to a small positive number, sailing past a product-only
@@ -118,10 +133,35 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 	// 64-bit int, but on a 32-bit build (GOARCH=386, arm, wasm) `int` is 32 bits
 	// and it wraps to a small positive number that sails past the cap, straight
 	// into the makeslice panic this guard exists to prevent.
-	if g.nx <= 0 || g.ny <= 0 || g.nx > occupancyMaxCells || g.ny > occupancyMaxCells ||
-		g.nx > occupancyMaxCells/g.ny {
+	if nx <= 0 || ny <= 0 || nx > occupancyMaxCells || ny > occupancyMaxCells ||
+		nx > occupancyMaxCells/ny {
+		return 0, 0, 0, 0, false
+	}
+	return originX, originY, nx, ny, true
+}
+
+// bandGridCells reports how many cells buildOccupancyWith would allocate per
+// plane for the band at height z, or 0 when it would build no grid at all.
+//
+// A grid holds several []bool of this length, so this is the unit the aggregate
+// memory budget in BuildFacings is denominated in.
+func bandGridCells(elems []Element, z float64) int {
+	_, _, nx, ny, ok := bandGridDims(elems, z)
+	if !ok {
+		return 0
+	}
+	return nx * ny
+}
+
+// buildOccupancyWith is buildOccupancy over a caller-owned worldCache, shared
+// across every band in one BuildFacings run so a vertex is transformed once per
+// model rather than once per band it sits beneath.
+func buildOccupancyWith(elems []Element, z float64, wc *worldCache) *occupancy {
+	originX, originY, nx, ny, ok := bandGridDims(elems, z)
+	if !ok {
 		return nil
 	}
+	g := &occupancy{minX: originX, minY: originY, nx: nx, ny: ny}
 	g.solid = make([]bool, g.nx*g.ny)
 	g.covered = make([]bool, g.nx*g.ny)
 
@@ -141,7 +181,7 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		if !crosses && !above {
 			continue
 		}
-		w := worldPoints(e.Verts, e.Placement)
+		w := wc.at(i)
 
 		// Solid: the actual cross-section at z, filled per element (even-odd
 		// over that element's own rings, so a genuinely hollow element keeps
