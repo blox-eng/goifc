@@ -19,6 +19,40 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- `BuildFacings` no longer re-transforms the whole model into every 10 cm mid-height
+  band. It built one occupancy grid per distinct band — 152 of them on kb645.ifc —
+  and rasterized the model into each from scratch: 164,670 `worldPoints` calls for
+  1,878 elements, 239M triangles transformed to cover 3.3M, **72x redundant**. World
+  points are now computed once and shared, and the bands (which are independent) are
+  classified on a bounded worker pool.
+
+  **15.233s -> 2.139s (7.1x)** on kb645.ifc, with the classification bit-identical:
+  digest `c0b435cfc8457ca5`, n=1519, on both sides — every field of every `Facing`,
+  ids sorted, full float precision. The import pass as a whole goes 27.6s -> 13.7s.
+
+  Concurrency is bounded rather than one goroutine per band, because a grid is the
+  large allocation and the serial loop deliberately kept one live at a time. Measured
+  rather than assumed: **peak heap went down**, 692.4 MB serial to 675.6 MB parallel,
+  and total allocation fell 32%. The retained cache is 54.8 MB.
+
+  The bound is on total cells in flight, not merely on the number of grids. A grid
+  count alone is only a memory ceiling while every grid is small, and
+  `occupancyMaxCells` permits a single band ~40M cells — so eight such bands at once
+  would be roughly eight times anything the serial version could hold, on exactly the
+  georeferenced, site-scale models that cap exists for. The worker pool is therefore
+  sized against the largest band's grid so the aggregate never exceeds what one
+  maximal grid was already allowed: **peak grid memory is no higher than before this
+  change on any model**, and parallelism only decides how that fixed budget is split.
+
+  Two ordering properties are load-bearing and now have tests: the cache is filled
+  before the workers start, so it is read-only while shared (filling it lazily would
+  be a data race whose writers compute identical values — invisible except under
+  `-race`); and per-band results merge in sorted key order, never completion order,
+  so a malformed file repeating a `GlobalId` across bands resolves the same way it
+  always did.
+
 ## v0.9.2 — 2026-08-21
 
 ### Fixed
