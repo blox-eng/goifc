@@ -37,6 +37,15 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   rather than assumed: **peak heap went down**, 692.4 MB serial to 675.6 MB parallel,
   and total allocation fell 32%. The retained cache is 54.8 MB.
 
+  The bound is on total cells in flight, not merely on the number of grids. A grid
+  count alone is only a memory ceiling while every grid is small, and
+  `occupancyMaxCells` permits a single band ~40M cells — so eight such bands at once
+  would be roughly eight times anything the serial version could hold, on exactly the
+  georeferenced, site-scale models that cap exists for. The worker pool is therefore
+  sized against the largest band's grid so the aggregate never exceeds what one
+  maximal grid was already allowed: **peak grid memory is no higher than before this
+  change on any model**, and parallelism only decides how that fixed budget is split.
+
   Two ordering properties are load-bearing and now have tests: the cache is filled
   before the workers start, so it is read-only while shared (filling it lazily would
   be a data race whose writers compute identical values — invisible except under

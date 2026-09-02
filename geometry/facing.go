@@ -139,6 +139,24 @@ func BuildFacings(elems []Element) map[string]Facing {
 	if workers > len(keys) {
 		workers = len(keys)
 	}
+	// Bound the AGGREGATE grid memory, not just the grid COUNT. A count alone is
+	// only a memory ceiling if every grid is small: occupancyMaxCells lets one
+	// band allocate ~40M cells across several []bool, so eight of those in flight
+	// is roughly eight times what the serial version could ever hold. On kb645
+	// this never binds — its grids are tiny and the clamp leaves workers alone —
+	// but the models that reach the cap are precisely the georeferenced,
+	// site-scale ones the cap was written for, so the ceiling has to hold there
+	// too, not just on a well-behaved building.
+	//
+	// Sized off the LARGEST band rather than the model's overall extent: a band's
+	// grid covers only the elements its slice cuts, so the overall extent
+	// over-estimates badly on exactly those far-flung models and would serialize
+	// runs that never needed it.
+	if maxCells := maxBandGridCells(elems, keys); maxCells > 0 {
+		if allowed := facingBandCellBudget / maxCells; allowed < workers {
+			workers = allowed
+		}
+	}
 	if workers < 1 {
 		workers = 1
 	}
@@ -189,7 +207,37 @@ func BuildFacings(elems []Element) map[string]Facing {
 // A grid is the large allocation in this package (up to occupancyMaxCells), so
 // this is a memory ceiling first and a parallelism knob second: peak grid memory
 // is this many, whatever the model's band count.
+//
+// It is only HALF the ceiling — see facingBandCellBudget for the other half.
 const facingBandWorkers = 8
+
+// facingBandCellBudget caps the total occupancy-grid cells in flight across all
+// band workers.
+//
+// Deliberately equal to occupancyMaxCells, the most a SINGLE grid was ever
+// allowed to allocate: the aggregate can therefore never exceed what the serial
+// version already held at its own worst case, so band parallelism cannot raise
+// peak grid memory above the pre-existing ceiling — it only decides how that
+// fixed budget is divided. A model whose bands are small (every real building
+// measured) spends it on facingBandWorkers grids at once; a model whose bands
+// approach the cap spends it on one, and runs exactly as it used to.
+const facingBandCellBudget = occupancyMaxCells
+
+// maxBandGridCells returns the largest per-plane cell count any of these bands
+// will allocate, so BuildFacings can size its worker pool to the budget before
+// the first grid exists.
+//
+// This is a bbox pass per band with no vertex transform, which is nothing beside
+// the rasterization it is sizing — measured at well under 1% of the stage.
+func maxBandGridCells(elems []Element, keys []int64) int {
+	most := 0
+	for _, key := range keys {
+		if c := bandGridCells(elems, float64(key)*occupancyCell); c > most {
+			most = c
+		}
+	}
+	return most
+}
 
 // voted is an element whose axis has been decided but whose sign has not.
 type voted struct {

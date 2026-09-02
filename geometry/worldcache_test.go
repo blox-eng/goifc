@@ -82,3 +82,47 @@ func TestBuildFacingsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// TestBandGridCellsMatchesAllocation pins the invariant the aggregate memory
+// budget rests on: bandGridCells must report exactly what buildOccupancyWith
+// goes on to allocate.
+//
+// BuildFacings sizes its worker pool from bandGridCells BEFORE any grid exists,
+// so if the two ever disagree the pool is sized against a fiction and
+// facingBandCellBudget stops bounding anything — silently, with every test still
+// green, because the classification itself is unaffected. They share
+// bandGridDims today precisely so they cannot drift; this fails if anyone splits
+// them apart again.
+//
+// Note that a nil return does NOT mean nothing was allocated: buildOccupancyWith
+// allocates the grid and only then discards it when the slice turns out to cut
+// no element (`!sliced`). The budget is about memory, so bandGridCells predicts
+// the ALLOCATION, and that case is deliberately not treated as a mismatch.
+func TestBandGridCellsMatchesAllocation(t *testing.T) {
+	elems := benchModel(41)
+	for _, z := range []float64{-5, 0, 0.35, 1.5, 3, 1e6} {
+		predicted := bandGridCells(elems, z)
+		g := buildOccupancyWith(elems, z, newWorldCache(elems))
+
+		if predicted == 0 {
+			// Sizing refused, so nothing may be built at all.
+			if g != nil {
+				t.Fatalf("z=%v: bandGridCells predicted no grid, but one was built (%dx%d)",
+					z, g.nx, g.ny)
+			}
+			continue
+		}
+		if g == nil {
+			continue // allocated, then discarded for cutting nothing
+		}
+		actual := g.nx * g.ny
+		if predicted != actual {
+			t.Fatalf("z=%v: bandGridCells predicted %d cells, grid allocated %d (%dx%d)",
+				z, predicted, actual, g.nx, g.ny)
+		}
+		if len(g.solid) != actual || len(g.covered) != actual {
+			t.Fatalf("z=%v: grid planes are %d/%d cells, nx*ny is %d",
+				z, len(g.solid), len(g.covered), actual)
+		}
+	}
+}
