@@ -2,7 +2,10 @@ package geometry
 
 import (
 	"math"
+	"runtime"
 	"slices"
+	"sync"
+	"sync/atomic"
 )
 
 // Exposure is what the Facing.Normal side of an element reaches.
@@ -81,43 +84,110 @@ func BuildFacings(elems []Element) map[string]Facing {
 	bands := map[int64][]voted{}
 	var keys []int64
 
+	// One transform of each element's vertices for the whole run, shared by the
+	// axis vote, every band's grid, and the final sign. See worldCache: without
+	// it an element is re-transformed once per band beneath it.
+	wc := newWorldCache(elems)
+
 	for i := range elems {
 		e := elems[i]
-		dir, share, ok := axisOf(e)
+		dir, share, ok := axisOf(e, wc.at(i))
 		if !ok {
 			continue
 		}
 		key, keyed := sliceKey(e)
 		if !keyed {
-			out[e.GlobalID] = signFacing(e, dir, share, nil)
+			out[e.GlobalID] = signFacing(e, dir, share, nil, wc.at(i))
 			continue
 		}
 		if _, seen := bands[key]; !seen {
 			keys = append(keys, key)
 		}
-		bands[key] = append(bands[key], voted{e, dir, share})
+		bands[key] = append(bands[key], voted{i, e, dir, share})
 	}
 
 	// Sorted, never a map range: an iteration order must not be able to reach
 	// the output, even where today's arithmetic happens not to care.
 	slices.Sort(keys)
-	for _, key := range keys {
-		// Built at the height the KEY denotes, never at some member element's
-		// exact mid-height: two elements can differ by most of a cell and still
-		// share a key, so cutting at one arrival's height would make the plane
-		// — and every sign on the band — depend on input order.
-		g := buildOccupancy(elems, float64(key)*occupancyCell)
-		for _, v := range bands[key] {
-			out[v.e.GlobalID] = signFacing(v.e, v.dir, v.share, g)
+
+	// Bands are independent — each builds its own grid at a height its KEY
+	// denotes, reads only the shared read-only inputs, and decides only its own
+	// members — so they are computed in parallel. On a real building this is the
+	// dominant cost of the whole import: the rasterization, not the vertex
+	// transform, and it repeats per band.
+	//
+	// Concurrency is BOUNDED rather than one goroutine per band, because a grid
+	// is the large allocation here. The serial version kept exactly one live at
+	// a time and said so; this keeps at most facingBandWorkers live, which is
+	// the deliberate trade — a bounded multiple of peak memory for a large
+	// multiple of throughput. Unbounded would put one grid per distinct
+	// mid-height in flight at once, which on a big model is the memory blow-up
+	// the serial comment existed to prevent.
+	wc.fill() // read-only from here, so the workers may share it
+
+	results := make([]map[string]Facing, len(keys))
+	workers := runtime.GOMAXPROCS(0)
+	if workers > facingBandWorkers {
+		workers = facingBandWorkers
+	}
+	if workers > len(keys) {
+		workers = len(keys)
+	}
+	if workers < 1 {
+		workers = 1
+	}
+
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				k := int(next.Add(1) - 1)
+				if k >= len(keys) {
+					return
+				}
+				key := keys[k]
+				// Built at the height the KEY denotes, never at some member
+				// element's exact mid-height: two elements can differ by most of
+				// a cell and still share a key, so cutting at one arrival's
+				// height would make the plane — and every sign on the band —
+				// depend on input order.
+				g := buildOccupancyWith(elems, float64(key)*occupancyCell, wc)
+				band := make(map[string]Facing, len(bands[key]))
+				for _, v := range bands[key] {
+					band[v.e.GlobalID] = signFacing(v.e, v.dir, v.share, g, wc.at(v.i))
+				}
+				results[k] = band
+				// g dies here, so at most `workers` grids are ever live.
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Merged in sorted key order, never in completion order. Bands hold disjoint
+	// elements so no key normally collides — but a malformed file CAN repeat a
+	// GlobalId across two bands, and then the winner is decided by merge order.
+	// Serial iteration made that the sorted one; completion order would make it
+	// the scheduler's.
+	for _, band := range results {
+		for id, f := range band {
+			out[id] = f
 		}
-		// g dies here. One band's grid is live at a time, so peak memory is one
-		// grid rather than one per distinct element mid-height in the model.
 	}
 	return out
 }
 
+// facingBandWorkers caps how many occupancy grids BuildFacings keeps in flight.
+// A grid is the large allocation in this package (up to occupancyMaxCells), so
+// this is a memory ceiling first and a parallelism knob second: peak grid memory
+// is this many, whatever the model's band count.
+const facingBandWorkers = 8
+
 // voted is an element whose axis has been decided but whose sign has not.
 type voted struct {
+	i     int // index into the elems slice, so the shared worldCache can be asked
 	e     Element
 	dir   v3
 	share float64
@@ -154,31 +224,37 @@ func sliceKey(e Element) (int64, bool) {
 
 // axisOf runs the unsigned axis vote for e in world space. ok=false means the
 // element has no facade, and so needs no neighbour context at all.
-func axisOf(e Element) (dir v3, share float64, ok bool) {
+// w is e's world points, supplied by the caller so a run that asks about the
+// same element repeatedly transforms it once.
+func axisOf(e Element, w []v3) (dir v3, share float64, ok bool) {
 	if len(e.Tris) == 0 {
 		return v3{}, 0, false
 	}
 	// The vote area is deliberately dropped: it folds antipodes, so it is a vote
 	// weight and never a quantity. FaceArea is measured separately, on one side,
 	// once the sign is known.
-	dir, _, share, ok = dominantAxis(worldPoints(e.Verts, e.Placement), e.Tris)
+	dir, _, share, ok = dominantAxis(w, e.Tris)
 	return dir, share, ok
 }
 
 // facingWithin resolves e's facing against grid g. A nil g means no neighbour
 // context — the axis still resolves, the sign does not.
+// Single-element path: no run to amortise over, so it transforms once here and
+// hands the same slice to both steps rather than taking a cache.
 func facingWithin(e Element, g *occupancy) (Facing, bool) {
-	dir, share, ok := axisOf(e)
+	w := worldPoints(e.Verts, e.Placement)
+	dir, share, ok := axisOf(e, w)
 	if !ok {
 		return Facing{}, false
 	}
-	return signFacing(e, dir, share, g), true
+	return signFacing(e, dir, share, g, w), true
 }
 
 // signFacing resolves which of ±dir points at the exposed side, against grid g.
 // A nil g means no neighbour context: the axis stands, the sign is arbitrary
 // and the confidence says so.
-func signFacing(e Element, dir v3, share float64, g *occupancy) Facing {
+// w is e's world points, supplied by the caller for the same reason as axisOf.
+func signFacing(e Element, dir v3, share float64, g *occupancy, w []v3) Facing {
 	f := Facing{Normal: dir}
 
 	if g == nil {
@@ -203,7 +279,7 @@ func signFacing(e Element, dir v3, share float64, g *occupancy) Facing {
 	// Measured against the RESOLVED normal, never the canonical one: the whole
 	// point of FaceArea is that it names the side the element actually presents,
 	// so it has to be computed after the sign is known.
-	f.FaceArea = sideAreaDir(worldPoints(e.Verts, e.Placement), e.Tris, f.Normal)
+	f.FaceArea = sideAreaDir(w, e.Tris, f.Normal)
 	return f
 }
 

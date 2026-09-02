@@ -65,6 +65,13 @@ type occupancy struct {
 // Returns nil when the slice misses all geometry, or when the extent would need
 // more than occupancyMaxCells.
 func buildOccupancy(elems []Element, z float64) *occupancy {
+	return buildOccupancyWith(elems, z, newWorldCache(elems))
+}
+
+// buildOccupancyWith is buildOccupancy over a caller-owned worldCache, shared
+// across every band in one BuildFacings run so a vertex is transformed once per
+// model rather than once per band it sits beneath.
+func buildOccupancyWith(elems []Element, z float64, wc *worldCache) *occupancy {
 	minX, minY := math.Inf(1), math.Inf(1)
 	maxX, maxY := math.Inf(-1), math.Inf(-1)
 	any := false
@@ -141,7 +148,7 @@ func buildOccupancy(elems []Element, z float64) *occupancy {
 		if !crosses && !above {
 			continue
 		}
-		w := worldPoints(e.Verts, e.Placement)
+		w := wc.at(i)
 
 		// Solid: the actual cross-section at z, filled per element (even-odd
 		// over that element's own rings, so a genuinely hollow element keeps
