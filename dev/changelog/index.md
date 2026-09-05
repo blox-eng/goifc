@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.9.3 — 2026-09-02
+
 ### Fixed
 
 - `BuildFacings` no longer re-transforms the whole model into every 10 cm mid-height band. It built one occupancy grid per distinct band — 152 of them on kb645.ifc — and rasterized the model into each from scratch: 164,670 `worldPoints` calls for 1,878 elements, 239M triangles transformed to cover 3.3M, **72x redundant**. World points are now computed once and shared, and the bands (which are independent) are classified on a bounded worker pool.
