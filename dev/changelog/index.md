@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.10.0 — 2026-09-17
+
 ### Added
 
 - `geometry.Polygon2D` — a hole-nested ring set in one plane's (u, v) frame, in metres: an outer ring and the voids inside it, implicitly closed. It is what `Element.SilhouetteOn` describes one step on — that method returns a FLAT `[]Loop` hole-nested by winding, which can hold several outer loops, so the conversion is one `Polygon2D` per outer loop. Winding decides nothing: the rings are filled even-odd, so an outline stored and read back still measures correctly.
