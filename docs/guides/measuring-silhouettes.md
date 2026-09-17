@@ -124,17 +124,34 @@ It refuses when:
 - there are no polygons at all;
 - a ring has fewer than three points, or encloses no area;
 - any coordinate is `NaN` or infinite;
+- two edges of one polygon cross each other, or run along each other for
+  more than a point — a bow-tie, a ring that doubles back over its own edge,
+  two squares joined by a bridge walked there and back, a hole cutting through
+  its outer ring. That is not an outline, and a ring crossing itself can
+  otherwise measure to a confident wrong figure;
 - the rings do not describe the surface they claim — a hole that is not inside
-  its outer ring, two holes that overlap each other, a boundary that crosses
-  itself. "Outer minus holes" and the region the rings actually enclose are
-  then two different numbers, and there is no way to know which one was meant;
+  its outer ring, two holes that overlap each other. "Outer minus holes" and
+  the region the rings actually enclose are then two different numbers, and
+  there is no way to know which one was meant;
 - the union boundary did not close.
 
-That last one is the same refusal `SilhouetteOn` already makes, and for the
-same reason: the area integral is taken about the world origin, so an unclosed
-boundary does not return a slightly wrong number — it returns the residual
-multiplied by the model's distance from the origin. A 0.58 m² panel 47 m out
-reports 30.69 m².
+Rings may **touch** at a point. A ring may pass through one of its own
+vertices twice, a vertex may sit on another edge, and a hole may meet its
+outer ring at a corner: each has one honest area and one honest boundary, and
+`SilhouetteOn` emits such outlines — an opening that reaches the corner of a
+notch comes back as one ring passing through that corner twice. Touching is
+judged at the 1e-5 m weld quantum below. Checking for crossings compares every
+edge of a polygon with every other.
+
+The unclosed boundary is the same check `SilhouetteOn` makes, but not for the
+same stakes. `SilhouetteOn` integrates about the world origin, where an
+unclosed boundary would return its residual multiplied by the model's distance
+from the origin — a 0.58 m² panel 47 m out once reported 30.69 m² — and that
+is why it refuses. `UnionMeasure2D` first moves every ring by one shared
+offset, to the centre of their combined bounding box, and integrates there, so
+the model's distance from the world origin scales nothing. An unclosed union
+boundary is refused anyway: its integral is not the area of anything, wherever
+it is taken.
 
 ## A bridged outline is not a quantity source
 
@@ -167,6 +184,8 @@ outline this measures; simplify it first.
 Superlinear and shape-dependent, not one exponent. The sweep's bound is O(v²)
 in a single polygon's vertex count — every vertex opens a slab, and every edge
 may cross every slab — with the boundary walk over the pieces on top of it.
+The crossing check before the sweep is O(v²) on every input, since it compares
+every pair of edges.
 Measured between 32 and 512 vertices, growth ran from roughly linear on an
 outline whose slabs each hold two crossings to well above quadratic on one
 whose slabs hold many. Treat O(v²) as the bound and not as a prediction.

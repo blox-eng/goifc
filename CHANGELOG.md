@@ -52,9 +52,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   must not substitute zero — zero is a measurement, this is the absence of one.
   They refuse when there are no polygons at all, when a ring has fewer than
   three points or encloses no area, when a coordinate is NaN or infinite, when
-  the rings do not describe the surface they claim (a hole outside its outer
-  ring, two holes overlapping, a boundary crossing itself), or when the union
-  boundary did not close — the refusal `Element.SilhouetteOn` already makes.
+  two edges of one polygon cross or run along each other (a bow-tie, a ring
+  doubling back over its own edge, a hole cutting through its outer ring),
+  when the rings do not describe the surface they claim (a hole outside its
+  outer ring, two holes overlapping), or when the union boundary did not
+  close. Rings may touch at a point, because `Element.SilhouetteOn` emits such
+  outlines.
 
   Both measure the same outline the same wherever the model sits. That is worth
   stating because `SilhouetteOn` projects WORLD coordinates and `ElevationPlane`
