@@ -8,6 +8,19 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- `geometry.Polygon2D` — a hole-nested ring set in one plane's (u, v) frame, in metres: an outer ring and the voids inside it, implicitly closed. It is what `Element.SilhouetteOn` describes one step on — that method returns a FLAT `[]Loop` hole-nested by winding, which can hold several outer loops, so the conversion is one `Polygon2D` per outer loop. Winding decides nothing: the rings are filled even-odd, so an outline stored and read back still measures correctly.
+- `geometry.PolygonsFromLoops(loops)` — that conversion: one `Polygon2D` per outer loop of one element's outline, each holding the loops nested directly inside it, decided by containment rather than winding. An island inside an opening is an outer again. It refuses loops it cannot nest honestly: too short, non-finite or enclosing nothing; crossing or running along each other; passing through each other at a corner; or touching at every point it could test.
+- `geometry.UnionArea2D(polys)` — the area the polygons cover TOGETHER, with anything two of them share counted once and holes subtracted unless another polygon fills them. This is the question a facade asks: a cladding band in front of the wall behind it is one surface, and adding the two areas overstates it by the shared strip. Net area already deducts the union of a host's openings rather than their sum; this is that operation exported, for outlines the caller is holding rather than elements the library is holding.
+- `geometry.UnionMeasure2D(polys)` — the same area plus the length of the union's boundary, from one walk of one boundary so the two cannot describe different shapes. The boundary includes a void the union still has and excludes a seam where two polygons merge, exactly as the shared area is counted once.
+
+Both return `ok == false` rather than a figure nobody can trust, and a caller must not substitute zero — zero is a measurement, this is the absence of one. They refuse when there are no polygons at all, when a ring has fewer than three points or encloses no area, when a coordinate is NaN or infinite, when two edges of one polygon cross or run along each other (a bow-tie, a ring doubling back over its own edge, a hole cutting through its outer ring), when the rings do not describe the surface they claim (a hole outside its outer ring, two holes overlapping), or when the union boundary did not close. Rings may touch at a point, because `Element.SilhouetteOn` emits such outlines.
+
+Both measure the same outline the same wherever the model sits. That is worth stating because `SilhouetteOn` projects WORLD coordinates and `ElevationPlane` has no origin to subtract them against, so a model on a national grid arrives at x≈4.6e5, y≈4.7e6 — the rings are recentred before measurement so neither the figure nor the refusal depends on it.
+
+The polygons must already be in ONE plane's frame; nothing here can detect a mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail it can see. See [measuring silhouettes](https://blox-eng.github.io/goifc/latest/guides/measuring-silhouettes/).
+
 ## v0.9.3 — 2026-09-02
 
 ### Fixed

@@ -23,6 +23,7 @@ Meshes are element-local; placements and bounding boxes are world.
 
 ## Guides
 
+- [Measuring silhouettes](https://blox-eng.github.io/goifc/latest/dev/guides/measuring-silhouettes/index.md)
 - [Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)
 - [Storey plans](https://blox-eng.github.io/goifc/latest/dev/guides/storey-plans/index.md)
 

@@ -49,3 +49,9 @@ for i := range a.Result.Elements {
     fmt.Printf("%s\t%.3f m³\t(%s)\n", e.Name, *e.Qto.Volume, e.QuantitySource)
 }
 ```
+
+## Summing across elements
+
+The warning above is about mixing tiers. There is a second way a sum goes wrong, and it is inside one tier: **elements that overlap**.
+
+Two elements cladding one facade plane — a wall and the band in front of it — each report their own area, and adding the two counts the strip they share twice. Measure them as one surface instead, with the overlap counted once: see [measuring silhouettes](https://blox-eng.github.io/goifc/latest/dev/guides/measuring-silhouettes/index.md).
