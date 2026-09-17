@@ -56,11 +56,13 @@ fuzz: ## Fuzz the untrusted-input paths (override with FUZZTIME=30m)
 	@echo "Fuzzing each target for $(or $(FUZZTIME),60s)..."
 	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),60s)
 	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),60s)
+	.github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D $(or $(FUZZTIME),60s)
 
 fuzz-deep: ## Fuzz hard (default 30m per target; override with FUZZTIME=2h)
 	@echo "Deep-fuzzing each target for $(or $(FUZZTIME),30m)..."
 	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),30m)
 	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),30m)
+	.github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D $(or $(FUZZTIME),30m)
 
 # The docs toolchain is Python, so it lives in a venv rather than in the
 # developer's global site-packages — and in the SAME pinned versions the Docs

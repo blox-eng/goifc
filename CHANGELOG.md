@@ -19,6 +19,39 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- `geometry.Polygon2D` — a hole-nested ring set in one plane's (u, v) frame,
+  in metres: an outer ring and the voids inside it, implicitly closed. It is
+  what `Element.SilhouetteOn` describes one step on — that method returns a
+  FLAT `[]Loop` hole-nested by winding, and splitting those rings into an outer
+  and its holes is the consumer's one conversion. Winding decides nothing: the
+  rings are filled even-odd, so an outline stored and read back still measures
+  correctly.
+- `geometry.UnionArea2D(polys)` — the area the polygons cover TOGETHER, with
+  anything two of them share counted once and holes subtracted unless another
+  polygon fills them. This is the question a facade asks: a cladding band in
+  front of the wall behind it is one surface, and adding the two areas
+  overstates it by the shared strip. Net area already deducts the union of a
+  host's openings rather than their sum; this is that operation exported, for
+  outlines the caller is holding rather than elements the library is holding.
+- `geometry.UnionMeasure2D(polys)` — the same area plus the length of the
+  union's boundary, from one walk of one boundary so the two cannot describe
+  different shapes. The boundary includes a void the union still has and
+  excludes a seam where two polygons merge, exactly as the shared area is
+  counted once.
+
+  Both return `ok == false` rather than a figure nobody can trust, and a caller
+  must not substitute zero — zero is a measurement, this is the absence of one.
+  They refuse when there are no polygons at all, when a ring has fewer than
+  three points or encloses no area, when a coordinate is NaN or infinite, when
+  the rings do not describe the surface they claim (a hole outside its outer
+  ring, two holes overlapping, a boundary crossing itself), or when the union
+  boundary did not close — the refusal `Element.SilhouetteOn` already makes.
+
+  The polygons must already be in ONE plane's frame; nothing here can detect a
+  mismatch. See [measuring silhouettes](guides/measuring-silhouettes.md).
+
 ## v0.9.3 — 2026-09-02
 
 ### Fixed

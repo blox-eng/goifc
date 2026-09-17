@@ -226,6 +226,10 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh . FuzzAssemble 60s
+      - name: Fuzz the 2D union
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D 60s
       - name: Upload crashers
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
