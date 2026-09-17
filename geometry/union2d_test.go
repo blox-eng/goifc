@@ -265,6 +265,11 @@ func TestUnionMeasure2DMeasuresRingsThatTouchAtAPoint(t *testing.T) {
 // meets the corner of a 1 x 1 m notch cut from the wall's top. SilhouetteOn
 // walks that as one ring which passes through the shared corner twice, and
 // refusing it would refuse the library's own output.
+//
+// That ring is measured on its own here. SilhouetteOn also lists the opening
+// again as a loop of its own, which is a second listing of a boundary the
+// pinched ring already carries; PolygonsFromLoops refuses such a set (see
+// TestPolygonsFromLoopsRefuses).
 func TestUnionMeasure2DMeasuresAPinchSilhouetteOnEmits(t *testing.T) {
 	p, ok := ElevationPlane([3]float64{-1, 0, 0})
 	if !ok {
@@ -591,17 +596,13 @@ func TestUnionArea2DDoesNotMutateItsInput(t *testing.T) {
 }
 
 // TestUnionArea2DMeasuresASilhouette walks the seam a consumer actually
-// crosses: an outline from [Element.SilhouetteOn], whose rings are a FLAT list
-// hole-nested by winding, split into Outer and Holes and handed back for
-// measurement. That split is the one conversion between the two APIs and it is
-// the consumer's to make, so it is exercised here rather than assumed.
+// crosses: an outline from [Element.SilhouetteOn], a FLAT list of rings,
+// converted by PolygonsFromLoops and handed back for measurement.
 //
-// BOTH shapes are measured, and the frame is the point. A solid box yields a
-// single loop, so the largest-|area| selection runs over one candidate and the
-// hole branch appends nothing — the half of the conversion the guide's
-// headline example exists for, a wall with an opening, would never run. Each
-// case therefore asserts the loop count it depends on, so a fixture that stops
-// producing a hole fails here instead of quietly measuring the other branch.
+// Each case asserts the loop and polygon counts it depends on, so a fixture
+// that stops posing its case fails here instead of quietly measuring another
+// one. The two boxes with a gap are the case a largest-ring conversion gets
+// wrong: two outer loops, and the smaller one is no hole of the larger.
 func TestUnionArea2DMeasuresASilhouette(t *testing.T) {
 	p, ok := ElevationPlane([3]float64{-1, 0, 0}) // looking along -X
 	if !ok {
@@ -611,26 +612,154 @@ func TestUnionArea2DMeasuresASilhouette(t *testing.T) {
 		name      string
 		elem      Element
 		wantLoops int
+		wantPolys int
 		wantHoles int
 		wantArea  float64
 	}{
 		// A 3 x 5 x 2 m box seen along -X is a solid 5 x 2 m rectangle.
-		{"a solid box", boxElement("box", v3{0, 0, 0}, v3{3, 5, 2}), 1, 0, 10},
+		{"a solid box", boxElement("box", v3{0, 0, 0}, v3{3, 5, 2}), 1, 1, 0, 10},
 		// A 6 x 6 m frame with a 2 x 2 m opening: 36 gross, 32 net.
-		{"a frame with an opening", frameElement(), 2, 1, 32},
+		{"a frame with an opening", frameElement(), 2, 1, 1, 32},
+		// Two 1 x 1 m boxes 2 m apart: two outers, 2 m² between them.
+		{"two boxes with a gap", boxesElement("pair", [][2]v3{
+			{{0, 0, 0}, {1, 1, 1}},
+			{{0, 3, 0}, {1, 4, 1}},
+		}), 2, 2, 0, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			loops := elem(t, tc.elem, p)
 			if len(loops) != tc.wantLoops {
 				t.Fatalf("SilhouetteOn returned %d loops, want %d — the fixture no longer poses the case this test is for", len(loops), tc.wantLoops)
 			}
-			poly := polygonFromLoops(loops)
-			if len(poly.Holes) != tc.wantHoles {
-				t.Fatalf("the conversion produced %d holes, want %d", len(poly.Holes), tc.wantHoles)
+			polys, ok := PolygonsFromLoops(loops)
+			if !ok || len(polys) != tc.wantPolys {
+				t.Fatalf("PolygonsFromLoops = %d polygons, %v; want %d, true", len(polys), ok, tc.wantPolys)
 			}
-			area, ok := UnionArea2D([]Polygon2D{poly})
+			holes := 0
+			for _, poly := range polys {
+				holes += len(poly.Holes)
+			}
+			if holes != tc.wantHoles {
+				t.Fatalf("the conversion produced %d holes, want %d", holes, tc.wantHoles)
+			}
+			area, ok := UnionArea2D(polys)
 			if !ok || math.Abs(area-tc.wantArea) > 1e-9 {
 				t.Errorf("UnionArea2D = %v, %v; want %v, true", area, ok, tc.wantArea)
+			}
+		})
+	}
+}
+
+// TestPolygonsFromLoopsNestsByContainment: one polygon per outer loop, each
+// holding only the loops directly inside it, whatever the loops' winding.
+//
+// The outline is a 6 x 6 m face with a 4 x 4 m opening, a 2 x 2 m island
+// standing in the opening, and a separate 1 x 1 m patch beside the face. The
+// island is an outer again: its nearest enclosing loop is a hole.
+func TestPolygonsFromLoopsNestsByContainment(t *testing.T) {
+	face := [][2]float64{{0, 0}, {6, 0}, {6, 6}, {0, 6}}
+	opening := [][2]float64{{1, 1}, {1, 5}, {5, 5}, {5, 1}}
+	island := [][2]float64{{2, 2}, {4, 2}, {4, 4}, {2, 4}}
+	patch := [][2]float64{{8, 0}, {9, 0}, {9, 1}, {8, 1}}
+	loops := []Loop{
+		{Role: LoopSilhouette, Points: island},
+		{Role: LoopSilhouette, Points: patch},
+		{Role: LoopSilhouette, Points: opening},
+		{Role: LoopSilhouette, Points: face},
+	}
+	want := []Polygon2D{
+		{Outer: island},
+		{Outer: patch},
+		{Outer: face, Holes: [][][2]float64{opening}},
+	}
+	for name, in := range map[string][]Loop{
+		"as wound": loops,
+		"all one way": {
+			{Points: island}, {Points: patch}, {Points: reversePts(opening)}, {Points: face},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := PolygonsFromLoops(in)
+			if !ok || len(got) != len(want) {
+				t.Fatalf("PolygonsFromLoops = %v, %v; want %v, true", got, ok, want)
+			}
+			for i := range want {
+				if len(got[i].Outer) != len(want[i].Outer) || got[i].Outer[0] != want[i].Outer[0] ||
+					len(got[i].Holes) != len(want[i].Holes) {
+					t.Errorf("polygon %d = %v; want %v", i, got[i], want[i])
+				}
+			}
+			// 36 - 16 + 4 + 1.
+			if area, ok := UnionArea2D(got); !ok || math.Abs(area-25) > 1e-9 {
+				t.Errorf("UnionArea2D = %v, %v; want 25, true", area, ok)
+			}
+		})
+	}
+}
+
+// TestPolygonsFromLoopsNestsLoopsThatTouch: touching is not crossing, so a
+// loop that meets another at points still nests. The opening is a diamond
+// whose four corners sit on the face's four edges, so no vertex of it can say
+// which side of the face it is on; an edge midpoint has to.
+func TestPolygonsFromLoopsNestsLoopsThatTouch(t *testing.T) {
+	face := [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}}
+	diamond := [][2]float64{{2, 0}, {4, 2}, {2, 4}, {0, 2}}
+	polys, ok := PolygonsFromLoops([]Loop{{Points: face}, {Points: diamond}})
+	if !ok || len(polys) != 1 || len(polys[0].Holes) != 1 {
+		t.Fatalf("PolygonsFromLoops = %v, %v; want one face with one opening", polys, ok)
+	}
+	// Four corner triangles of 2 m² each.
+	if area, ok := UnionArea2D(polys); !ok || math.Abs(area-8) > 1e-9 {
+		t.Errorf("UnionArea2D = %v, %v; want 8, true", area, ok)
+	}
+}
+
+// TestPolygonsFromLoopsRefuses pins each loop set that cannot be nested
+// honestly.
+func TestPolygonsFromLoopsRefuses(t *testing.T) {
+	square := [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}}
+	for name, loops := range map[string][]Loop{
+		"a loop of two points":     {{Points: [][2]float64{{0, 0}, {1, 1}}}},
+		"a loop enclosing no area": {{Points: [][2]float64{{0, 0}, {1, 1}, {2, 2}}}},
+		"a non-finite coordinate":  {{Points: [][2]float64{{0, 0}, {math.NaN(), 0}, {1, 1}}}},
+		// A bar across a post, crossing it well away from every corner and
+		// edge midpoint of either: containment alone would call them two
+		// separate outers and cover the crossing, where even-odd filling
+		// the pair leaves it void.
+		"two loops that cross": {
+			{Points: [][2]float64{{-5, 2}, {5, 2}, {5, 3}, {-5, 3}}},
+			{Points: [][2]float64{{-0.5, -5}, {0.5, -5}, {0.5, 5}, {-0.5, 5}}},
+		},
+		// An opening's boundary listed twice: once as the detour of a ring
+		// that is pinched at (1, 2), and once on its own. Nested any way, one
+		// listing turns the opening into covered surface.
+		"a boundary listed twice": {
+			{Points: [][2]float64{
+				{0, 0}, {3, 0}, {3, 1}, {3, 2}, {3, 3}, {1, 3}, {1, 2},
+				{2, 2}, {2, 1}, {1, 1}, {1, 2}, {0, 2}, {0, 1},
+			}},
+			{Points: [][2]float64{{1, 1}, {2, 1}, {2, 2}, {1, 2}}},
+		},
+		// Two corners of the diamond sit on the square's left edge, and it
+		// passes through the square there: half of it in, half out.
+		"a loop passing through another at its corners": {
+			{Points: square},
+			{Points: [][2]float64{{0, 1}, {-1, 2}, {0, 3}, {1, 2}}},
+		},
+		// Every corner and every edge midpoint of the triangle lies on the
+		// outer loop, which dents out between them: which side the triangle is
+		// on cannot be told from any point this tests.
+		"a loop touching another at every tested point": {
+			{Points: [][2]float64{
+				{0, 0}, {1, -1}, {2, 0}, {3, -1}, {4, 0}, {3.5, 2.5},
+				{2, 2}, {2.5, 3.5}, {0, 4}, {-1, 3}, {0, 2}, {-1, 1},
+			}},
+			{Points: [][2]float64{{0, 0}, {4, 0}, {0, 4}}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if polys, ok := PolygonsFromLoops(loops); ok {
+				t.Errorf("PolygonsFromLoops = %v, true; want ok = false", polys)
 			}
 		})
 	}
@@ -644,24 +773,6 @@ func elem(t *testing.T, e Element, p Plane) []Loop {
 		t.Fatal("SilhouetteOn returned no loops")
 	}
 	return loops
-}
-
-// polygonFromLoops is the conversion the guide documents: the ring with the
-// largest absolute area is the outer one, every other ring a hole.
-func polygonFromLoops(loops []Loop) Polygon2D {
-	outer := 0
-	for i := range loops {
-		if math.Abs(polygonArea2D(loops[i].Points)) > math.Abs(polygonArea2D(loops[outer].Points)) {
-			outer = i
-		}
-	}
-	poly := Polygon2D{Outer: loops[outer].Points}
-	for i := range loops {
-		if i != outer {
-			poly.Holes = append(poly.Holes, loops[i].Points)
-		}
-	}
-	return poly
 }
 
 // frameElement is a 6 x 6 m wall with a 2 x 2 m opening, built as four boxes so

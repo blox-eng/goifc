@@ -24,10 +24,17 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 - `geometry.Polygon2D` — a hole-nested ring set in one plane's (u, v) frame,
   in metres: an outer ring and the voids inside it, implicitly closed. It is
   what `Element.SilhouetteOn` describes one step on — that method returns a
-  FLAT `[]Loop` hole-nested by winding, and splitting those rings into an outer
-  and its holes is the consumer's one conversion. Winding decides nothing: the
-  rings are filled even-odd, so an outline stored and read back still measures
-  correctly.
+  FLAT `[]Loop` hole-nested by winding, which can hold several outer loops, so
+  the conversion is one `Polygon2D` per outer loop. Winding decides nothing:
+  the rings are filled even-odd, so an outline stored and read back still
+  measures correctly.
+- `geometry.PolygonsFromLoops(loops)` — that conversion: one `Polygon2D` per
+  outer loop of one element's outline, each holding the loops nested directly
+  inside it, decided by containment rather than winding. An island inside an
+  opening is an outer again. It refuses loops it cannot nest honestly: too
+  short, non-finite or enclosing nothing; crossing or running along each
+  other; passing through each other at a corner; or touching at every point
+  it could test.
 - `geometry.UnionArea2D(polys)` — the area the polygons cover TOGETHER, with
   anything two of them share counted once and holes subtracted unless another
   polygon fills them. This is the question a facade asks: a cladding band in

@@ -16,22 +16,12 @@ for _, e := range face { // the elements you have decided clad this plane
 	if len(loops) == 0 {
 		continue // an absent outline, reported absent
 	}
-	// Split the flat ring list into an outer and its holes: the ring with the
-	// largest absolute area is the outer one. This is the one conversion
-	// between the two APIs, and it is yours to make.
-	outer := 0
-	for i := range loops {
-		if math.Abs(shoelace(loops[i].Points)) > math.Abs(shoelace(loops[outer].Points)) {
-			outer = i
-		}
+	// One Polygon2D per outer loop, each with the loops nested inside it.
+	converted, ok := geometry.PolygonsFromLoops(loops)
+	if !ok {
+		return // no figure for the face: this outline cannot be nested
 	}
-	poly := geometry.Polygon2D{Outer: loops[outer].Points}
-	for i := range loops {
-		if i != outer {
-			poly.Holes = append(poly.Holes, loops[i].Points)
-		}
-	}
-	polys = append(polys, poly)
+	polys = append(polys, converted...)
 }
 
 area, ok := geometry.UnionArea2D(polys)
@@ -40,20 +30,6 @@ if !ok {
 	return
 }
 fmt.Printf("%.2f m² of facade\n", area)
-```
-
-`shoelace` is the ordinary signed-area sum over a ring, which the standard
-library does not provide:
-
-```go
-func shoelace(r [][2]float64) float64 {
-	var a float64
-	for i := range r {
-		j := (i + 1) % len(r)
-		a += r[i][0]*r[j][1] - r[j][0]*r[i][1]
-	}
-	return a / 2
-}
 ```
 
 ## The question it answers
@@ -86,9 +62,25 @@ Rings are implicitly closed — do not repeat the first point as the last — an
 coordinates are metres in **one plane's (u, v) frame**.
 
 `SilhouetteOn` returns a flat `[]Loop`, hole-nested by winding rather than by
-structure. Splitting those rings into an outer and its holes is the one
-conversion between the two APIs, and it is yours to make: the ring with the
-largest absolute area is the outer one, every other ring a hole.
+structure, and one outline can have **several** outer loops: an element whose
+projection falls into disjoint patches, or an island standing inside an
+opening, comes back with one outer loop per patch. So the conversion is one
+`Polygon2D` per outer loop, each holding only the loops nested directly inside
+it, and `PolygonsFromLoops` makes it:
+
+```go
+polys, ok := geometry.PolygonsFromLoops(e.SilhouetteOn(p))
+```
+
+Do not build one polygon around the largest ring. Every other patch then
+becomes a "hole" lying outside its outer, and the union is refused.
+
+`PolygonsFromLoops` nests by containment, not by winding. It refuses
+(`ok == false`) a loop that is too short, not finite or encloses nothing, loops
+whose edges cross or run along each other, a loop that passes through another
+at a corner, and a loop that touches another at every point it could be
+tested by. Give it the loops of **one** element; combining elements is the
+union's job.
 
 Winding decides nothing here. The rings are filled even-odd, exactly as
 [`Loop`](sections.md) says a renderer may treat them, so an outline that has

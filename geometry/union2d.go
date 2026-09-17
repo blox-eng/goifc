@@ -35,10 +35,14 @@ const unionRingClosure = 1e-9
 // repeat its first point as its last.
 //
 // It is the shape [Element.SilhouetteOn] describes, one step further on. That
-// method returns a FLAT []Loop, hole-nested by winding (outer counter-
-// clockwise, holes clockwise); splitting those rings into an outer and its
-// holes is the consumer's one conversion, and the largest ring by absolute
-// area is the outer one.
+// method returns a FLAT []Loop, hole-nested by winding, and an outline can have
+// SEVERAL outer loops: an element whose projection falls into disjoint
+// patches, or an island standing inside an opening, comes back as one outer
+// loop per patch. The conversion is therefore one Polygon2D per outer loop,
+// each holding only the loops nested directly inside it — not one Polygon2D
+// around the largest ring, which turns every other patch into a "hole" lying
+// outside its outer and gets the whole outline refused.
+// [PolygonsFromLoops] makes that conversion.
 //
 // Winding is not load-bearing here. The rings are filled even-odd, exactly as
 // [Loop] says a renderer may treat them, so an outline that has been
@@ -47,6 +51,143 @@ const unionRingClosure = 1e-9
 type Polygon2D struct {
 	Outer [][2]float64
 	Holes [][][2]float64
+}
+
+// PolygonsFromLoops converts the flat, hole-nested rings of one outline —
+// what [Element.SilhouetteOn], [Element.SectionOn] or [FootprintOn] returns
+// for one element on one plane — into the Polygon2D values [UnionArea2D]
+// takes: one per outer loop, in the order the outer loops appear, each
+// holding the loops nested directly inside it.
+//
+// Nesting is decided by containment, not by winding, so loops that were
+// stored and re-serialized by something with its own idea of orientation
+// convert the same. A loop inside no other loop is an outer; a loop whose
+// nearest enclosing loop is an outer is that outer's hole; a loop whose
+// nearest enclosing loop is a hole is an outer again — an island standing in
+// an opening.
+//
+// ok is false, and there are no polygons, when the loops cannot be nested
+// honestly: a loop has fewer than three points, a non-finite coordinate or no
+// area; two edges cross or run along each other, in one loop or across two,
+// judged as [UnionArea2D] judges them; or a loop touches another at every
+// point this could test it by, so which side of the other it lies on cannot
+// be told, or it lies partly inside another, passing through it at a
+// vertex. Loops may touch at points, as they may in [UnionArea2D].
+//
+// The loops of one outline never share an edge, so the overlap test refuses
+// a loop set that repeats one: the same boundary listed twice describes no
+// region, and measuring it would count a void as covered. Pass the loops of
+// ONE element; the union of several elements is what [UnionArea2D] is for.
+//
+// Cost is O(e²) in the total edge count, for the same crossing check
+// [UnionArea2D] makes, plus O(n·e) for nesting n loops.
+func PolygonsFromLoops(loops []Loop) (polys []Polygon2D, ok bool) {
+	rings := make([][][2]float64, len(loops))
+	areas := make([]float64, len(loops))
+	for i, l := range loops {
+		for _, q := range l.Points {
+			if math.IsNaN(q[0]) || math.IsNaN(q[1]) || math.IsInf(q[0], 0) || math.IsInf(q[1], 0) {
+				return nil, false
+			}
+		}
+		areas[i] = math.Abs(polygonArea2D(l.Points))
+		if len(l.Points) < 3 || !(areas[i] > 0) {
+			return nil, false
+		}
+		rings[i] = l.Points
+	}
+	if edgesCrossOrOverlap(rings) {
+		return nil, false
+	}
+
+	// Largest first, so every loop's possible containers precede it. Two
+	// loops of equal area cannot contain each other without overlapping.
+	order := make([]int, len(rings))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return areas[order[a]] > areas[order[b]] })
+
+	parent := make([]int, len(rings))
+	hole := make([]bool, len(rings))
+	for k, i := range order {
+		parent[i] = -1
+		// Walk the larger loops smallest first: the first that contains this
+		// one is its nearest enclosing loop.
+		for m := k - 1; m >= 0; m-- {
+			j := order[m]
+			inside, known := ringInsideRing(rings[i], rings[j])
+			if !known {
+				return nil, false
+			}
+			if inside {
+				parent[i] = j
+				hole[i] = !hole[j]
+				break
+			}
+		}
+	}
+
+	index := make([]int, len(rings))
+	for i, r := range rings {
+		if !hole[i] {
+			index[i] = len(polys)
+			polys = append(polys, Polygon2D{Outer: r})
+		}
+	}
+	for i, r := range rings {
+		if hole[i] {
+			p := &polys[index[parent[i]]]
+			p.Holes = append(p.Holes, r)
+		}
+	}
+	return polys, true
+}
+
+// ringInsideRing reports whether ring a lies inside ring b, for two rings whose
+// edges neither cross nor overlap. It tests a's vertices and edge midpoints,
+// skipping any within unionTouch of b's boundary: the midpoints are there
+// because a ring may touch another at every vertex, as a diamond inscribed in
+// a square does.
+//
+// Every tested point must agree. Two rings can still pass through each other
+// AT a vertex — a diamond whose two corners sit on a square's edge, one half
+// in and one half out — which the edge test calls touching; its points then
+// disagree, and known is false. known is also false when no point clears b.
+func ringInsideRing(a, b [][2]float64) (inside, known bool) {
+	n := len(a)
+	candidates := make([][2]float64, 0, 2*n)
+	candidates = append(candidates, a...)
+	for i := range a {
+		p, q := a[i], a[(i+1)%n]
+		candidates = append(candidates, [2]float64{p[0] + (q[0]-p[0])/2, p[1] + (q[1]-p[1])/2})
+	}
+	for _, c := range candidates {
+		if distanceToRing(c, b) <= unionTouch {
+			continue
+		}
+		in := pointInPolygon(c, b)
+		if known && in != inside {
+			return false, false
+		}
+		inside, known = in, true
+	}
+	return inside, known
+}
+
+// distanceToRing is the distance from p to the nearest point of r's boundary.
+func distanceToRing(p [2]float64, r [][2]float64) float64 {
+	best := math.Inf(1)
+	for i := range r {
+		a, b := r[i], r[(i+1)%len(r)]
+		dx, dy := b[0]-a[0], b[1]-a[1]
+		t := 0.0
+		if l2 := dx*dx + dy*dy; l2 > 0 {
+			t = math.Max(0, math.Min(1, ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/l2))
+		}
+		best = math.Min(best, math.Hypot(p[0]-(a[0]+t*dx), p[1]-(a[1]+t*dy)))
+	}
+	return best
 }
 
 // UnionArea2D returns the area of the union of polys: the surface they cover
