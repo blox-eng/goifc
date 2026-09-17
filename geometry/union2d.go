@@ -224,16 +224,14 @@ func unionPolygonTriangles(p Polygon2D, ox, oy float64) ([][3][2]float64, bool) 
 	if edgesCrossOrOverlap(rings) {
 		return nil, false
 	}
-	tris, ok := sweepRings(rings)
-	if !ok {
-		return nil, false
-	}
+	tris := sweepRings(rings)
 	var got float64
 	for _, t := range tris {
 		got += math.Abs(signedArea2(t)) / 2 // signedArea2 is TWICE the area
 	}
 	// The gate: the rings must state a real positive area, and the pieces must
-	// add up to it. One condition rather than two, because a separate
+	// add up to it. An empty decomposition lands here too, as got == 0, which
+	// is why sweepRings has no failure result of its own. One condition rather than two, because a separate
 	// want > 0 arm turned out to catch nothing this one does not — when want
 	// is zero or negative the tolerance is too, so the comparison refuses.
 	if !(want > 0) || math.Abs(got-want) > unionRingClosure*want {
@@ -300,8 +298,9 @@ func (e sweepEdge) yAt(x float64) float64 {
 }
 
 // sweepRings is the decomposition itself. See unionPolygonTriangles for why it
-// is a sweep and what ok means.
-func sweepRings(rings [][][2]float64) ([][3][2]float64, bool) {
+// is a sweep. It returns no verdict: rings it cannot decompose yield pieces
+// that do not sum to the area they state, and the caller's gate refuses that.
+func sweepRings(rings [][][2]float64) [][3][2]float64 {
 	var edges []sweepEdge
 	seen := make(map[float64]struct{})
 	var xs []float64
@@ -320,9 +319,6 @@ func sweepRings(rings [][][2]float64) ([][3][2]float64, bool) {
 			}
 			edges = append(edges, sweepEdge{a[0], a[1], b[0], b[1]})
 		}
-	}
-	if len(xs) < 2 || len(edges) == 0 {
-		return nil, false
 	}
 	sort.Float64s(xs)
 
@@ -380,7 +376,7 @@ func sweepRings(rings [][][2]float64) ([][3][2]float64, bool) {
 			out = append(out, [3][2]float64{a, b, c}, [3][2]float64{a, c, d})
 		}
 	}
-	return out, len(out) > 0
+	return out
 }
 
 // unionTouch is how close two things must be to count as touching, in metres:

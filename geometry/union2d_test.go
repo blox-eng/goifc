@@ -293,6 +293,34 @@ func TestUnionMeasure2DMeasuresAPinchSilhouetteOnEmits(t *testing.T) {
 	}
 }
 
+// TestUnionArea2DRefusesAnOutlineBelowTheWeld: a triangle 0.1 µm on a side has
+// a real area, passes every check on its rings, and decomposes cleanly — and
+// then the weld makes each of its pieces a single point. No piece survives to
+// be measured, so there is no figure; the refusal is the same one a ring
+// enclosing no area gets, and zero is not substituted for it.
+func TestUnionArea2DRefusesAnOutlineBelowTheWeld(t *testing.T) {
+	tiny := Polygon2D{Outer: [][2]float64{{0, 0}, {1e-7, 0}, {0, 1e-7}}}
+	if area, ok := UnionArea2D([]Polygon2D{tiny}); ok {
+		t.Errorf("UnionArea2D = %v, true; want ok = false — nothing above the weld quantum is left to measure", area)
+	}
+}
+
+// TestUnionMeasure2DMeasuresASlabNarrowerThanAFloat: two vertices one float64
+// apart in x open a slab with no midpoint between its boundaries. The slab is
+// skipped rather than ordered at a boundary, where edges meeting at a vertex
+// are indistinguishable, and what it gives up is one float spacing wide. The
+// outline is a 2 x 1 m rectangle with a bump that narrow on its right side.
+func TestUnionMeasure2DMeasuresASlabNarrowerThanAFloat(t *testing.T) {
+	x := math.Nextafter(1, 2)
+	// Symmetric about x = 0 so that recentring shifts nothing and the two
+	// right-hand vertices stay adjacent floats.
+	p := Polygon2D{Outer: [][2]float64{{-1, 0}, {1, 0}, {x, 0.5}, {1, 1}, {-1, 1}}}
+	area, per, ok := UnionMeasure2D([]Polygon2D{p})
+	if !ok || math.Abs(area-2) > 1e-9 || math.Abs(per-6) > 1e-9 {
+		t.Errorf("UnionMeasure2D = %v, %v, %v; want 2, 6, true", area, per, ok)
+	}
+}
+
 // TestUnionMeasure2DReturnsTheUnionBoundary: the two 2 x 2 squares merge into
 // one 3 x 2 rectangle, so the seam between them carries no boundary — 10 m of
 // perimeter, not the 16 m the two squares have on their own.
