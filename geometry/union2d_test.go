@@ -3,6 +3,8 @@ package geometry
 import (
 	"math"
 	"testing"
+
+	"github.com/blox-eng/goifc/model"
 )
 
 // TestUnionArea2DCountsOverlapOnce: two 2 x 2 squares sharing a 1 x 2 strip
@@ -100,6 +102,39 @@ func TestUnionArea2DRefusesWhatItCannotMeasure(t *testing.T) {
 				t.Errorf("UnionArea2D = %v, true; want ok = false — a figure nobody can trust is worse than none", area)
 			}
 		})
+	}
+}
+
+// TestUnionArea2DRefusesAHoleThatPokesOutOfItsOuter is the fixture that pins
+// how TIGHT unionRingClosure has to be. Nothing else in the package does: the
+// constant could be loosened by six orders of magnitude and every other test
+// would still pass.
+//
+// A 1 x 1 hole overhangs its outer ring by a hair. That is a drafting slip,
+// not an adversarial input, and it is what the gate exists to catch: "outer
+// minus holes" says 15 m² while the rings actually enclose slightly more,
+// because even-odd fills the sliver that escaped. At a 1 mm overhang the
+// discrepancy is 1.3e-4 relative, and a constant of 1e-3 hands back
+// 15.002 m² of facade with ok = true.
+//
+// The three overhangs descend to 1e-5 m, which is the weld quantum and the
+// floor on how tight this can honestly be pinned — below it the library does
+// not claim to resolve geometry at all. Together they refuse any loosening to
+// 1e-5 or beyond. (The gate still SEES a sub-quantum sliver, because it
+// compares the decomposition against the rings before the weld; that is the
+// same pre-weld ordering documented on UnionArea2D, from the other side.)
+func TestUnionArea2DRefusesAHoleThatPokesOutOfItsOuter(t *testing.T) {
+	for _, overhang := range []float64{1e-3, 1e-4, 1e-5} {
+		p := Polygon2D{
+			Outer: [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}},
+			Holes: [][][2]float64{{
+				{3 + overhang, 1}, {4 + overhang, 1}, {4 + overhang, 2}, {3 + overhang, 2},
+			}},
+		}
+		if area, ok := UnionArea2D([]Polygon2D{p}); ok {
+			t.Errorf("overhang %g m: UnionArea2D = %v, true; want ok = false — the rings enclose %v m², not the 15 they claim",
+				overhang, area, 15+2*overhang)
+		}
 	}
 }
 
@@ -241,35 +276,57 @@ func TestUnionMeasure2DMeasuresARakedEdge(t *testing.T) {
 // that magnitude while the closure gate is RELATIVE to the area, and the two
 // meet in two different ways: a 1-5 m outline is REFUSED (a soak through
 // this door went 0/500 at 47 m, 6/500 at 10 km, 497/500 at 300 km), and the
-// fixture below is worse — it is ACCEPTED at 50.0001220703 m² instead of 50.
+// shapes below are worse — they are ACCEPTED, at a wrong figure.
 //
-// The fixture is shaped for what it has to see. The raked edge spans THREE
-// slabs, because interpolation only happens at a slab boundary an edge
-// crosses: an outline whose every edge begins and ends on its own slab
-// interpolates nothing, survives the bug untouched, and reads as reassurance.
-// (A gable — two slabs, one edge each — was the first attempt here, and it
-// passed against the broken build.)
+// TWO shapes, because they catch it at COMPLEMENTARY origins and neither alone
+// is enough: the rake bites on the exactly-representable grid and the gable
+// off it. Both are raked on purpose — an outline whose every edge is axis
+// aligned interpolates nothing, survives the bug untouched, and reads as
+// reassurance. The rake's edge additionally spans THREE slabs, because
+// interpolation only happens at a slab boundary an edge crosses.
+//
+// The near origins are controls rather than coverage: they bite at no
+// magnitude, and exist so that a regression breaking measurement everywhere is
+// told apart from one that only breaks it far out.
 func TestUnionMeasure2DIsInvariantFarFromTheOrigin(t *testing.T) {
-	// A 10 x 10 right triangle, its base split so the hypotenuse crosses two
-	// interior slab boundaries at a non-dyadic x.
 	const t3 = 1.0 / 3.0
-	rake := func(ox, oy float64) Polygon2D {
-		return Polygon2D{Outer: [][2]float64{
-			{ox, oy}, {ox + 3 + t3, oy}, {ox + 7 + t3, oy}, {ox + 10, oy}, {ox, oy + 10},
-		}}
-	}
-	wantPer := 20 + 10*math.Sqrt2
-	for _, origin := range [][2]float64{
-		{0, 0},
-		{47, 47},
-		{10000, 10000},
-		{460000, 4700000},     // a projected national grid (eastings ~1e5-1e6 m, northings ~1e6-1e7 m)
-		{460000.1, 4700000.7}, // and the same, off the representable grid
-		{-460000, -4700000},
-	} {
-		area, per, ok := UnionMeasure2D([]Polygon2D{rake(origin[0], origin[1])})
-		if !ok || math.Abs(area-50) > 1e-9 || math.Abs(per-wantPer) > 1e-9 {
-			t.Errorf("at %v: UnionMeasure2D = %v, %v, %v; want 50, %v, true", origin, area, per, ok, wantPer)
+	for _, shape := range []struct {
+		name     string
+		at       func(ox, oy float64) Polygon2D
+		wantArea float64
+		wantPer  float64
+	}{{
+		// A 10 x 10 right triangle, its base split so the hypotenuse crosses
+		// two interior slab boundaries at a non-dyadic x.
+		name: "a rake over three slabs",
+		at: func(ox, oy float64) Polygon2D {
+			return Polygon2D{Outer: [][2]float64{
+				{ox, oy}, {ox + 3 + t3, oy}, {ox + 7 + t3, oy}, {ox + 10, oy}, {ox, oy + 10},
+			}}
+		},
+		wantArea: 50, wantPer: 20 + 10*math.Sqrt2,
+	}, {
+		name: "a gable over two",
+		at: func(ox, oy float64) Polygon2D {
+			return Polygon2D{Outer: [][2]float64{
+				{ox, oy}, {ox + 4, oy}, {ox + 4, oy + 2}, {ox + 2, oy + 4}, {ox, oy + 2},
+			}}
+		},
+		wantArea: 12, wantPer: 8 + 4*math.Sqrt2,
+	}} {
+		for _, origin := range [][2]float64{
+			{0, 0},
+			{47, 47},
+			{10000, 10000},
+			{460000, 4700000},     // a projected national grid (eastings ~1e5-1e6 m, northings ~1e6-1e7 m)
+			{460000.1, 4700000.7}, // and the same, off the representable grid
+			{-460000, -4700000},
+		} {
+			area, per, ok := UnionMeasure2D([]Polygon2D{shape.at(origin[0], origin[1])})
+			if !ok || math.Abs(area-shape.wantArea) > 1e-9 || math.Abs(per-shape.wantPer) > 1e-9 {
+				t.Errorf("%s at %v: UnionMeasure2D = %v, %v, %v; want %v, %v, true",
+					shape.name, origin, area, per, ok, shape.wantArea, shape.wantPer)
+			}
 		}
 	}
 }
@@ -306,30 +363,110 @@ func TestUnionArea2DDoesNotMutateItsInput(t *testing.T) {
 // hole-nested by winding, split into Outer and Holes and handed back for
 // measurement. That split is the one conversion between the two APIs and it is
 // the consumer's to make, so it is exercised here rather than assumed.
+//
+// BOTH shapes are measured, and the frame is the point. A solid box yields a
+// single loop, so the largest-|area| selection runs over one candidate and the
+// hole branch appends nothing — the half of the conversion the guide's
+// headline example exists for, a wall with an opening, would never run. Each
+// case therefore asserts the loop count it depends on, so a fixture that stops
+// producing a hole fails here instead of quietly measuring the other branch.
 func TestUnionArea2DMeasuresASilhouette(t *testing.T) {
-	e := boxElement("box", v3{0, 0, 0}, v3{3, 5, 2}) // seen along -X: 5 x 2 m
-	p, ok := ElevationPlane([3]float64{-1, 0, 0})
+	p, ok := ElevationPlane([3]float64{-1, 0, 0}) // looking along -X
 	if !ok {
 		t.Fatal("ElevationPlane(ok) = false")
 	}
+	for _, tc := range []struct {
+		name      string
+		elem      Element
+		wantLoops int
+		wantHoles int
+		wantArea  float64
+	}{
+		// A 3 x 5 x 2 m box seen along -X is a solid 5 x 2 m rectangle.
+		{"a solid box", boxElement("box", v3{0, 0, 0}, v3{3, 5, 2}), 1, 0, 10},
+		// A 6 x 6 m frame with a 2 x 2 m opening: 36 gross, 32 net.
+		{"a frame with an opening", frameElement(), 2, 1, 32},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			loops := elem(t, tc.elem, p)
+			if len(loops) != tc.wantLoops {
+				t.Fatalf("SilhouetteOn returned %d loops, want %d — the fixture no longer poses the case this test is for", len(loops), tc.wantLoops)
+			}
+			poly := polygonFromLoops(loops)
+			if len(poly.Holes) != tc.wantHoles {
+				t.Fatalf("the conversion produced %d holes, want %d", len(poly.Holes), tc.wantHoles)
+			}
+			area, ok := UnionArea2D([]Polygon2D{poly})
+			if !ok || math.Abs(area-tc.wantArea) > 1e-9 {
+				t.Errorf("UnionArea2D = %v, %v; want %v, true", area, ok, tc.wantArea)
+			}
+		})
+	}
+}
+
+// elem returns an element's silhouette, failing rather than returning nothing.
+func elem(t *testing.T, e Element, p Plane) []Loop {
+	t.Helper()
 	loops := e.SilhouetteOn(p)
 	if len(loops) == 0 {
 		t.Fatal("SilhouetteOn returned no loops")
 	}
-	best, bestArea := -1, 0.0
-	for i, l := range loops {
-		if a := math.Abs(polygonArea2D(l.Points)); a > bestArea {
-			best, bestArea = i, a
+	return loops
+}
+
+// polygonFromLoops is the conversion the guide documents: the ring with the
+// largest absolute area is the outer one, every other ring a hole.
+func polygonFromLoops(loops []Loop) Polygon2D {
+	outer := 0
+	for i := range loops {
+		if math.Abs(polygonArea2D(loops[i].Points)) > math.Abs(polygonArea2D(loops[outer].Points)) {
+			outer = i
 		}
 	}
-	poly := Polygon2D{Outer: loops[best].Points}
-	for i, l := range loops {
-		if i != best {
-			poly.Holes = append(poly.Holes, l.Points)
+	poly := Polygon2D{Outer: loops[outer].Points}
+	for i := range loops {
+		if i != outer {
+			poly.Holes = append(poly.Holes, loops[i].Points)
 		}
 	}
-	area, ok := UnionArea2D([]Polygon2D{poly})
-	if !ok || math.Abs(area-10) > 1e-9 {
-		t.Errorf("UnionArea2D of the silhouette = %v, %v; want 10, true", area, ok)
+	return poly
+}
+
+// frameElement is a 6 x 6 m wall with a 2 x 2 m opening, built as four boxes so
+// the mesh genuinely has a hole in it rather than a ring drawn to look like
+// one. Seen along -X its silhouette is two loops: the outer wound CCW and the
+// opening wound CW, which is the hole-nesting convention Loop documents.
+func frameElement() Element {
+	boxes := [][2]v3{
+		{{0, 0, 0}, {1, 6, 2}}, // below the opening
+		{{0, 0, 4}, {1, 6, 6}}, // above it
+		{{0, 0, 2}, {1, 2, 4}}, // left of it
+		{{0, 4, 2}, {1, 6, 4}}, // right of it
+	}
+	var verts []float32
+	var tris []uint32
+	for _, b := range boxes {
+		w, bt := boxMeshWorld(b[0], b[1])
+		base := uint32(len(verts) / 3)
+		for _, q := range w {
+			verts = append(verts, float32(q[0]), float32(q[1]), float32(q[2]))
+		}
+		for _, i := range bt {
+			tris = append(tris, base+i)
+		}
+	}
+	return Element{
+		GlobalID: "frame",
+		Verts:    verts,
+		Tris:     tris,
+		Placement: model.Mat4{
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1,
+		},
+		BBoxMin: [3]float64{0, 0, 0},
+		BBoxMax: [3]float64{1, 6, 6},
+		Source:  SourceBrep,
 	}
 }
