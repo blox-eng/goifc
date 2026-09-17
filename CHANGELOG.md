@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.10.0 — 2026-09-17
+
 ### Added
 
 - `geometry.Polygon2D` — a hole-nested ring set in one plane's (u, v) frame,
