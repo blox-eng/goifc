@@ -306,15 +306,16 @@ func TestUnionArea2DRefusesAnOutlineBelowTheWeld(t *testing.T) {
 }
 
 // TestUnionMeasure2DMeasuresASlabNarrowerThanAFloat: two vertices one float64
-// apart in x open a slab with no midpoint between its boundaries. The slab is
-// skipped rather than ordered at a boundary, where edges meeting at a vertex
-// are indistinguishable, and what it gives up is one float spacing wide. The
-// outline is a 2 x 1 m rectangle with a bump that narrow on its right side.
+// apart in x open a slab with no midpoint between its boundaries, so its
+// crossings are ordered at a boundary, where the two edges of the bump meet.
+// The outline is a 2 x 1 m rectangle with a bump that narrow on its right
+// side, and it must measure as the rectangle.
 func TestUnionMeasure2DMeasuresASlabNarrowerThanAFloat(t *testing.T) {
-	x := math.Nextafter(1, 2)
+	x := math.Nextafter(1, 0)
 	// Symmetric about x = 0 so that recentring shifts nothing and the two
-	// right-hand vertices stay adjacent floats.
-	p := Polygon2D{Outer: [][2]float64{{-1, 0}, {1, 0}, {x, 0.5}, {1, 1}, {-1, 1}}}
+	// right-hand vertices stay adjacent floats. The midpoint of [x, 1] rounds
+	// to 1, the bump's tip, so the bump's two edges tie there.
+	p := Polygon2D{Outer: [][2]float64{{-1, 0}, {x, 0}, {1, 0.5}, {x, 1}, {-1, 1}}}
 	area, per, ok := UnionMeasure2D([]Polygon2D{p})
 	if !ok || math.Abs(area-2) > 1e-9 || math.Abs(per-6) > 1e-9 {
 		t.Errorf("UnionMeasure2D = %v, %v, %v; want 2, 6, true", area, per, ok)

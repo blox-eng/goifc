@@ -324,16 +324,17 @@ func sweepRings(rings [][][2]float64) [][3][2]float64 {
 
 	// One crossing of a slab: the edge's y at the slab's two boundaries, keyed
 	// for ordering by its y at the middle, where no two distinct edges of a
-	// sound ring set can meet.
+	// sound ring set can meet. A slab one float64 wide has no middle, and xm
+	// then rounds onto one of its boundaries, where two edges sharing a vertex
+	// do meet. That needs no special case: the tie-break below orders such a
+	// pair by where the two edges are at the other boundary, which is their
+	// true order across the slab.
 	type crossing struct{ mid, lo, hi float64 }
 	var cs []crossing
 	var out [][3][2]float64
 	for s := 0; s+1 < len(xs); s++ {
 		x0, x1 := xs[s], xs[s+1]
 		xm := x0 + (x1-x0)/2
-		if !(xm > x0 && xm < x1) {
-			continue // the slab is thinner than the gap between two float64s
-		}
 		cs = cs[:0]
 		for _, e := range edges {
 			if e.x0 <= x0 && e.x1 >= x1 {
