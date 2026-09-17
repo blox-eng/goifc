@@ -3,8 +3,6 @@ package geometry
 import (
 	"math"
 	"testing"
-
-	"github.com/blox-eng/goifc/model"
 )
 
 // TestUnionArea2DCountsOverlapOnce: two 2 x 2 squares sharing a 1 x 2 strip
@@ -138,6 +136,163 @@ func TestUnionArea2DRefusesAHoleThatPokesOutOfItsOuter(t *testing.T) {
 	}
 }
 
+// TestUnionArea2DRefusesEdgesThatCrossOrOverlap: a ring whose edges cross, or
+// run along each other, is not an outline, and is refused before it is
+// measured.
+//
+// Most of these measured to the RIGHT area before they were refused, because a
+// zero-width bridge or whisker encloses nothing. They are refused anyway: an
+// outline that walks an edge twice has no single honest boundary, and a
+// consumer that stored one has a defect worth hearing about. The last two
+// cross properly and were the reason this became urgent — "a ring crossing
+// itself twice" measured 10/3 with ok = true, although the region it encloses
+// is 8/3. The pieces the sweep cut from it summed to the shoelace, so the area
+// gate had nothing to object to.
+//
+// Each case is also asserted translated far out and with every ring reversed,
+// because a crossing test on exact signs flips its verdict under rounding.
+func TestUnionArea2DRefusesEdgesThatCrossOrOverlap(t *testing.T) {
+	square := [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}}
+	for name, polys := range map[string][]Polygon2D{
+		"two squares joined by a bridge walked there and back": {{Outer: [][2]float64{
+			{0, 0}, {1, 0}, {3, 0}, {4, 0}, {4, 1}, {3, 1}, {3, 0}, {1, 0}, {1, 1}, {0, 1},
+		}}},
+		"a whisker out of the ring and back": {{Outer: [][2]float64{
+			{0, 0}, {2, 0}, {2, 1}, {3, 1}, {2, 1}, {2, 2}, {0, 2},
+		}}},
+		"a slit into the ring and back": {{Outer: [][2]float64{
+			{0, 0}, {2, 0}, {2, 2}, {1, 2}, {1, 1}, {1, 2}, {0, 2},
+		}}},
+		"an edge folded back over the one before it": {{Outer: [][2]float64{
+			{0, 0}, {3, 0}, {1, 0}, {1, 1}, {0, 1},
+		}}},
+		"a ring walked twice": {{Outer: [][2]float64{
+			{0, 0}, {1, 0}, {1, 1}, {0, 1}, {0, 0}, {1, 0}, {1, 1}, {0, 1},
+		}}},
+		"a bow-tie": {{Outer: [][2]float64{{0, 0}, {2, 2}, {2, 0}, {0, 2}}}},
+		"a hole cut through its outer ring": {{
+			Outer: square,
+			Holes: [][][2]float64{{{3, 1}, {5, 1}, {5, 2}, {3, 2}}},
+		}},
+		"a hole lying along its outer ring": {{
+			Outer: square,
+			Holes: [][][2]float64{{{1, 0}, {2, 0}, {2, 1}, {1, 1}}},
+		}},
+		// A notch whose 20 µm floor runs 1-8 µm above the base: along the
+		// base, closer than the weld, for longer than the weld. Listed from
+		// the floor on purpose, so the short edge is compared first and the
+		// overlap has to be found from the long edge's side — the base's far
+		// ends are metres off the floor's own line.
+		"a notch floor lying along the base": {{Outer: [][2]float64{
+			{50.00002, 8e-6}, {50, 1e-6}, {0, 10}, {0, 0}, {100, 0}, {100, 10},
+		}}},
+		"a ring crossing itself once": {{Outer: [][2]float64{
+			{3, 1}, {0, 4}, {0, 0}, {2, 4}, {1, 3},
+		}}},
+		"a ring crossing itself twice": {{Outer: [][2]float64{
+			{4, 2}, {0, 4}, {4, 3}, {0, 2}, {4, 4},
+		}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for variant, in := range map[string][]Polygon2D{
+				"as written": polys,
+				"far out":    translatePolys(polys, 1e6*math.Pi, -1e6*math.Pi),
+				"reversed":   reversePolys(polys),
+			} {
+				if area, per, ok := UnionMeasure2D(in); ok {
+					t.Errorf("%s: UnionMeasure2D = %v, %v, true; want ok = false — two edges cross or overlap", variant, area, per)
+				}
+			}
+		})
+	}
+}
+
+// TestUnionMeasure2DMeasuresRingsThatTouchAtAPoint: a pinch is not a crossing.
+// A ring may pass through one of its own vertices twice, a vertex may sit on
+// another edge, and a hole may meet its outer ring at a point; each has one
+// honest area and one honest boundary, and each is measured.
+func TestUnionMeasure2DMeasuresRingsThatTouchAtAPoint(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		poly     Polygon2D
+		wantArea float64
+		wantPer  float64
+	}{{
+		name: "two squares meeting at a corner, walked as one ring",
+		poly: Polygon2D{Outer: [][2]float64{
+			{0, 0}, {1, 0}, {1, 1}, {2, 1}, {2, 2}, {1, 2}, {1, 1}, {0, 1},
+		}},
+		wantArea: 2, wantPer: 8,
+	}, {
+		name:     "two triangles, one's corner on the other's base",
+		poly:     Polygon2D{Outer: [][2]float64{{0, 0}, {2, 0}, {2, 2}, {1, 0}, {0, 2}}},
+		wantArea: 2, wantPer: 6 + 2*math.Sqrt(5),
+	}, {
+		// The same pinch on a raked base at decimal coordinates. 0.3 and 0.1
+		// are not exactly representable, so the corner is not exactly on the
+		// base in float64 — a crossing test on exact signs refuses this ring
+		// as it is written, although every caller would call it a touch.
+		name:     "the same on a raked base, at decimal coordinates",
+		poly:     Polygon2D{Outer: [][2]float64{{0, 0}, {3, 1}, {3, -3}, {0.3, 0.1}, {0, -2}}},
+		wantArea: 5.4 + 0.3,
+		wantPer: math.Hypot(2.7, 0.9) + 4 + math.Hypot(2.7, 3.1) +
+			math.Hypot(0.3, 0.1) + math.Hypot(0.3, 2.1) + 2,
+	}, {
+		name: "a hole whose corner touches its outer ring",
+		poly: Polygon2D{
+			Outer: [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}},
+			Holes: [][][2]float64{{{0, 2}, {1, 1}, {2, 2}, {1, 3}}},
+		},
+		wantArea: 14, wantPer: 16 + 4*math.Sqrt2,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			for variant, in := range map[string][]Polygon2D{
+				"as written": {tc.poly},
+				"far out":    translatePolys([]Polygon2D{tc.poly}, 1e6*math.Pi, -1e6*math.Pi),
+				"reversed":   reversePolys([]Polygon2D{tc.poly}),
+			} {
+				area, per, ok := UnionMeasure2D(in)
+				if !ok || math.Abs(area-tc.wantArea) > 1e-6 || math.Abs(per-tc.wantPer) > 1e-6 {
+					t.Errorf("%s: UnionMeasure2D = %v, %v, %v; want %v, %v, true", variant, area, per, ok, tc.wantArea, tc.wantPer)
+				}
+			}
+		})
+	}
+}
+
+// TestUnionMeasure2DMeasuresAPinchSilhouetteOnEmits is why a pinch is allowed:
+// the library emits one. A 3 x 3 m wall has a 1 x 1 m opening whose corner
+// meets the corner of a 1 x 1 m notch cut from the wall's top. SilhouetteOn
+// walks that as one ring which passes through the shared corner twice, and
+// refusing it would refuse the library's own output.
+func TestUnionMeasure2DMeasuresAPinchSilhouetteOnEmits(t *testing.T) {
+	p, ok := ElevationPlane([3]float64{-1, 0, 0})
+	if !ok {
+		t.Fatal("ElevationPlane(ok) = false")
+	}
+	e := boxesElement("notched", [][2]v3{
+		{{0, 0, 0}, {1, 3, 1}}, // the bottom row
+		{{0, 0, 1}, {1, 1, 2}}, // left of the opening
+		{{0, 2, 1}, {1, 3, 2}}, // right of it
+		{{0, 0, 2}, {1, 2, 3}}, // the top row, short of the notch
+	})
+	var pinched [][2]float64
+	for _, l := range elem(t, e, p) {
+		if hasRepeatedVertex(l.Points) {
+			pinched = l.Points
+		}
+	}
+	if pinched == nil {
+		t.Fatal("SilhouetteOn emitted no ring that passes through a vertex twice — the fixture no longer poses the case this test is for")
+	}
+	// 9 m² less the opening and the notch; the notched square's 12 m of edge
+	// plus the opening's 4.
+	area, per, ok := UnionMeasure2D([]Polygon2D{{Outer: pinched}})
+	if !ok || math.Abs(area-7) > 1e-9 || math.Abs(per-16) > 1e-9 {
+		t.Errorf("UnionMeasure2D = %v, %v, %v; want 7, 16, true", area, per, ok)
+	}
+}
+
 // TestUnionMeasure2DReturnsTheUnionBoundary: the two 2 x 2 squares merge into
 // one 3 x 2 rectangle, so the seam between them carries no boundary — 10 m of
 // perimeter, not the 16 m the two squares have on their own.
@@ -202,8 +357,8 @@ func TestUnionMeasure2DOrdersCrossingsWithinTheSlab(t *testing.T) {
 // the sweep with two crossings at exactly the same height, and sort.Slice is
 // not stable — with the tie unbroken, the answer was decided by the order the
 // edges happened to be collected in, so the ring measured 0.03125 one way and
-// was refused the other. Both refuse now, which is what the contract promises
-// for a boundary that meets itself.
+// was refused the other. Both refuse now, and before the sweep: the whisker
+// runs back along its own edge, which is not an outline.
 //
 // The crashing input is committed under testdata/fuzz, so `go test` replays it
 // whether or not anyone is fuzzing.
@@ -220,6 +375,54 @@ func TestUnionMeasure2DIsIndependentOfRingOrder(t *testing.T) {
 	}
 	if fok {
 		t.Errorf("UnionMeasure2D(ok) = true on a ring that meets itself; want false")
+	}
+}
+
+// TestUnionMeasure2DBreaksTiesOnGeometry keeps the sweep's tie-break honest now
+// that the ring TestUnionMeasure2DIsIndependentOfRingOrder was written for is
+// refused before the sweep. Edges closer than the weld quantum still reach it,
+// and can still tie.
+//
+// In the first ring two right triangles with 1 m legs meet at (0, 1), jittered
+// there by q, a fraction of a micrometre: no check calls that a crossing, but
+// two edges pass through the middle of one thin slab at the same height. Left
+// to the order the edges were collected in, that tie made the ring measure
+// forwards and refuse backwards.
+func TestUnionMeasure2DBreaksTiesOnGeometry(t *testing.T) {
+	const q = 1.0 / (1 << 21)
+	for _, tc := range []struct {
+		name     string
+		ring     [][2]float64
+		wantArea float64
+		wantPer  float64
+	}{{
+		name: "two triangles meeting at a jittered corner",
+		ring: [][2]float64{
+			{1 + 2*q, 2 - 2*q}, {q, 2 + 2*q}, {-q, 0}, {2 * q, -2 * q}, {1 - q, 1 + q}, {-q, 1 + q},
+		},
+		wantArea: 1, wantPer: 4 + 2*math.Sqrt2,
+	}, {
+		// A 2 x 1 m rectangle whose base steps back by q and on again: three
+		// edges agree across that slab at every key, so the whole total order
+		// is consulted, and the step is a point at the weld.
+		name:     "a base that steps back by less than the weld",
+		ring:     [][2]float64{{0, 0}, {1 + q, 0}, {1, 0}, {2, 0}, {2, 1}, {0, 1}},
+		wantArea: 2, wantPer: 6,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			reversed := make([][2]float64, len(tc.ring))
+			for i, p := range tc.ring {
+				reversed[len(tc.ring)-1-i] = p
+			}
+			fa, fp, fok := UnionMeasure2D([]Polygon2D{{Outer: tc.ring}})
+			ra, rp, rok := UnionMeasure2D([]Polygon2D{{Outer: reversed}})
+			if fok != rok || fa != ra || fp != rp {
+				t.Errorf("forwards = %v, %v, %v; backwards = %v, %v, %v — the same ring", fa, fp, fok, ra, rp, rok)
+			}
+			if !fok || math.Abs(fa-tc.wantArea) > 1e-5 || math.Abs(fp-tc.wantPer) > 1e-5 {
+				t.Errorf("UnionMeasure2D = %v, %v, %v; want about %v, %v, true", fa, fp, fok, tc.wantArea, tc.wantPer)
+			}
+		})
 	}
 }
 
@@ -437,36 +640,44 @@ func polygonFromLoops(loops []Loop) Polygon2D {
 // one. Seen along -X its silhouette is two loops: the outer wound CCW and the
 // opening wound CW, which is the hole-nesting convention Loop documents.
 func frameElement() Element {
-	boxes := [][2]v3{
+	return boxesElement("frame", [][2]v3{
 		{{0, 0, 0}, {1, 6, 2}}, // below the opening
 		{{0, 0, 4}, {1, 6, 6}}, // above it
 		{{0, 0, 2}, {1, 2, 4}}, // left of it
 		{{0, 4, 2}, {1, 6, 4}}, // right of it
-	}
-	var verts []float32
-	var tris []uint32
+	})
+}
+
+// boxesElement is one element whose mesh is several axis-aligned boxes, given
+// in world coordinates with an identity placement.
+func boxesElement(gid string, boxes [][2]v3) Element {
+	e := boxElement(gid, boxes[0][0], boxes[0][1])
+	e.Verts, e.Tris = nil, nil
 	for _, b := range boxes {
+		for k := 0; k < 3; k++ {
+			e.BBoxMin[k] = math.Min(e.BBoxMin[k], b[0][k])
+			e.BBoxMax[k] = math.Max(e.BBoxMax[k], b[1][k])
+		}
 		w, bt := boxMeshWorld(b[0], b[1])
-		base := uint32(len(verts) / 3)
+		base := uint32(len(e.Verts) / 3)
 		for _, q := range w {
-			verts = append(verts, float32(q[0]), float32(q[1]), float32(q[2]))
+			e.Verts = append(e.Verts, float32(q[0]), float32(q[1]), float32(q[2]))
 		}
 		for _, i := range bt {
-			tris = append(tris, base+i)
+			e.Tris = append(e.Tris, base+i)
 		}
 	}
-	return Element{
-		GlobalID: "frame",
-		Verts:    verts,
-		Tris:     tris,
-		Placement: model.Mat4{
-			1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1,
-		},
-		BBoxMin: [3]float64{0, 0, 0},
-		BBoxMax: [3]float64{1, 6, 6},
-		Source:  SourceBrep,
+	return e
+}
+
+// hasRepeatedVertex reports whether a ring passes through one point twice.
+func hasRepeatedVertex(r [][2]float64) bool {
+	seen := make(map[[2]float64]bool, len(r))
+	for _, q := range r {
+		if seen[q] {
+			return true
+		}
+		seen[q] = true
 	}
+	return false
 }

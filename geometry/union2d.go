@@ -66,12 +66,27 @@ type Polygon2D struct {
 //   - there are no polygons at all;
 //   - a ring has fewer than three points, or encloses no area;
 //   - any coordinate is NaN or infinite;
+//   - two edges of one polygon cross each other, or run along each other for
+//     any length — a bow-tie, a ring that doubles back over its own edge, two
+//     same-sided squares joined by a bridge walked there and back, a hole
+//     that cuts through its outer ring. Such rings are not an outline, and a
+//     crossing inside a slab is exactly what the decomposition cannot pair,
+//     so some of them used to measure to a confident wrong figure;
 //   - the rings do not describe the surface they claim — a hole that is not
-//     inside its outer ring, two holes that overlap each other, a boundary
-//     that crosses itself — so that "outer minus holes" and the region the
-//     rings actually enclose are two different numbers;
+//     inside its outer ring, two holes that overlap each other — so that
+//     "outer minus holes" and the region the rings actually enclose are two
+//     different numbers;
 //   - the union boundary did not close, the same refusal [Element.SilhouetteOn]
 //     already makes.
+//
+// Rings may TOUCH, at a point: a ring may pass through one of its own
+// vertices twice, a vertex may sit on another edge, and a hole may meet its
+// outer ring at a corner. That is deliberate. Such a pinch has one honest area
+// and one honest boundary, and [Element.SilhouetteOn] emits it — an outline
+// whose opening reaches the corner of a notch comes back as one ring passing
+// twice through that corner — so refusing it would refuse the library's own
+// output. Touching is judged at the quantum below: an endpoint that close to
+// an edge is on it.
 //
 // Two points closer than 1e-5 m are ONE point here. That quantum is not this
 // function's: it is the weld the boundary walk has always used, and a piece
@@ -92,7 +107,8 @@ type Polygon2D struct {
 // Cost is superlinear and SHAPE-dependent, not one exponent. The sweep's bound
 // is O(v²) in a single polygon's vertex count — every vertex opens a slab, and
 // every edge may cross every slab — with the boundary walk over the resulting
-// pieces on top of that. Measured between 32 and 512 vertices, growth ran from
+// pieces on top of that. The crossing check before the sweep is O(v²) always:
+// every edge of a polygon is compared with every other, with no spatial index. Measured between 32 and 512 vertices, growth ran from
 // roughly linear on an outline whose slabs each hold two crossings to well
 // above quadratic on one whose slabs hold many, so treat O(v²) as the bound
 // and not as a prediction. A facade outline is tens of vertices, and nothing
@@ -155,8 +171,9 @@ func UnionMeasure2D(polys []Polygon2D) (area, perimeter float64, ok bool) {
 // fallback paths, and it fails by emitting a plausible wrong triangulation
 // rather than by refusing. The sweep has no such case to get wrong.
 //
-// ok is false when a ring encloses no area, and when the pieces do not sum to
-// the area the rings state. The second is the honesty gate for the whole
+// ok is false when a ring encloses no area, when two edges cross or overlap
+// (see edgesCrossOrOverlap), and when the pieces do not sum to the area the
+// rings state. The second is the honesty gate for the whole
 // function: a sound ring set decomposes exactly, so a mismatch is not a
 // rounding story, it is the rings describing something other than an outer
 // with voids inside it.
@@ -198,6 +215,15 @@ func unionPolygonTriangles(p Polygon2D, ox, oy float64) ([][3][2]float64, bool) 
 		}
 	}
 
+	// Before the sweep, not after it: a crossing inside a slab is the one thing
+	// the sweep's pairing assumes away, and the area gate below does not
+	// reliably see it. A bow-tie whose lobes wind in opposite senses is refused
+	// there, but a ring that crosses itself can also decompose into pieces
+	// whose absolute areas sum to what the shoelace says while the union of
+	// those pieces is a different number.
+	if edgesCrossOrOverlap(rings) {
+		return nil, false
+	}
 	tris, ok := sweepRings(rings)
 	if !ok {
 		return nil, false
@@ -327,14 +353,15 @@ func sweepRings(rings [][][2]float64) ([][3][2]float64, bool) {
 		// out of the loop below and the pieces would no longer sum to the area
 		// the rings state, which unionPolygonTriangles' gate refuses.
 		// A TOTAL order, not just a comparison on mid. Two edges can cross a
-		// slab at the same mid height — a ring that touches itself, or doubles
-		// back along its own edge, presents the sweep with a coincident pair —
-		// and sort.Slice is not stable, so a tie left unbroken is resolved by
-		// whatever order the edges happened to be collected in. That made the
-		// SAME ring measure 0.03125 listed one way and refuse listed the
-		// other, which the fuzz target's winding invariant caught. Ranking
-		// ties by the slab's two boundaries makes the order a function of the
-		// geometry alone.
+		// slab at the same mid height — a ring that doubled back along its own
+		// edge did, and sort.Slice is not stable, so a tie left unbroken was
+		// resolved by whatever order the edges happened to be collected in.
+		// That made the SAME ring measure 0.03125 listed one way and refuse
+		// listed the other, which the fuzz target's winding invariant caught.
+		// edgesCrossOrOverlap now refuses that ring before it gets here, but it
+		// judges at the weld quantum, so two edges closer than that still
+		// arrive and can still tie. Ranking ties by the slab's two boundaries
+		// keeps the order a function of the geometry alone.
 		sort.Slice(cs, func(i, j int) bool {
 			if cs[i].mid != cs[j].mid {
 				return cs[i].mid < cs[j].mid
@@ -354,4 +381,84 @@ func sweepRings(rings [][][2]float64) ([][3][2]float64, bool) {
 		}
 	}
 	return out, len(out) > 0
+}
+
+// unionTouch is how close two things must be to count as touching, in metres:
+// the boundary walk's weld quantum, so that this check and the weld agree on
+// what one point is.
+const unionTouch = 1 / sectionWeldQuantum
+
+// edgesCrossOrOverlap reports whether any two edges of rings, in the same ring
+// or in different ones, cross each other or run along each other for more
+// than a point. Meeting at a point is allowed: see the pinch paragraph on
+// [UnionArea2D].
+//
+// Every pair is compared, so this is O(e²) in the polygon's edge count. An
+// edge no longer than unionTouch is skipped: the weld makes it a point, and a
+// point can only touch.
+//
+// The comparison uses a tolerance rather than exact signs, which is why
+// section.go's ringSelfIntersects is not reused. The rings arrive recentred,
+// so a vertex lying exactly on another edge in the caller's coordinates can
+// sit a rounding error to either side of it here. Exact signs would call half
+// of those a crossing, and whether an outline is refused would then depend on
+// where the model stands.
+func edgesCrossOrOverlap(rings [][][2]float64) bool {
+	type edge struct {
+		a, b [2]float64
+		len  float64
+	}
+	var edges []edge
+	for _, r := range rings {
+		for i := range r {
+			a, b := r[i], r[(i+1)%len(r)]
+			if l := math.Hypot(b[0]-a[0], b[1]-a[1]); l > unionTouch {
+				edges = append(edges, edge{a, b, l})
+			}
+		}
+	}
+	for i, s := range edges {
+		for _, t := range edges[i+1:] {
+			sa, sb := touchSide(s.a, s.b, s.len, t.a), touchSide(s.a, s.b, s.len, t.b)
+			ta, tb := touchSide(t.a, t.b, t.len, s.a), touchSide(t.a, t.b, t.len, s.b)
+			switch {
+			case sa*sb < 0 && ta*tb < 0:
+				return true // each edge has the other's ends on opposite sides
+			case sa == 0 && sb == 0:
+				if collinearOverlap(s.a, s.b, s.len, t.a, t.b) {
+					return true
+				}
+			case ta == 0 && tb == 0:
+				// From t's side as well: a short edge lying along a long one
+				// can have the long one's far ends well off its own line.
+				if collinearOverlap(t.a, t.b, t.len, s.a, s.b) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// touchSide is the side of the line through a and b (l apart) that p lies on:
+// +1 left, -1 right, 0 when p is within unionTouch of the line.
+func touchSide(a, b [2]float64, l float64, p [2]float64) int {
+	d := ((b[0]-a[0])*(p[1]-a[1]) - (b[1]-a[1])*(p[0]-a[0])) / l
+	switch {
+	case d > unionTouch:
+		return 1
+	case d < -unionTouch:
+		return -1
+	}
+	return 0
+}
+
+// collinearOverlap reports whether c–d, already known to lie along a–b (l
+// apart), shares more than unionTouch of its length with it.
+func collinearOverlap(a, b [2]float64, l float64, c, d [2]float64) bool {
+	ux, uy := (b[0]-a[0])/l, (b[1]-a[1])/l
+	pc := (c[0]-a[0])*ux + (c[1]-a[1])*uy
+	pd := (d[0]-a[0])*ux + (d[1]-a[1])*uy
+	lo, hi := math.Max(0, math.Min(pc, pd)), math.Min(l, math.Max(pc, pd))
+	return hi-lo > unionTouch
 }
