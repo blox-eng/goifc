@@ -248,12 +248,13 @@ func distanceToRing(p [2]float64, r [][2]float64) float64 {
 // Cost is superlinear and SHAPE-dependent, not one exponent. The sweep's bound
 // is O(v²) in a single polygon's vertex count — every vertex opens a slab, and
 // every edge may cross every slab — with the boundary walk over the resulting
-// pieces on top of that. The crossing check before the sweep is O(v²) always:
-// every edge of a polygon is compared with every other, with no spatial index. Measured between 32 and 512 vertices, growth ran from
-// roughly linear on an outline whose slabs each hold two crossings to well
-// above quadratic on one whose slabs hold many, so treat O(v²) as the bound
-// and not as a prediction. A facade outline is tens of vertices, and nothing
-// here refuses a polygon for being large.
+// pieces on top of that. The crossing check before the sweep is O(v²) on
+// every input: each edge of a polygon is compared with every other, with no
+// spatial index. Measured between 32 and 512 vertices on a circle (two
+// crossings per slab) and a comb (many), total time grew roughly 2 to 3.5
+// times per doubling, and the crossing check was a tenth to a half of it;
+// treat O(v²) as the bound and not as a prediction. A facade outline is tens
+// of vertices, and nothing here refuses a polygon for being large.
 func UnionArea2D(polys []Polygon2D) (area float64, ok bool) {
 	area, _, ok = UnionMeasure2D(polys)
 	return area, ok

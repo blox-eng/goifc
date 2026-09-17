@@ -185,10 +185,10 @@ Superlinear and shape-dependent, not one exponent. The sweep's bound is O(v²)
 in a single polygon's vertex count — every vertex opens a slab, and every edge
 may cross every slab — with the boundary walk over the pieces on top of it.
 The crossing check before the sweep is O(v²) on every input, since it compares
-every pair of edges.
-Measured between 32 and 512 vertices, growth ran from roughly linear on an
-outline whose slabs each hold two crossings to well above quadratic on one
-whose slabs hold many. Treat O(v²) as the bound and not as a prediction.
+every pair of edges. Measured between 32 and 512 vertices on a circle (two
+crossings per slab) and a comb (many), total time grew roughly 2 to 3.5 times
+per doubling, and the crossing check was a tenth to a half of it. Treat O(v²)
+as the bound and not as a prediction.
 
 A facade outline is tens of vertices. Nothing refuses a polygon for being
 large — there is no cap — but a machine-generated outline with thousands of
