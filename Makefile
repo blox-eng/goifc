@@ -40,6 +40,8 @@ clean: ## Clean build artifacts (Go cache, rendered site, docs venv)
 	go clean ./...
 	rm -rf site $(DOCS_VENV)
 
+GOVULNCHECK_VERSION ?= v1.7.0
+
 vulncheck: ## Scan for vulnerabilities reachable from this code (incl. stdlib)
 	@echo "Running govulncheck..."
 	@# Pinning GOTOOLCHAIN to the version go.mod declares is the entire point,
@@ -49,18 +51,23 @@ vulncheck: ## Scan for vulnerabilities reachable from this code (incl. stdlib)
 	@# clean while the version actually shipped stays vulnerable. (GOTOOLCHAIN=local
 	@# is NOT the fix: it pins to whichever go is on PATH, which is a third
 	@# unrelated version.) Scan what is pinned, not what is convenient.
+	@# The tool is pinned too, for the same reason CI pins it: a govulncheck
+	@# release whose go directive is newer than go.mod's cannot run under the
+	@# pinned toolchain at all. Raise it when go.mod's go directive moves.
 	GOTOOLCHAIN=go$(shell awk '/^go /{print $$2; exit}' go.mod) \
-		go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+		go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 fuzz: ## Fuzz the untrusted-input paths (override with FUZZTIME=30m)
 	@echo "Fuzzing each target for $(or $(FUZZTIME),60s)..."
 	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),60s)
 	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),60s)
+	.github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D $(or $(FUZZTIME),60s)
 
 fuzz-deep: ## Fuzz hard (default 30m per target; override with FUZZTIME=2h)
 	@echo "Deep-fuzzing each target for $(or $(FUZZTIME),30m)..."
 	.github/scripts/fuzz-smoke.sh ./step/ FuzzParseBytes $(or $(FUZZTIME),30m)
 	.github/scripts/fuzz-smoke.sh . FuzzAssemble $(or $(FUZZTIME),30m)
+	.github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D $(or $(FUZZTIME),30m)
 
 # The docs toolchain is Python, so it lives in a venv rather than in the
 # developer's global site-packages — and in the SAME pinned versions the Docs

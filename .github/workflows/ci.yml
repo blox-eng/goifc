@@ -179,16 +179,22 @@ jobs:
       # toolchain is exactly the kind of thing this catches — and did, on the first
       # run: GO-2026-4601 (net/url IPv6 parsing) was reachable from WriteGLB via
       # gltf.Encoder.Encode on the then-pinned 1.25.4, fixed in 1.25.8.
-      - uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+      #
+      # The tool is installed by hand, at a pinned version, rather than through
+      # golang/govulncheck-action: that action always installs
+      # govulncheck@latest, and a govulncheck release may declare a newer go
+      # directive than this module's. setup-go runs with GOTOOLCHAIN=local, so
+      # the install then fails before anything is scanned. The pin is the
+      # newest release whose own go floor does not exceed the go directive in
+      # go.mod; raise it when that directive moves.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          # go-version-input defaults to 'stable', and the action forwards BOTH
-          # it and go-version-file to setup-go, which then ignores the file and
-          # warns. That silently scanned whatever 'stable' happened to be rather
-          # than the toolchain we ship — the exact opposite of the paragraph
-          # above. Blanking it makes go.mod authoritative for real.
-          go-version-input: ''
           go-version-file: go.mod
-          go-package: ./...
+          cache: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+      - name: govulncheck
+        run: govulncheck ./...
 
   fuzz:
     name: Fuzz Smoke
@@ -226,6 +232,10 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh . FuzzAssemble 60s
+      - name: Fuzz the 2D union
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D 60s
       - name: Upload crashers
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
