@@ -16,7 +16,22 @@ for _, e := range face { // the elements you have decided clad this plane
 	if len(loops) == 0 {
 		continue // an absent outline, reported absent
 	}
-	polys = append(polys, polygonFromLoops(loops))
+	// Split the flat ring list into an outer and its holes: the ring with the
+	// largest absolute area is the outer one. This is the one conversion
+	// between the two APIs, and it is yours to make.
+	outer := 0
+	for i := range loops {
+		if math.Abs(shoelace(loops[i].Points)) > math.Abs(shoelace(loops[outer].Points)) {
+			outer = i
+		}
+	}
+	poly := geometry.Polygon2D{Outer: loops[outer].Points}
+	for i := range loops {
+		if i != outer {
+			poly.Holes = append(poly.Holes, loops[i].Points)
+		}
+	}
+	polys = append(polys, poly)
 }
 
 area, ok := geometry.UnionArea2D(polys)
@@ -25,6 +40,20 @@ if !ok {
 	return
 }
 fmt.Printf("%.2f m² of facade\n", area)
+```
+
+`shoelace` is the ordinary signed-area sum over a ring, which the standard
+library does not provide:
+
+```go
+func shoelace(r [][2]float64) float64 {
+	var a float64
+	for i := range r {
+		j := (i + 1) % len(r)
+		a += r[i][0]*r[j][1] - r[j][0]*r[i][1]
+	}
+	return a / 2
+}
 ```
 
 ## The question it answers
@@ -126,10 +155,30 @@ Do not feed a bridged outline to the union. Measure with `NetAreas` or
 `Facing.FaceArea`, or take the silhouette from `SilhouetteOn`, which refuses
 rather than repairs.
 
+## Detail below 1 cm/100 is not detail
+
+Two points closer than **1e-5 m** are one point here. That quantum belongs to
+the boundary walk this reuses, not to the union: a piece whose corners do not
+weld to three distinct points is dropped as a segment rather than admitted as a
+triangle, which is what keeps a tessellator's slivers from tearing the outline
+open.
+
+The area given up is bounded by the quantum times the piece's longest edge —
+below the resolution at which a boundary can be stated at all. But note what
+that means for the refusal above: the check that the pieces add up to the
+rings' own area is made **before** the weld, so area the weld removes is not a
+mismatch it can report. An outline whose real detail lives at 10 µm is not an
+outline this measures; simplify it first.
+
 ## Cost
 
-The decomposition behind the union is a vertical sweep, quadratic in the vertex
-count of the largest single polygon, and then a boundary walk over the pieces.
+Superlinear and shape-dependent, not one exponent. The sweep's bound is O(v²)
+in a single polygon's vertex count — every vertex opens a slab, and every edge
+may cross every slab — with the boundary walk over the pieces on top of it.
+Measured between 32 and 512 vertices, growth ran from roughly linear on an
+outline whose slabs each hold two crossings to well above quadratic on one
+whose slabs hold many. Treat O(v²) as the bound and not as a prediction.
+
 A facade outline is tens of vertices. Nothing refuses a polygon for being
 large — there is no cap — but a machine-generated outline with thousands of
 vertices is worth simplifying before it gets here.

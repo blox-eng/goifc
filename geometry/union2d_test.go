@@ -63,8 +63,14 @@ func TestUnionArea2DRefusesWhatItCannotMeasure(t *testing.T) {
 			Outer: [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}},
 			Holes: [][][2]float64{{{1, 1}, {2, 2}, {3, 3}}},
 		}},
+		// UNEQUAL areas on purpose. With a 1x1 hole outside a 1x1 outer the
+		// two cancel to want == 0 and the gate's positive-area arm refuses it,
+		// so the fixture would pass while the closure term — the part that
+		// actually notices a hole is not where it claims to be — was gone. At
+		// 4x4 and 1x1 the closure term is the only thing standing between this
+		// input and a confident 17 m².
 		"a hole outside its outer": {{
-			Outer: [][2]float64{{0, 0}, {1, 0}, {1, 1}, {0, 1}},
+			Outer: [][2]float64{{0, 0}, {4, 0}, {4, 4}, {0, 4}},
 			Holes: [][][2]float64{{{5, 5}, {5, 6}, {6, 6}, {6, 5}}},
 		}},
 		"a hole larger than its outer": {{
@@ -123,6 +129,65 @@ func TestUnionMeasure2DCountsAHoleBoundary(t *testing.T) {
 	}
 }
 
+// TestUnionMeasure2DOrdersCrossingsWithinTheSlab: a 6 x 6 face with a
+// triangular opening whose APEX lands on a slab boundary. Two of that hole's
+// edges start at the same height and separate inside the slab, so the only key
+// that orders them correctly is their height at the slab's MIDDLE — at either
+// boundary they are equal, and the pairing that follows is then a coin toss.
+//
+// All four listings of the same hole are asserted because the bug is
+// winding-sensitive: the wrong key still happens to sort correctly for three of
+// them, so a single fixture would have passed while the code was broken.
+func TestUnionMeasure2DOrdersCrossingsWithinTheSlab(t *testing.T) {
+	wantPer := 24 + 4 + 4*math.Sqrt2 // the face, plus the opening's reveal
+	for name, hole := range map[string][][2]float64{
+		"apex last":   {{1, 2}, {5, 2}, {3, 4}},
+		"apex first":  {{3, 4}, {5, 2}, {1, 2}},
+		"apex middle": {{1, 2}, {3, 4}, {5, 2}},
+		"reversed":    {{5, 2}, {1, 2}, {3, 4}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := Polygon2D{
+				Outer: [][2]float64{{0, 0}, {6, 0}, {6, 6}, {0, 6}},
+				Holes: [][][2]float64{hole},
+			}
+			area, per, ok := UnionMeasure2D([]Polygon2D{p})
+			if !ok || math.Abs(area-32) > 1e-9 || math.Abs(per-wantPer) > 1e-9 {
+				t.Errorf("UnionMeasure2D = %v, %v, %v; want 32, %v, true", area, per, ok, wantPer)
+			}
+		})
+	}
+}
+
+// TestUnionMeasure2DIsIndependentOfRingOrder: the same ring, listed forwards
+// and backwards, must reach the same verdict.
+//
+// The fixture is the one FuzzUnionArea2D found: a ring that returns to a vertex
+// it has already used and runs a zero-width whisker out and back. That presents
+// the sweep with two crossings at exactly the same height, and sort.Slice is
+// not stable — with the tie unbroken, the answer was decided by the order the
+// edges happened to be collected in, so the ring measured 0.03125 one way and
+// was refused the other. Both refuse now, which is what the contract promises
+// for a boundary that meets itself.
+//
+// The crashing input is committed under testdata/fuzz, so `go test` replays it
+// whether or not anyone is fuzzing.
+func TestUnionMeasure2DIsIndependentOfRingOrder(t *testing.T) {
+	ring := [][2]float64{{12, 12.25}, {12.25, 12}, {12, 12}, {24.75, 24.75}, {12, 12}}
+	reversed := make([][2]float64, len(ring))
+	for i, q := range ring {
+		reversed[len(ring)-1-i] = q
+	}
+	fa, fp, fok := UnionMeasure2D([]Polygon2D{{Outer: ring}})
+	ra, rp, rok := UnionMeasure2D([]Polygon2D{{Outer: reversed}})
+	if fok != rok || fa != ra || fp != rp {
+		t.Errorf("forwards = %v, %v, %v; backwards = %v, %v, %v — the same ring", fa, fp, fok, ra, rp, rok)
+	}
+	if fok {
+		t.Errorf("UnionMeasure2D(ok) = true on a ring that meets itself; want false")
+	}
+}
+
 // TestUnionArea2DIgnoresRingWinding: the outline a consumer stored may have
 // been re-serialized by anything. Winding decides nothing here — the ring set
 // is filled even-odd, exactly as Loop's own doc says a renderer may treat it.
@@ -166,17 +231,46 @@ func TestUnionMeasure2DMeasuresARakedEdge(t *testing.T) {
 	}
 }
 
-// TestUnionArea2DIsInvariantFarFromTheOrigin: the union area integral is taken
-// about the world origin, which is why boundaryCloses is load-bearing. A
-// facade 47 m out must measure the same as one at the origin.
-func TestUnionArea2DIsInvariantFarFromTheOrigin(t *testing.T) {
-	const d = 47
-	near := Polygon2D{Outer: [][2]float64{{0, 0}, {2, 0}, {2, 3}, {0, 3}}}
-	far := Polygon2D{Outer: [][2]float64{{d, d}, {d + 2, d}, {d + 2, d + 3}, {d, d + 3}}}
-	a, aok := UnionArea2D([]Polygon2D{near})
-	b, bok := UnionArea2D([]Polygon2D{far})
-	if !aok || !bok || math.Abs(a-6) > 1e-9 || math.Abs(b-6) > 1e-6 {
-		t.Errorf("UnionArea2D = %v (%v) at the origin and %v (%v) %d m out; want 6 both", a, aok, b, bok, d)
+// TestUnionMeasure2DIsInvariantFarFromTheOrigin: the same outline measures the
+// same wherever the building stands.
+//
+// This is not a formality. SilhouetteOn projects WORLD coordinates and
+// ElevationPlane's frame has no origin to subtract them against, so a model
+// on a projected national grid (eastings ~1e5–1e6 m, northings ~1e6–1e7 m)
+// arrives here at x≈4.6e5, y≈4.7e6. The sweep interpolates ABSOLUTELY at
+// that magnitude while the closure gate is RELATIVE to the area, and the two
+// meet in two different ways: a 1-5 m outline is REFUSED (a soak through
+// this door went 0/500 at 47 m, 6/500 at 10 km, 497/500 at 300 km), and the
+// fixture below is worse — it is ACCEPTED at 50.0001220703 m² instead of 50.
+//
+// The fixture is shaped for what it has to see. The raked edge spans THREE
+// slabs, because interpolation only happens at a slab boundary an edge
+// crosses: an outline whose every edge begins and ends on its own slab
+// interpolates nothing, survives the bug untouched, and reads as reassurance.
+// (A gable — two slabs, one edge each — was the first attempt here, and it
+// passed against the broken build.)
+func TestUnionMeasure2DIsInvariantFarFromTheOrigin(t *testing.T) {
+	// A 10 x 10 right triangle, its base split so the hypotenuse crosses two
+	// interior slab boundaries at a non-dyadic x.
+	const t3 = 1.0 / 3.0
+	rake := func(ox, oy float64) Polygon2D {
+		return Polygon2D{Outer: [][2]float64{
+			{ox, oy}, {ox + 3 + t3, oy}, {ox + 7 + t3, oy}, {ox + 10, oy}, {ox, oy + 10},
+		}}
+	}
+	wantPer := 20 + 10*math.Sqrt2
+	for _, origin := range [][2]float64{
+		{0, 0},
+		{47, 47},
+		{10000, 10000},
+		{460000, 4700000},     // a projected national grid (eastings ~1e5-1e6 m, northings ~1e6-1e7 m)
+		{460000.1, 4700000.7}, // and the same, off the representable grid
+		{-460000, -4700000},
+	} {
+		area, per, ok := UnionMeasure2D([]Polygon2D{rake(origin[0], origin[1])})
+		if !ok || math.Abs(area-50) > 1e-9 || math.Abs(per-wantPer) > 1e-9 {
+			t.Errorf("at %v: UnionMeasure2D = %v, %v, %v; want 50, %v, true", origin, area, per, ok, wantPer)
+		}
 	}
 }
 

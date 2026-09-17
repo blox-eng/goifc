@@ -163,6 +163,35 @@ func FuzzUnionArea2D(f *testing.F) {
 		if ok != mOK || area != mArea {
 			t.Fatalf("UnionArea2D = %v, %v but UnionMeasure2D = %v, %v", area, ok, mArea, mOK)
 		}
+		// The metamorphic pair runs whether or not the input measured, because
+		// a REFUSAL regression is invisible to everything above: a change that
+		// starts refusing perfectly good outlines returns ok = false
+		// consistently from both entry points and satisfies every assertion in
+		// this function. That is not hypothetical — a relative closure
+		// tolerance compared against absolute rounding refused 497 of 500 real
+		// 5 m outlines at national-grid magnitudes, and no assertion here saw
+		// it.
+		//
+		// Translating every polygon by a constant, and reversing every ring,
+		// must both leave ok and the area exactly where they were: the first
+		// pins measurement against where the building stands, the second
+		// against how its outline was serialized.
+		for name, mutated := range map[string][]Polygon2D{
+			// A NON-DYADIC shift, deliberately: 1e5 leaves the decoder's
+			// quarter-metre grid exactly representable, so the sweep rounds
+			// nothing and the translated input is not actually harder. Pi
+			// times a million is off every grid there is.
+			"translated": translatePolys(polys, 1e6*math.Pi, -1e6*math.Pi),
+			"reversed":   reversePolys(polys),
+		} {
+			mA, mOK := UnionArea2D(mutated)
+			if mOK != ok {
+				t.Fatalf("%s: ok = %v, was %v", name, mOK, ok)
+			}
+			if ok && math.Abs(mA-area) > 1e-6+1e-9*math.Abs(area) {
+				t.Fatalf("%s: area = %v, was %v", name, mA, area)
+			}
+		}
 		if !ok {
 			return
 		}
@@ -181,4 +210,37 @@ func FuzzUnionArea2D(f *testing.F) {
 			t.Fatalf("union area %v exceeds the polygons' own areas summed, %v", area, gross)
 		}
 	})
+}
+
+// translatePolys copies polys shifted by (dx, dy). Area is invariant under it;
+// so, for an honest implementation, is measurability.
+func translatePolys(polys []Polygon2D, dx, dy float64) []Polygon2D {
+	out := make([]Polygon2D, len(polys))
+	for i, p := range polys {
+		out[i].Outer = translateRing(p.Outer, -dx, -dy)
+		for _, h := range p.Holes {
+			out[i].Holes = append(out[i].Holes, translateRing(h, -dx, -dy))
+		}
+	}
+	return out
+}
+
+// reversePolys copies polys with every ring wound the other way. Winding
+// decides nothing, so nothing may change.
+func reversePolys(polys []Polygon2D) []Polygon2D {
+	rev := func(r [][2]float64) [][2]float64 {
+		out := make([][2]float64, len(r))
+		for i, q := range r {
+			out[len(r)-1-i] = q
+		}
+		return out
+	}
+	out := make([]Polygon2D, len(polys))
+	for i, p := range polys {
+		out[i].Outer = rev(p.Outer)
+		for _, h := range p.Holes {
+			out[i].Holes = append(out[i].Holes, rev(h))
+		}
+	}
+	return out
 }

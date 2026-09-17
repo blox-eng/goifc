@@ -49,8 +49,15 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   ring, two holes overlapping, a boundary crossing itself), or when the union
   boundary did not close — the refusal `Element.SilhouetteOn` already makes.
 
+  Both measure the same outline the same wherever the model sits. That is worth
+  stating because `SilhouetteOn` projects WORLD coordinates and `ElevationPlane`
+  has no origin to subtract them against, so a model on a national grid arrives
+  at x≈4.6e5, y≈4.7e6 — the rings are recentred before measurement so neither
+  the figure nor the refusal depends on it.
+
   The polygons must already be in ONE plane's frame; nothing here can detect a
-  mismatch. See [measuring silhouettes](guides/measuring-silhouettes.md).
+  mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail
+  it can see. See [measuring silhouettes](https://blox-eng.github.io/goifc/latest/guides/measuring-silhouettes/).
 
 ## v0.9.3 — 2026-09-02
 

@@ -12,6 +12,22 @@ import (
 // parts in 1e16, not 1e9. Anything larger means the rings do not describe the
 // surface they claim: a hole outside its outer ring, two holes overlapping, a
 // self-crossing boundary. See unionPolygonTriangles.
+//
+// This tolerance is RELATIVE while the rounding it bounds is ABSOLUTE: the
+// rounding grows with the coordinates' distance from the frame origin, not
+// with the area being measured. Left alone, that makes both the figure and the
+// verdict a function of where the building stands — and a facade's (u, v) ARE
+// world coordinates, because SilhouetteOn projects them and ElevationPlane's
+// frame has no origin to subtract them against. On a projected national grid
+// (eastings ~1e5–1e6 m, northings ~1e6–1e7 m, e.g. x≈4.6e5, y≈4.7e6) it
+// failed in both directions: 1-5 m outlines were
+// REFUSED (497 of 500 at 300 km), and a 50 m² outline whose raked edge crossed
+// three slabs was ACCEPTED at 50.0001220703125.
+//
+// The union therefore recentres every ring on their shared bounding-box centre
+// before measuring (see unionOffset). That removes the magnitude from the
+// comparison, where loosening this number would only have moved the cliff
+// further out.
 const unionRingClosure = 1e-9
 
 // Polygon2D is a hole-nested ring set in one plane's (u, v) frame, in metres:
@@ -57,14 +73,30 @@ type Polygon2D struct {
 //   - the union boundary did not close, the same refusal [Element.SilhouetteOn]
 //     already makes.
 //
+// Two points closer than 1e-5 m are ONE point here. That quantum is not this
+// function's: it is the weld the boundary walk has always used, and a piece
+// whose corners do not weld to three distinct points is dropped as a segment
+// rather than admitted as a triangle. The area given up is bounded by the
+// quantum times the piece's longest edge — below the resolution at which a
+// boundary can be stated at all — but note that the gate described above
+// cannot see it: that comparison is made BEFORE the weld, so area the weld
+// removes is not a mismatch it is able to report. An outline whose detail is
+// at that scale is not an outline this measures; simplify it first.
+//
 // The polygons must already be expressed in ONE plane's frame. Projecting them
 // there is the caller's business: [Element.SilhouetteOn] does it for an
 // element, and [PlaneFromNormal] or [ElevationPlane] builds the frame. Two
 // outlines taken on different frames will union into a figure that means
 // nothing, and nothing here can detect it.
 //
-// Cost is O(v²) in the vertex count of the largest polygon, plus the cost of
-// the boundary walk over the pieces. A facade outline is tens of vertices.
+// Cost is superlinear and SHAPE-dependent, not one exponent. The sweep's bound
+// is O(v²) in a single polygon's vertex count — every vertex opens a slab, and
+// every edge may cross every slab — with the boundary walk over the resulting
+// pieces on top of that. Measured between 32 and 512 vertices, growth ran from
+// roughly linear on an outline whose slabs each hold two crossings to well
+// above quadratic on one whose slabs hold many, so treat O(v²) as the bound
+// and not as a prediction. A facade outline is tens of vertices, and nothing
+// here refuses a polygon for being large.
 func UnionArea2D(polys []Polygon2D) (area float64, ok bool) {
 	area, _, ok = UnionMeasure2D(polys)
 	return area, ok
@@ -85,9 +117,12 @@ func UnionMeasure2D(polys []Polygon2D) (area, perimeter float64, ok bool) {
 	if len(polys) == 0 {
 		return 0, 0, false
 	}
+	// ONE offset for every polygon, so they stay in a common frame and still
+	// union. Area and perimeter are invariant under it.
+	ox, oy := unionOffset(polys)
 	var tris [][3][2]float64
 	for _, p := range polys {
-		pieces, ok := unionPolygonTriangles(p)
+		pieces, ok := unionPolygonTriangles(p, ox, oy)
 		if !ok {
 			return 0, 0, false
 		}
@@ -125,10 +160,12 @@ func UnionMeasure2D(polys []Polygon2D) (area, perimeter float64, ok bool) {
 // function: a sound ring set decomposes exactly, so a mismatch is not a
 // rounding story, it is the rings describing something other than an outer
 // with voids inside it.
-func unionPolygonTriangles(p Polygon2D) ([][3][2]float64, bool) {
+func unionPolygonTriangles(p Polygon2D, ox, oy float64) ([][3][2]float64, bool) {
 	rings := make([][][2]float64, 0, 1+len(p.Holes))
-	rings = append(rings, p.Outer)
-	rings = append(rings, p.Holes...)
+	rings = append(rings, translateRing(p.Outer, ox, oy))
+	for _, h := range p.Holes {
+		rings = append(rings, translateRing(h, ox, oy))
+	}
 
 	want := 0.0
 	for i, r := range rings {
@@ -177,6 +214,49 @@ func unionPolygonTriangles(p Polygon2D) ([][3][2]float64, bool) {
 		return nil, false
 	}
 	return tris, true
+}
+
+// unionOffset is the centre of the bounding box of every ring of every polygon
+// — the one translation that puts the whole input as close to the origin as a
+// single shift can.
+//
+// It is a bounding-box centre rather than, say, the first vertex, because what
+// has to shrink is the LARGEST coordinate magnitude the sweep interpolates on,
+// and the box centre minimises exactly that.
+//
+// A non-finite coordinate is ignored here rather than refused: the ring
+// carrying it is refused a moment later, by name, and poisoning the offset
+// would take every other polygon down with it. If nothing finite is found the
+// offset is zero, which changes nothing about the refusal that follows.
+func unionOffset(polys []Polygon2D) (ox, oy float64) {
+	minX, minY := math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
+	for _, p := range polys {
+		for _, r := range append([][][2]float64{p.Outer}, p.Holes...) {
+			for _, q := range r {
+				if math.IsNaN(q[0]) || math.IsNaN(q[1]) || math.IsInf(q[0], 0) || math.IsInf(q[1], 0) {
+					continue
+				}
+				minX, maxX = math.Min(minX, q[0]), math.Max(maxX, q[0])
+				minY, maxY = math.Min(minY, q[1]), math.Max(maxY, q[1])
+			}
+		}
+	}
+	if math.IsInf(minX, 0) || math.IsInf(minY, 0) {
+		return 0, 0
+	}
+	return minX + (maxX-minX)/2, minY + (maxY-minY)/2
+}
+
+// translateRing copies a ring shifted by (-ox, -oy). A copy, not a shift in
+// place: the outline belongs to the caller, who stored it and will read it
+// again.
+func translateRing(r [][2]float64, ox, oy float64) [][2]float64 {
+	out := make([][2]float64, len(r))
+	for i, q := range r {
+		out[i] = [2]float64{q[0] - ox, q[1] - oy}
+	}
+	return out
 }
 
 // sweepEdge is one non-vertical ring edge, oriented left to right. A vertical
@@ -246,7 +326,24 @@ func sweepRings(rings [][][2]float64) ([][3][2]float64, bool) {
 		// construction. Were one somehow not, the unpaired crossing would drop
 		// out of the loop below and the pieces would no longer sum to the area
 		// the rings state, which unionPolygonTriangles' gate refuses.
-		sort.Slice(cs, func(i, j int) bool { return cs[i].mid < cs[j].mid })
+		// A TOTAL order, not just a comparison on mid. Two edges can cross a
+		// slab at the same mid height — a ring that touches itself, or doubles
+		// back along its own edge, presents the sweep with a coincident pair —
+		// and sort.Slice is not stable, so a tie left unbroken is resolved by
+		// whatever order the edges happened to be collected in. That made the
+		// SAME ring measure 0.03125 listed one way and refuse listed the
+		// other, which the fuzz target's winding invariant caught. Ranking
+		// ties by the slab's two boundaries makes the order a function of the
+		// geometry alone.
+		sort.Slice(cs, func(i, j int) bool {
+			if cs[i].mid != cs[j].mid {
+				return cs[i].mid < cs[j].mid
+			}
+			if cs[i].lo != cs[j].lo {
+				return cs[i].lo < cs[j].lo
+			}
+			return cs[i].hi < cs[j].hi
+		})
 		for i := 0; i+1 < len(cs); i += 2 {
 			lo, hi := cs[i], cs[i+1]
 			a := [2]float64{x0, lo.lo}
