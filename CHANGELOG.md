@@ -28,7 +28,13 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   occurrences, once per element that reaches the item, not distinct
   entities — it resolves through `IfcMappedItem` into the shared geometry it
   maps to, so a type's count can exceed the number of such entities in the
-  file when several elements share one mapped representation.
+  file when several elements share one mapped representation. It reports the
+  types that have no tessellation path at all, which is not every cause of a
+  fallback: a dispatched path that is attempted and declines partway — an
+  unbuildable profile, an unclosable shell, a failed boolean operand, an
+  unresolvable mapped source — degrades to a box just the same, with nothing
+  in this map to name it. Rank gaps from it knowing the counts are a lower
+  bound, and that a type's absence is not evidence it never falls back.
 
 ## v0.10.0 — 2026-09-17
 

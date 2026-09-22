@@ -10,14 +10,21 @@ elements that produced geometry but fell back to a bounding box
 instead of a tessellated shape. The **looseness** columns compare
 goifc's world AABB to IfcOpenShell's world AABB — not to the true
 solid, which the oracle does not store. Those two boxes are
-near-identical for any element both engines tessellate, and even
-for one that fell back to goifc's own OBB path: that box is built
-directly from the element's own point extent, so its world AABB
-coincides with the true solid's world AABB just as IfcOpenShell's
-oracle box does. (IfcOpenShell has no OBB fallback of its own —
-its oracle boxes come from an exact-solid tessellation.) So a ratio
-of 1.00 here is nearly blind to fallback quality by construction —
-read it as "box vs. box", not as "goifc matches IfcOpenShell".
+near-identical for any element both engines tessellate. For one
+that fell back to goifc's own OBB path, the box is built from the
+`IfcCartesianPoint` coordinates reachable from the element's
+representation, so it coincides with the true solid's world AABB
+only where those points reach the solid's extremes. Where they do
+not — a revolved or otherwise curved sweep has extremes that no
+point in the file names — the fallback box can come out either
+looser than the true solid (a pitched roof's OBB can hold twice
+its volume) or, the failure that actually hurts a consumer,
+tighter than it. Gate 1 is precisely what catches the tighter
+case; the stair-flight shortfalls recorded below are it firing.
+(IfcOpenShell has no OBB fallback of its own — its oracle boxes
+come from an exact-solid tessellation.) So a ratio of 1.00 here is
+nearly blind to fallback quality by construction — read it as
+"box vs. box", not as "goifc matches IfcOpenShell".
 Ratios are printed to four decimal places so "exactly 1" and
 "very close to 1" are distinguishable.
 
@@ -29,7 +36,7 @@ Ratios are printed to four decimal places so "exactly 1" and
 
 ## What falls back, and how often
 
-Representation-item types with no tessellation path. Closing the top of this list buys the most accuracy.
+Representation-item types that have no tessellation path at all. Closing the top of this list buys the most accuracy.
 
 Counts are OCCURRENCES, not distinct entities: an `IfcMappedItem`
 is resolved to the items it maps, and each resolution is counted
@@ -43,6 +50,31 @@ in the file. Keys are the upper-case STEP keyword as parsed
 (`IFCFACEBASEDSURFACEMODEL`, not `IfcFaceBasedSurfaceModel`);
 nothing here changes that casing.
 
+**Occurrences here and the OBB column above are different
+quantities, and neither converts into the other.** This table
+counts representation ITEMS, once per element that reaches one;
+the OBB column counts ELEMENTS. So `duplex_a`'s 65 occurrences
+beside its 69 OBB elements is not a near-match between two
+measurements of the same thing — it is two different units that
+happen to land close together. Do not subtract them.
+
+**This list is also not exhaustive of what falls back.** It names
+only types that `tessellateItemDepth` has no case for at all. An
+element becomes a box just as readily when a dispatched path IS
+attempted and declines partway: an extrusion whose profile cannot
+be built, a brep whose shell cannot be closed, a boolean whose
+operand failed, a mapped item whose source could not be resolved.
+None of that class appears here, so a type's absence from this
+table is not evidence that it never falls back, and the counts
+below are a lower bound on the causes.
+
+Concretely, in this corpus:
+
+- `fzk_haus` has 2 OBB elements and reports no unhandled item type at
+  all, so nothing in the table below accounts for a single one of
+  them. A dispatched path declining mid-attempt is the cause this
+  diagnostic cannot see, and this is what that looks like.
+
 | Item type | Occurrences |
 |---|---|
 | `IFCFACEBASEDSURFACEMODEL` | 65 |
@@ -50,18 +82,27 @@ nothing here changes that casing.
 ## Known Gate 1 violations
 
 Gate 1 asserts that goifc's AABB contains IfcOpenShell's oracle box
-for every element the oracle knows. A bound that under-reports is
-always a bug, never a legitimate fallback — an OBB fallback box is
-allowed to be larger than the solid it stands for, never smaller.
+for every element the oracle and goifc's scene both know. A bound
+that under-reports is always a bug, never a legitimate fallback —
+an OBB fallback box is allowed to be larger than the solid it
+stands for, never smaller.
 The violations below are real, currently open goifc geometry gaps,
 tracked in `parity/knownviolations.go`'s `knownViolations` allowlist
 so CI stays green on this known state while still failing on any
 new or worsened violation.
 
-Against `duplex_a`, the gate compares 215 elements. All but 2 are contained:
+Across the public corpus the gate compares 331 elements, of which 329
+are contained.
+
+Against `ifcopenhouse`, the gate compares 34 elements, and all 34 are contained.
+
+Against `duplex_a`, the gate compares 215 elements. 213 are contained; 2 are
+not:
 
 | GlobalID | Axis | Shortfall | What it is |
 |---|---|---|---|
 | `1oKjKg9PD3fP1iIwXLh3lK` | min-y | 0.009927508 m | IfcStairFlight, Revit instance 151086 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads) |
 | `3KMJUyUe9DfQ2FOCd5ZoiN` | max-y | 0.009927222 m | IfcStairFlight, Revit instance 198878 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads) |
+
+Against `fzk_haus`, the gate compares 82 elements, and all 82 are contained.
 

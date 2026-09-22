@@ -30,24 +30,33 @@ func Report() (string, error) {
 	b.WriteString("instead of a tessellated shape. The **looseness** columns compare\n")
 	b.WriteString("goifc's world AABB to IfcOpenShell's world AABB — not to the true\n")
 	b.WriteString("solid, which the oracle does not store. Those two boxes are\n")
-	b.WriteString("near-identical for any element both engines tessellate, and even\n")
-	b.WriteString("for one that fell back to goifc's own OBB path: that box is built\n")
-	b.WriteString("directly from the element's own point extent, so its world AABB\n")
-	b.WriteString("coincides with the true solid's world AABB just as IfcOpenShell's\n")
-	b.WriteString("oracle box does. (IfcOpenShell has no OBB fallback of its own —\n")
-	b.WriteString("its oracle boxes come from an exact-solid tessellation.) So a ratio\n")
-	b.WriteString("of 1.00 here is nearly blind to fallback quality by construction —\n")
-	b.WriteString("read it as \"box vs. box\", not as \"goifc matches IfcOpenShell\".\n")
+	b.WriteString("near-identical for any element both engines tessellate. For one\n")
+	b.WriteString("that fell back to goifc's own OBB path, the box is built from the\n")
+	b.WriteString("`IfcCartesianPoint` coordinates reachable from the element's\n")
+	b.WriteString("representation, so it coincides with the true solid's world AABB\n")
+	b.WriteString("only where those points reach the solid's extremes. Where they do\n")
+	b.WriteString("not — a revolved or otherwise curved sweep has extremes that no\n")
+	b.WriteString("point in the file names — the fallback box can come out either\n")
+	b.WriteString("looser than the true solid (a pitched roof's OBB can hold twice\n")
+	b.WriteString("its volume) or, the failure that actually hurts a consumer,\n")
+	b.WriteString("tighter than it. Gate 1 is precisely what catches the tighter\n")
+	b.WriteString("case; the stair-flight shortfalls recorded below are it firing.\n")
+	b.WriteString("(IfcOpenShell has no OBB fallback of its own — its oracle boxes\n")
+	b.WriteString("come from an exact-solid tessellation.) So a ratio of 1.00 here is\n")
+	b.WriteString("nearly blind to fallback quality by construction — read it as\n")
+	b.WriteString("\"box vs. box\", not as \"goifc matches IfcOpenShell\".\n")
 	b.WriteString("Ratios are printed to four decimal places so \"exactly 1\" and\n")
 	b.WriteString("\"very close to 1\" are distinguishable.\n\n")
 
 	b.WriteString("| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | AABB ratio p50 | p90 | max |\n")
 	b.WriteString("|---|---|---|---|---|---|---|---|---|---|\n")
+	covs := make(map[string]Coverage, len(Public))
 	for _, name := range Public {
 		c, err := MeasureCoverage(name)
 		if err != nil {
 			return "", err
 		}
+		covs[name] = c
 		l, err := MeasureLooseness(name)
 		if err != nil {
 			return "", err
@@ -56,8 +65,25 @@ func Report() (string, error) {
 			name, c.Total, c.Extrude, c.Brep, c.OBB, c.Empty, 100*OBBRate(c), l.P50, l.P90, l.Max)
 	}
 
+	totals := map[string]int{}
+	perModel := map[string]int{}
+	for _, name := range Public {
+		f, err := Load(name)
+		if err != nil {
+			return "", err
+		}
+		r, err := model.Extract(f)
+		if err != nil {
+			return "", fmt.Errorf("parity: extract %s: %w", name, err)
+		}
+		for ty, n := range geometry.UnhandledItemTypes(f, r) {
+			totals[ty] += n
+			perModel[name] += n
+		}
+	}
+
 	b.WriteString("\n## What falls back, and how often\n\n")
-	b.WriteString("Representation-item types with no tessellation path. ")
+	b.WriteString("Representation-item types that have no tessellation path at all. ")
 	b.WriteString("Closing the top of this list buys the most accuracy.\n\n")
 	b.WriteString("Counts are OCCURRENCES, not distinct entities: an `IfcMappedItem`\n")
 	b.WriteString("is resolved to the items it maps, and each resolution is counted\n")
@@ -70,22 +96,29 @@ func Report() (string, error) {
 	b.WriteString("in the file. Keys are the upper-case STEP keyword as parsed\n")
 	b.WriteString("(`IFCFACEBASEDSURFACEMODEL`, not `IfcFaceBasedSurfaceModel`);\n")
 	b.WriteString("nothing here changes that casing.\n\n")
+
+	b.WriteString("**Occurrences here and the OBB column above are different\n")
+	b.WriteString("quantities, and neither converts into the other.** This table\n")
+	b.WriteString("counts representation ITEMS, once per element that reaches one;\n")
+	b.WriteString("the OBB column counts ELEMENTS. So `duplex_a`'s 65 occurrences\n")
+	b.WriteString("beside its 69 OBB elements is not a near-match between two\n")
+	b.WriteString("measurements of the same thing — it is two different units that\n")
+	b.WriteString("happen to land close together. Do not subtract them.\n\n")
+
+	b.WriteString("**This list is also not exhaustive of what falls back.** It names\n")
+	b.WriteString("only types that `tessellateItemDepth` has no case for at all. An\n")
+	b.WriteString("element becomes a box just as readily when a dispatched path IS\n")
+	b.WriteString("attempted and declines partway: an extrusion whose profile cannot\n")
+	b.WriteString("be built, a brep whose shell cannot be closed, a boolean whose\n")
+	b.WriteString("operand failed, a mapped item whose source could not be resolved.\n")
+	b.WriteString("None of that class appears here, so a type's absence from this\n")
+	b.WriteString("table is not evidence that it never falls back, and the counts\n")
+	b.WriteString("below are a lower bound on the causes.\n\n")
+
+	b.WriteString(unattributedNote(covs, perModel))
+
 	b.WriteString("| Item type | Occurrences |\n|---|---|\n")
 
-	totals := map[string]int{}
-	for _, name := range Public {
-		f, err := Load(name)
-		if err != nil {
-			return "", err
-		}
-		r, err := model.Extract(f)
-		if err != nil {
-			return "", err
-		}
-		for ty, n := range geometry.UnhandledItemTypes(f, r) {
-			totals[ty] += n
-		}
-	}
 	types := make([]string, 0, len(totals))
 	for ty := range totals {
 		types = append(types, ty)
@@ -105,45 +138,121 @@ func Report() (string, error) {
 
 	b.WriteString("\n## Known Gate 1 violations\n\n")
 	b.WriteString("Gate 1 asserts that goifc's AABB contains IfcOpenShell's oracle box\n")
-	b.WriteString("for every element the oracle knows. A bound that under-reports is\n")
-	b.WriteString("always a bug, never a legitimate fallback — an OBB fallback box is\n")
-	b.WriteString("allowed to be larger than the solid it stands for, never smaller.\n")
+	b.WriteString("for every element the oracle and goifc's scene both know. A bound\n")
+	b.WriteString("that under-reports is always a bug, never a legitimate fallback —\n")
+	b.WriteString("an OBB fallback box is allowed to be larger than the solid it\n")
+	b.WriteString("stands for, never smaller.\n")
 	b.WriteString("The violations below are real, currently open goifc geometry gaps,\n")
 	b.WriteString("tracked in `parity/knownviolations.go`'s `knownViolations` allowlist\n")
 	b.WriteString("so CI stays green on this known state while still failing on any\n")
 	b.WriteString("new or worsened violation.\n\n")
 
-	anyKnown := false
+	// The compared count is the INTERSECTION of the oracle and goifc's scene,
+	// not the oracle's size: an element the oracle knows but goifc's scene does
+	// not is never compared, and printing len(oracle) would overstate what the
+	// gate actually checked. Containment is measured here rather than inferred
+	// from the allowlist's length, so the published "contained" figure is the
+	// same assertion Gate 1 makes rather than an arithmetic restatement of the
+	// allowlist.
+	var totalCompared, totalContained int
+	type gate1 struct{ compared, contained int }
+	per := make(map[string]gate1, len(Public))
 	for _, name := range Public {
-		kvs := knownViolations[name]
-		if len(kvs) == 0 {
-			continue
-		}
-		anyKnown = true
 		oracle, err := LoadOracle(name)
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, "Against `%s`, the gate compares %d elements. All but %d %s contained:\n\n",
-			name, len(oracle), len(kvs), pluralAre(len(kvs)))
+		sc, err := SceneOf(name)
+		if err != nil {
+			return "", err
+		}
+		var g gate1
+		for _, e := range sc.Elements {
+			want, ok := oracle[e.GlobalID]
+			if !ok {
+				continue
+			}
+			g.compared++
+			if Contains(ElementBox(e), want, Tolerance) {
+				g.contained++
+			}
+		}
+		per[name] = g
+		totalCompared += g.compared
+		totalContained += g.contained
+	}
+
+	fmt.Fprintf(&b, "Across the public corpus the gate compares %d elements, of which %d\n%s contained.\n\n",
+		totalCompared, totalContained, pluralAre(totalContained))
+
+	for _, name := range Public {
+		g := per[name]
+		kvs := knownViolations[name]
+		if g.compared == g.contained {
+			fmt.Fprintf(&b, "Against `%s`, the gate compares %d elements, and all %d %s contained.\n\n",
+				name, g.compared, g.contained, pluralAre(g.contained))
+			continue
+		}
+		short := g.compared - g.contained
+		fmt.Fprintf(&b, "Against `%s`, the gate compares %d elements. %d %s contained; %d %s\nnot:\n\n",
+			name, g.compared, g.contained, pluralAre(g.contained), short, pluralAre(short))
+		if len(kvs) == 0 {
+			b.WriteString("None of them is in the `knownViolations` allowlist, which means Gate 1\nis failing and this page was regenerated in a state that must not be\ncommitted.\n\n")
+			continue
+		}
 		b.WriteString("| GlobalID | Axis | Shortfall | What it is |\n|---|---|---|---|\n")
 		for _, kv := range kvs {
 			fmt.Fprintf(&b, "| `%s` | %s | %.9f m | %s |\n", kv.globalID, kv.axis, kv.shortfall, kv.note)
 		}
 		b.WriteString("\n")
 	}
-	if !anyKnown {
-		b.WriteString("None currently recorded.\n")
-	}
 
 	return b.String(), nil
 }
 
-// pluralAre returns the correctly-inflected copula for n, so "All but 1 is
-// contained" reads right alongside "All but 2 are contained".
+// pluralAre returns the correctly-inflected copula for n, so "1 is contained"
+// reads right alongside "2 are contained".
 func pluralAre(n int) string {
 	if n == 1 {
 		return "is"
 	}
 	return "are"
+}
+
+// pluralS returns "" for one and "s" for any other count.
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// unattributedNote names, from the measurements themselves, every model whose
+// OBB fallbacks the gap table attributes to nothing at all: a model with
+// fallback elements but no unhandled item type has every one of its fallbacks
+// caused by a dispatched path that declined mid-attempt, which
+// geometry.UnhandledItemTypes cannot see (the cause is inference; the lack of
+// attribution is measured). Derived rather than written down, so
+// it cannot outlive the measurement it describes.
+func unattributedNote(covs map[string]Coverage, perModel map[string]int) string {
+	var names []string
+	for _, name := range Public {
+		if covs[name].OBB > 0 && perModel[name] == 0 {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return "In this corpus, every model that has a fallback element also reports\nat least one unhandled item type below.\n\n"
+	}
+	var b strings.Builder
+	b.WriteString("Concretely, in this corpus:\n\n")
+	for _, name := range names {
+		n := covs[name].OBB
+		fmt.Fprintf(&b, "- `%s` has %d OBB element%s and reports no unhandled item type at\n", name, n, pluralS(n))
+		b.WriteString("  all, so nothing in the table below accounts for a single one of\n")
+		b.WriteString("  them. A dispatched path declining mid-attempt is the cause this\n")
+		b.WriteString("  diagnostic cannot see, and this is what that looks like.\n")
+	}
+	b.WriteString("\n")
+	return b.String()
 }

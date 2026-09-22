@@ -67,6 +67,22 @@ func presentation(item *step.Instance) bool {
 // geometry gaps are worth closing: a type with a high count costs accuracy on
 // real files, whatever the IFC schema says about how common it ought to be.
 //
+// It does NOT see every cause of a fallback, and a caller ranking gaps from it
+// needs to know what it is blind to. It reports types for which
+// tessellateItemDepth has no dispatch case at all. Each case it DOES have is
+// an attempt that can decline — a profile that cannot be built, a shell that
+// cannot be closed, a boolean whose operand failed, a mapped item whose source
+// could not be resolved — and tessellateItemDepth then falls through to
+// obbFromItem just the same. Those elements become boxes while their type is
+// absent from this map, so the counts here are a lower bound on the causes,
+// and a type's absence is not evidence that it never falls back. Reporting
+// declined attempts would mean instrumenting the dispatch itself; until that
+// exists, read a model with fallback elements that this map explains nothing
+// about as exactly that — unattributed. It happens: in goifc's public parity
+// corpus, fzk_haus has two OBB elements and this map comes back empty (see
+// docs/coverage.md). The two figures are not commensurable in any case — this
+// map counts representation items, [Scene.Stats] counts elements.
+//
 // Three things about the count that are easy to misread:
 //
 //  1. It counts OCCURRENCES, not distinct entities. An IfcMappedItem is
