@@ -129,6 +129,7 @@ nav:
       - Overview: design/index.md
       - Section geometry on an arbitrary plane: design/2026-08-13-arbitrary-section-plane.md
       - Outward-facing classification: design/2026-08-15-outward-facing-classification.md
+      - Parity and coverage harness: design/2026-09-21-parity-and-coverage-harness.md
 
 # A broken internal link or a snippet pointing at a moved file should fail the
 # build, not publish a site with a dead link in it.

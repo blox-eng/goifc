@@ -11,3 +11,6 @@ current and the doc is history.
 - [Outward-facing classification](2026-08-15-outward-facing-classification.md)
   — deciding which way a building element faces, and which of its two sides is
   the exposed one (issue #4).
+- [Parity and coverage harness](2026-09-21-parity-and-coverage-harness.md)
+  — a public IFC corpus, a gate asserting goifc's bounds really bound
+  IfcOpenShell's answer, and a frequency-ranked list of the geometry gaps.
