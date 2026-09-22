@@ -24,7 +24,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 - `geometry.UnhandledItemTypes` reports, per IFC entity type, how many
   representation items no tessellation path handles — the items that degrade to
   a bounding box. It answers "why is this element a box" and ranks which
-  geometry gaps cost the most accuracy on real files.
+  geometry gaps cost the most accuracy on real files. The count is
+  occurrences, once per element that reaches the item, not distinct
+  entities — it resolves through `IfcMappedItem` into the shared geometry it
+  maps to, so a type's count can exceed the number of such entities in the
+  file when several elements share one mapped representation.
 
 ## v0.10.0 — 2026-09-17
 
