@@ -15,6 +15,9 @@ not a substitute for a B-rep kernel.
 
 Do not clash-detect with them.
 
+Some elements get no mesh at all and come back as a bounding box instead. How
+many, per model, is measured rather than asserted — see [coverage](coverage.md).
+
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across
