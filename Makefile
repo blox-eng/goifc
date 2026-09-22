@@ -1,4 +1,4 @@
-.PHONY: lint test build clean fmt vet help docs docs-serve docs-deps
+.PHONY: lint test build clean fmt vet help docs docs-serve docs-deps parity parity-report parity-baseline oracle
 
 # Default target
 .DEFAULT_GOAL := help
@@ -91,6 +91,29 @@ docs: $(DOCS_BIN)/mkdocs ## Build the docs site (strict — a broken link fails)
 docs-serve: $(DOCS_BIN)/mkdocs ## Serve the docs at http://127.0.0.1:8000 with live reload
 	$(DOCS_BIN)/mkdocs serve
 
-ci: lint test vulncheck ## Run the blocking CI checks (lint + test + vulncheck)
+parity: ## Run the parity and coverage gates against the public IFC corpus
+	@echo "Running parity gates..."
+	cd parity && CGO_ENABLED=0 go test ./...
+	cd parity && CGO_ENABLED=0 go run ./cmd/coverage -check
+
+parity-report: ## Regenerate docs/coverage.md from the corpus
+	cd parity && CGO_ENABLED=0 go run ./cmd/coverage
+
+parity-baseline: ## Rewrite the committed coverage baseline (after closing a gap)
+	cd parity && CGO_ENABLED=0 go test ./... -run TestGate2 -update-baseline
+
+oracle: ## Regenerate the ifcopenshell AABB oracles (maintainer only; needs Docker)
+	@echo "Regenerating oracles via ifcopenshell in Docker..."
+	@for m in ifcopenhouse duplex_a fzk_haus; do \
+		gzip -dc parity/testdata/$$m.ifc.gz > /tmp/$$m.ifc; \
+		docker run --rm -v /tmp:/data -v $(PWD)/parity/oracle:/src \
+			aecgeeks/ifcopenshell:latest \
+			python3 /src/dump_oracle.py /data/$$m.ifc /data/$$m.json; \
+		cp /tmp/$$m.json parity/testdata/oracle/$$m.json; \
+		rm -f /tmp/$$m.ifc /tmp/$$m.json; \
+	done
+	@git diff --stat parity/testdata/oracle/
+
+ci: lint test vulncheck parity ## Run the blocking CI checks (lint + test + vulncheck + parity)
 
 all: fmt vet lint test build ## Run all checks and build

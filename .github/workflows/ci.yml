@@ -161,6 +161,33 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  parity:
+    name: Parity
+    runs-on: ubuntu-latest
+    needs: [lint, changes]
+    if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      # parity/ is a separate module, so the Test job's ./... never reaches it
+      # and Codecov never sees it. That is deliberate: harness coverage must not
+      # dilute the library's coverage figure.
+      - name: Run the parity gates
+        env:
+          CGO_ENABLED: '0'
+        run: cd parity && go test -v ./...
+      - name: Check the published coverage page is current
+        env:
+          CGO_ENABLED: '0'
+        run: cd parity && go run ./cmd/coverage -check
+
   govulncheck:
     name: Vulnerability Scan
     runs-on: ubuntu-latest
