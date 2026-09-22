@@ -178,7 +178,17 @@ jobs:
           cache: true
       # parity/ is a separate module, so the Test job's ./... never reaches it
       # and Codecov never sees it. That is deliberate: harness coverage must not
-      # dilute the library's coverage figure.
+      # dilute the library's coverage figure. The same separation means the
+      # Lint job's golangci-lint, run at the repo root, never walks into this
+      # module either — so lint it here, or nothing ever does.
+      - name: golangci-lint (parity/)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          args: --timeout=5m
+          working-directory: parity
+          skip-cache: true
+          skip-save-cache: true
       - name: Run the parity gates
         env:
           CGO_ENABLED: '0'

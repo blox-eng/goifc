@@ -96,7 +96,7 @@ func loadPlain(path, name string) (*step.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parity: open %s: %w", name, err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	f, err := step.Parse(r)
 	if err != nil {
 		return nil, fmt.Errorf("parity: parse %s: %w", name, err)
@@ -109,12 +109,12 @@ func loadGzip(path, name string) (*step.File, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parity: open %s: %w", name, err)
 	}
-	defer fh.Close()
+	defer func() { _ = fh.Close() }()
 	zr, err := gzip.NewReader(fh)
 	if err != nil {
 		return nil, fmt.Errorf("parity: gunzip %s: %w", name, err)
 	}
-	defer zr.Close()
+	defer func() { _ = zr.Close() }()
 	f, err := step.Parse(zr)
 	if err != nil {
 		return nil, fmt.Errorf("parity: parse %s: %w", name, err)
