@@ -30,8 +30,12 @@ func Report() (string, error) {
 	b.WriteString("instead of a tessellated shape. The **looseness** columns compare\n")
 	b.WriteString("goifc's world AABB to IfcOpenShell's world AABB — not to the true\n")
 	b.WriteString("solid, which the oracle does not store. Those two boxes are\n")
-	b.WriteString("near-identical for any element both engines tessellate at all,\n")
-	b.WriteString("including one that fell back to an OBB on both sides, so a ratio\n")
+	b.WriteString("near-identical for any element both engines tessellate, and even\n")
+	b.WriteString("for one that fell back to goifc's own OBB path: that box is built\n")
+	b.WriteString("directly from the element's own point extent, so its world AABB\n")
+	b.WriteString("coincides with the true solid's world AABB just as IfcOpenShell's\n")
+	b.WriteString("oracle box does. (IfcOpenShell has no OBB fallback of its own —\n")
+	b.WriteString("its oracle boxes come from an exact-solid tessellation.) So a ratio\n")
 	b.WriteString("of 1.00 here is nearly blind to fallback quality by construction —\n")
 	b.WriteString("read it as \"box vs. box\", not as \"goifc matches IfcOpenShell\".\n")
 	b.WriteString("Ratios are printed to four decimal places so \"exactly 1\" and\n")
@@ -101,18 +105,45 @@ func Report() (string, error) {
 
 	b.WriteString("\n## Known Gate 1 violations\n\n")
 	b.WriteString("Gate 1 asserts that goifc's AABB contains IfcOpenShell's oracle box\n")
-	b.WriteString("for every element the oracle knows. Against `duplex_a`, the gate\n")
-	b.WriteString("compares 215 elements. All but two are contained. The two are the\n")
-	b.WriteString("same Revit stair type (\"Stair:Residential - 200mm Max Riser 250mm\n")
-	b.WriteString("Tread\", 16 risers / 15 treads) placed twice — `IfcStairFlight`\n")
-	b.WriteString("instances `1oKjKg9PD3fP1iIwXLh3lK` and `3KMJUyUe9DfQ2FOCd5ZoiN` —\n")
-	b.WriteString("whose goifc world AABB is smaller than IfcOpenShell's by about\n")
-	b.WriteString("0.99 cm on the Y axis (0.009927508 m and 0.009927222 m). A bound\n")
-	b.WriteString("that under-reports is always a bug, never a legitimate fallback:\n")
-	b.WriteString("this is a real, currently open goifc geometry gap, tracked in\n")
-	b.WriteString("`parity/parity_test.go`'s `knownViolations` allowlist so CI stays\n")
-	b.WriteString("green on this known state while still failing on any new or\n")
-	b.WriteString("worsened violation.\n")
+	b.WriteString("for every element the oracle knows. A bound that under-reports is\n")
+	b.WriteString("always a bug, never a legitimate fallback — an OBB fallback box is\n")
+	b.WriteString("allowed to be larger than the solid it stands for, never smaller.\n")
+	b.WriteString("The violations below are real, currently open goifc geometry gaps,\n")
+	b.WriteString("tracked in `parity/knownviolations.go`'s `knownViolations` allowlist\n")
+	b.WriteString("so CI stays green on this known state while still failing on any\n")
+	b.WriteString("new or worsened violation.\n\n")
+
+	anyKnown := false
+	for _, name := range Public {
+		kvs := knownViolations[name]
+		if len(kvs) == 0 {
+			continue
+		}
+		anyKnown = true
+		oracle, err := LoadOracle(name)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "Against `%s`, the gate compares %d elements. All but %d %s contained:\n\n",
+			name, len(oracle), len(kvs), pluralAre(len(kvs)))
+		b.WriteString("| GlobalID | Axis | Shortfall | What it is |\n|---|---|---|---|\n")
+		for _, kv := range kvs {
+			fmt.Fprintf(&b, "| `%s` | %s | %.9f m | %s |\n", kv.globalID, kv.axis, kv.shortfall, kv.note)
+		}
+		b.WriteString("\n")
+	}
+	if !anyKnown {
+		b.WriteString("None currently recorded.\n")
+	}
 
 	return b.String(), nil
+}
+
+// pluralAre returns the correctly-inflected copula for n, so "All but 1 is
+// contained" reads right alongside "All but 2 are contained".
+func pluralAre(n int) string {
+	if n == 1 {
+		return "is"
+	}
+	return "are"
 }

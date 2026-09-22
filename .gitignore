@@ -13,6 +13,11 @@ coverage.html
 # per-clone and so silently stops working for everyone else.
 .superpowers/
 
+# Scratch planning notes kept alongside the docs source. Excluded from the
+# mkdocs build itself in mkdocs.yml (exclude_docs) — this just keeps them out
+# of git, same reasoning as .superpowers/ above.
+docs/plans/
+
 # Scratch changelog fed to the goreleaser hook by the release workflow's
 # go-semantic-release/action step. Never the real CHANGELOG.md — that's
 # promoted by hand in a separate workflow step.

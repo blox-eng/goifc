@@ -55,44 +55,15 @@ func formatShortfalls(sf []axisShortfall) string {
 	return s
 }
 
-// knownViolation is one Gate 1 containment violation that is a tracked, known
-// goifc bug rather than a new regression: goifc's world AABB for this element
-// under-reports the oracle's by roughly shortfall meters on axis, as measured
-// when the entry was added.
-type knownViolation struct {
-	globalID  string
-	axis      string // the worst-shortfall bound, e.g. "min-y"
-	shortfall float64
-}
-
 // allowlistMargin absorbs run-to-run float noise on top of a recorded known
 // shortfall (measured noise ceiling in this corpus is ~7.63e-7 m; this margin
 // is over 100x that) without absorbing any real further regression, which
 // would be orders of magnitude larger.
 const allowlistMargin = 1e-4
 
-// knownViolations lists, per public model, every Gate 1 containment violation
-// that is a tracked goifc bug rather than a new failure. This keeps CI green
-// on known state without weakening Contains or Tolerance: a violation not
-// listed here, or one that has grown past its recorded shortfall plus
-// allowlistMargin, still fails the gate (a new or worsened bug). So does a
-// listed entry that no longer violates at all — that means the bug was fixed
-// and the stale entry must be deleted, never left to quietly rot into a lie.
-//
-// duplex_a: goifc under-reports the world AABB of IfcStairFlight elements by
-// ~0.99 cm on the Y axis. Both known instances are the SAME Revit stair type
-// ("Stair:Residential - 200mm Max Riser 250mm Tread", 16 risers / 15 treads,
-// Revit instances 151086 and 198878) — the near-identical shortfall on both
-// (0.009927508 m and 0.009927222 m) points at a systematic issue with how
-// goifc bounds a stepped solid along its extrusion path, not per-element
-// noise. This is a known goifc geometry gap found by this gate; no issue has
-// been filed for it yet.
-var knownViolations = map[string][]knownViolation{
-	"duplex_a": {
-		{globalID: "1oKjKg9PD3fP1iIwXLh3lK", axis: "min-y", shortfall: 0.009927508357675308},
-		{globalID: "3KMJUyUe9DfQ2FOCd5ZoiN", axis: "max-y", shortfall: 0.009927222255395662},
-	},
-}
+// knownViolation and knownViolations live in knownviolations.go, not here:
+// Report() reads them too, to generate the published "Known Gate 1
+// violations" section instead of hand-typing it.
 
 // TestGate1BoundsContainOracle is the harness's central assertion: for every
 // element IfcOpenShell knows, goifc's AABB must CONTAIN the oracle's.

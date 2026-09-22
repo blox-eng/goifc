@@ -11,6 +11,13 @@ repo_name: blox-eng/goifc
 edit_uri: edit/main/docs/
 copyright: MIT-licensed. Built by Blox.
 
+# Scratch planning notes some contributors keep under docs/plans/ (see
+# .gitignore) are real Markdown files mkdocs would otherwise try to publish.
+# Excluding them here, rather than only gitignoring them, is what lets a
+# contributor who has such a file locally still run `make docs` clean.
+exclude_docs: |
+  plans/
+
 theme:
   name: material
   logo: assets/goifc-mark-dark.svg

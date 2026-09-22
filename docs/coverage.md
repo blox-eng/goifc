@@ -10,8 +10,12 @@ elements that produced geometry but fell back to a bounding box
 instead of a tessellated shape. The **looseness** columns compare
 goifc's world AABB to IfcOpenShell's world AABB — not to the true
 solid, which the oracle does not store. Those two boxes are
-near-identical for any element both engines tessellate at all,
-including one that fell back to an OBB on both sides, so a ratio
+near-identical for any element both engines tessellate, and even
+for one that fell back to goifc's own OBB path: that box is built
+directly from the element's own point extent, so its world AABB
+coincides with the true solid's world AABB just as IfcOpenShell's
+oracle box does. (IfcOpenShell has no OBB fallback of its own —
+its oracle boxes come from an exact-solid tessellation.) So a ratio
 of 1.00 here is nearly blind to fallback quality by construction —
 read it as "box vs. box", not as "goifc matches IfcOpenShell".
 Ratios are printed to four decimal places so "exactly 1" and
@@ -46,15 +50,18 @@ nothing here changes that casing.
 ## Known Gate 1 violations
 
 Gate 1 asserts that goifc's AABB contains IfcOpenShell's oracle box
-for every element the oracle knows. Against `duplex_a`, the gate
-compares 215 elements. All but two are contained. The two are the
-same Revit stair type ("Stair:Residential - 200mm Max Riser 250mm
-Tread", 16 risers / 15 treads) placed twice — `IfcStairFlight`
-instances `1oKjKg9PD3fP1iIwXLh3lK` and `3KMJUyUe9DfQ2FOCd5ZoiN` —
-whose goifc world AABB is smaller than IfcOpenShell's by about
-0.99 cm on the Y axis (0.009927508 m and 0.009927222 m). A bound
-that under-reports is always a bug, never a legitimate fallback:
-this is a real, currently open goifc geometry gap, tracked in
-`parity/parity_test.go`'s `knownViolations` allowlist so CI stays
-green on this known state while still failing on any new or
-worsened violation.
+for every element the oracle knows. A bound that under-reports is
+always a bug, never a legitimate fallback — an OBB fallback box is
+allowed to be larger than the solid it stands for, never smaller.
+The violations below are real, currently open goifc geometry gaps,
+tracked in `parity/knownviolations.go`'s `knownViolations` allowlist
+so CI stays green on this known state while still failing on any
+new or worsened violation.
+
+Against `duplex_a`, the gate compares 215 elements. All but 2 are contained:
+
+| GlobalID | Axis | Shortfall | What it is |
+|---|---|---|---|
+| `1oKjKg9PD3fP1iIwXLh3lK` | min-y | 0.009927508 m | IfcStairFlight, Revit instance 151086 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads) |
+| `3KMJUyUe9DfQ2FOCd5ZoiN` | max-y | 0.009927222 m | IfcStairFlight, Revit instance 198878 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads) |
+
