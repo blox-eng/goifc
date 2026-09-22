@@ -102,17 +102,51 @@ parity-report: ## Regenerate docs/coverage.md from the corpus
 parity-baseline: ## Rewrite the committed coverage baseline (after closing a gap)
 	cd parity && CGO_ENABLED=0 go test ./... -run TestGate2 -update-baseline
 
-oracle: ## Regenerate the ifcopenshell AABB oracles (maintainer only; needs Docker)
-	@echo "Regenerating oracles via ifcopenshell in Docker..."
-	@for m in ifcopenhouse duplex_a fzk_haus; do \
-		gzip -dc parity/testdata/$$m.ifc.gz > /tmp/$$m.ifc; \
-		docker run --rm -v /tmp:/data -v $(PWD)/parity/oracle:/src \
+oracle: ## Diff freshly generated ifcopenshell AABB oracles against the committed ones (maintainer only; needs Docker)
+	@# This target NEVER writes parity/testdata/oracle/, which is what
+	@# parity/oracle/README.md has always prescribed. Those files are the
+	@# measurement Gate 1 and the nine-decimal shortfalls in
+	@# parity/knownviolations.go are defined against: an unconditional copy from
+	@# a half-working image would leave both gates passing against weaker boxes,
+	@# the allowlist quietly meaningless and the published page regenerated to
+	@# different-but-plausible numbers, with nothing to show it happened. So
+	@# generate into a temporary directory, diff, and leave promoting the result
+	@# to a deliberate human act (README: "Promoting a verified regeneration").
+	@#
+	@# One shell, `set -eu`, and an explicit check after every step, because the
+	@# old loop took its exit status from a trailing `rm` and so reported
+	@# success after a docker run that had failed or written half a file.
+	@set -eu; \
+	tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	echo "Generating oracles into $$tmp (nothing under parity/testdata/oracle/ is written)..."; \
+	moved=0; \
+	for m in ifcopenhouse duplex_a fzk_haus; do \
+		gzip -dc parity/testdata/$$m.ifc.gz > "$$tmp/$$m.ifc" \
+			|| { echo "oracle: could not decompress parity/testdata/$$m.ifc.gz"; exit 1; }; \
+		docker run --rm -v "$$tmp":/data -v "$(PWD)/parity/oracle":/src:ro \
 			aecgeeks/ifcopenshell:latest \
-			python3 /src/dump_oracle.py /data/$$m.ifc /data/$$m.json; \
-		cp /tmp/$$m.json parity/testdata/oracle/$$m.json; \
-		rm -f /tmp/$$m.ifc /tmp/$$m.json; \
-	done
-	@git diff --stat parity/testdata/oracle/
+			python3 /src/dump_oracle.py "/data/$$m.ifc" "/data/$$m.json" \
+			|| { echo "oracle: ifcopenshell failed on $$m — see the Status section of parity/oracle/README.md"; exit 1; }; \
+		[ -s "$$tmp/$$m.json" ] \
+			|| { echo "oracle: ifcopenshell wrote no output for $$m"; exit 1; }; \
+		echo "=== $$m"; \
+		if diff -u "parity/testdata/oracle/$$m.json" "$$tmp/$$m.json"; then \
+			echo "    identical to the committed oracle"; \
+		else \
+			moved=1; \
+		fi; \
+	done; \
+	echo ""; \
+	if [ "$$moved" -eq 0 ]; then \
+		echo "oracle: every model reproduces the committed oracle exactly."; \
+	else \
+		echo "oracle: the generated oracles DIFFER from the committed ones, and nothing was overwritten."; \
+		echo "oracle: a shifted oracle moves Gate 1's meaning and invalidates the"; \
+		echo "oracle: knownViolations shortfalls. Read parity/oracle/README.md before"; \
+		echo "oracle: promoting anything."; \
+		exit 1; \
+	fi
 
 ci: lint test vulncheck parity ## Run the blocking CI checks (lint + test + vulncheck + parity)
 
