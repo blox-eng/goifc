@@ -123,6 +123,7 @@ nav:
   - Reference:
       - The step package: step.md
       - Limitations: limitations.md
+      - Coverage: coverage.md
       - Compatibility: compatibility.md
       - Changelog: changelog.md
   - Design docs:
