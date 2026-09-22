@@ -141,6 +141,13 @@ func TestGate1BoundsContainOracle(t *testing.T) {
 			t.Logf("%s: %d compared, %d oracle-only, %d goifc-only, %d violation(s)",
 				name, len(oracle)-onlyOracle, onlyOracle, onlyGoifc, len(violations))
 
+			if l, err := MeasureLooseness(name); err != nil {
+				t.Logf("%s: looseness measurement failed: %v", name, err)
+			} else {
+				t.Logf("%s: looseness compared=%d degenerate=%d p50=%.4g p90=%.4g max=%.4g",
+					name, l.Compared, l.Degenerate, l.P50, l.P90, l.Max)
+			}
+
 			known := make(map[string]knownViolation, len(knownViolations[name]))
 			for _, kv := range knownViolations[name] {
 				known[kv.globalID] = kv
