@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
@@ -37,6 +38,27 @@ func TestUnhandledItemTypesNamesRevolvedSolid(t *testing.T) {
 	got := UnhandledItemTypes(f, r)
 	if got["IFCREVOLVEDAREASOLID"] == 0 {
 		t.Errorf("UnhandledItemTypes() = %v; want IfcRevolvedAreaSolid (IFCREVOLVEDAREASOLID) counted", got)
+	}
+}
+
+// mapped_cycle.ifc's IfcMappedItem (#72) maps to a representation (#60) whose
+// only item is itself (#72) — a self-referencing MappingSource chain. The
+// resolution in countUnhandledItem must terminate at maxMapDepth instead of
+// recursing forever, and it must not panic. There is no real geometry in the
+// cycle to attribute, so the result is empty, not a crash.
+func TestUnhandledItemTypesCyclicMappingTerminates(t *testing.T) {
+	f, r := loadFileAndModel(t, "mapped_cycle.ifc")
+	done := make(chan map[string]int, 1)
+	go func() {
+		done <- UnhandledItemTypes(f, r)
+	}()
+	select {
+	case got := <-done:
+		if len(got) != 0 {
+			t.Errorf("UnhandledItemTypes() = %v, want empty (cycle has no real geometry)", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("UnhandledItemTypes() did not terminate on a cyclic IfcMappedItem chain")
 	}
 }
 
