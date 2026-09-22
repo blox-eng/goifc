@@ -61,6 +61,32 @@ func formatShortfalls(sf []axisShortfall) string {
 // would be orders of magnitude larger.
 const allowlistMargin = 1e-4
 
+// gate1Floor is how many elements Gate 1 must actually COMPARE per public
+// model — the size of the intersection of the oracle and goifc's scene, as
+// measured when this floor was recorded (oracle-only is 0 on all three models
+// today, so the intersection is the whole oracle).
+//
+// Without it the gate can pass having compared nothing at all. If the scene
+// came back empty, or its GlobalIDs stopped matching the oracle's, every
+// oracle entry falls into onlyOracle, no violation can be found, and the
+// stale-entry loop below skips every entry through its "not in this scene"
+// guard — a collapse to zero comparisons reading as a clean pass.
+//
+// A floor rather than an equality, so the gate stays a gate and not a
+// tripwire: goifc extracting more elements, or the oracle gaining an entry
+// goifc also builds, both raise the count and neither is a regression. It is
+// also deliberately not `onlyOracle == 0`, which would turn a selection
+// difference — the two libraries disagreeing about which entity classes are
+// elements — into a failure, and that is a diff, not a bug (see the log line
+// below). A corpus or oracle change that legitimately lowers a count updates
+// these numbers in the same commit that makes the change, the way
+// `make parity-baseline` records a Gate 2 change.
+var gate1Floor = map[string]int{
+	"ifcopenhouse": 34,
+	"duplex_a":     215,
+	"fzk_haus":     82,
+}
+
 // knownViolation and knownViolations live in knownviolations.go, not here:
 // Report() reads them too, to generate the published "Known Gate 1
 // violations" section instead of hand-typing it.
@@ -109,8 +135,22 @@ func TestGate1BoundsContainOracle(t *testing.T) {
 			// Selection differences are a diff, not a failure: the two libraries
 			// disagree about which entity classes count as elements (see
 			// model/extract.go:14-22). Report and move on.
+			compared := len(oracle) - onlyOracle
 			t.Logf("%s: %d compared, %d oracle-only, %d goifc-only, %d violation(s)",
-				name, len(oracle)-onlyOracle, onlyOracle, onlyGoifc, len(violations))
+				name, compared, onlyOracle, onlyGoifc, len(violations))
+
+			// Everything below reports on the elements that WERE compared, and
+			// says nothing about how many that was. Assert the count first, or
+			// a gate that compared nothing passes silently.
+			floor, ok := gate1Floor[name]
+			if !ok {
+				t.Fatalf("%s: no compared-element floor in gate1Floor; record one measured against this model, or the gate can pass having compared nothing",
+					name)
+			}
+			if compared < floor {
+				t.Errorf("%s: the gate compared only %d element(s), below the recorded floor of %d — the oracle and the scene have stopped lining up (%d oracle-only, %d goifc-only), so this gate is measuring almost nothing rather than passing",
+					name, compared, floor, onlyOracle, onlyGoifc)
+			}
 
 			if l, err := MeasureLooseness(name); err != nil {
 				t.Logf("%s: looseness measurement failed: %v", name, err)

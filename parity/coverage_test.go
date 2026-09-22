@@ -63,6 +63,18 @@ func TestGate2CoverageDoesNotRegress(t *testing.T) {
 			}
 			gotRate, wantRate := OBBRate(got), OBBRate(want)
 			t.Logf("%s: OBB rate %.4f (baseline %.4f), %+v", name, gotRate, wantRate, got)
+
+			// The rate alone has no floor: a regression that drops duplex_a from
+			// 218 elements to 5, none of them a fallback, yields 0 <= 0.321 and
+			// passes. The baseline already records the element count, so assert
+			// it — a rate measured over a different set of elements is not the
+			// same measurement, whichever way the count moved. A corpus or
+			// pipeline change that legitimately alters it is recorded by
+			// `make parity-baseline`, the same way a closed gap is.
+			if got.Total != want.Total {
+				t.Errorf("%s: element count is %d, baseline %d — the OBB rate is no longer measured over the same set of elements, so it is not comparable; if this change is intended, `make parity-baseline` records it",
+					name, got.Total, want.Total)
+			}
 			if gotRate > wantRate+1e-9 {
 				t.Errorf("%s: OBB rate rose to %.4f from %.4f — a geometry path regressed",
 					name, gotRate, wantRate)

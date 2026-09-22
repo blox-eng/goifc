@@ -100,7 +100,11 @@ func TestHandledItemTypesMatchesDispatch(t *testing.T) {
 	}
 	fn := extractFunc(t, string(src), "func tessellateItemDepth")
 	want := map[string]bool{}
-	for _, m := range regexp.MustCompile(`item\.IsA\("(Ifc[A-Za-z]+)"\)`).FindAllStringSubmatch(fn, -1) {
+	// Digits are part of the character class because IFC type names contain
+	// them — IfcCartesianTransformationOperator3D, Ifc2DCompositeCurve. A
+	// letters-only class would silently not see a future dispatch case for one
+	// of those, which is the exact divergence this test exists to catch.
+	for _, m := range regexp.MustCompile(`item\.IsA\("(Ifc[A-Za-z0-9]+)"\)`).FindAllStringSubmatch(fn, -1) {
 		want[m[1]] = true
 	}
 	if len(want) == 0 {
