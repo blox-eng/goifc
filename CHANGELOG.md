@@ -19,6 +19,13 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- `geometry.UnhandledItemTypes` reports, per IFC entity type, how many
+  representation items no tessellation path handles — the items that degrade to
+  a bounding box. It answers "why is this element a box" and ranks which
+  geometry gaps cost the most accuracy on real files.
+
 ## v0.10.0 — 2026-09-17
 
 ### Added
