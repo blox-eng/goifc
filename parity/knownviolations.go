@@ -35,8 +35,9 @@ type knownViolation struct {
 // Revit instances 151086 and 198878) — the near-identical shortfall on both
 // (0.009927508 m and 0.009927222 m) points at a systematic issue with how
 // goifc bounds a stepped solid along its extrusion path, not per-element
-// noise. This is a known goifc geometry gap found by this gate; no issue has
-// been filed for it yet.
+// noise. This is a known goifc geometry gap found by this gate, tracked as
+// https://github.com/blox-eng/goifc/issues/53. Closing it means deleting both
+// entries below in the same commit — the stale-entry check fails otherwise.
 var knownViolations = map[string][]knownViolation{
 	"duplex_a": {
 		{
