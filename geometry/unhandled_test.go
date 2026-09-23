@@ -1,9 +1,11 @@
 package geometry
 
 import (
-	"os"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path/filepath"
-	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +40,37 @@ func TestUnhandledItemTypesNamesRevolvedSolid(t *testing.T) {
 	got := UnhandledItemTypes(f, r)
 	if got["IFCREVOLVEDAREASOLID"] == 0 {
 		t.Errorf("UnhandledItemTypes() = %v; want IfcRevolvedAreaSolid (IFCREVOLVEDAREASOLID) counted", got)
+	}
+}
+
+// obb_boolean_revolved.ifc wraps that same IfcRevolvedAreaSolid as the FIRST
+// operand of an IfcBooleanClippingResult. The wrapper is in handledItemTypes,
+// so stopping at it reports nothing and the gap never ranks — even though the
+// element still falls back to a box, because clipMeshByDifference recurses into
+// that operand and finds no path. The half-space second operand is consumed by
+// halfSpacePlane, not tessellateItemDepth, so it is not a gap and must not be
+// counted.
+func TestUnhandledItemTypesDescendsIntoBooleanOperands(t *testing.T) {
+	f, r := loadFileAndModel(t, "obb_boolean_revolved.ifc")
+	got := UnhandledItemTypes(f, r)
+	if got["IFCREVOLVEDAREASOLID"] == 0 {
+		t.Errorf("UnhandledItemTypes() = %v; want IfcRevolvedAreaSolid counted through the boolean wrapper", got)
+	}
+	if n := got["IFCHALFSPACESOLID"]; n != 0 {
+		t.Errorf("UnhandledItemTypes() counted IfcHalfSpaceSolid %d time(s); the supported path consumes it, so it is not a gap", n)
+	}
+	if n := got["IFCBOOLEANCLIPPINGRESULT"]; n != 0 {
+		t.Errorf("UnhandledItemTypes() counted the boolean wrapper %d time(s); a DIFFERENCE wrapper is dispatched, the operand is the gap", n)
+	}
+}
+
+// A non-DIFFERENCE boolean is an unsupported OPERATION, not an unsupported
+// operand, so the boolean itself is the gap and must be named.
+func TestUnhandledItemTypesNamesNonDifferenceBoolean(t *testing.T) {
+	f, r := loadFileAndModel(t, "obb_boolean_union.ifc")
+	got := UnhandledItemTypes(f, r)
+	if got["IFCBOOLEANRESULT"] == 0 {
+		t.Errorf("UnhandledItemTypes() = %v; want the UNION IfcBooleanResult counted", got)
 	}
 }
 
@@ -94,21 +127,9 @@ func TestUnhandledItemTypesIgnoresPresentation(t *testing.T) {
 // is worse than having no harness. This reads the source rather than trusting a
 // comment.
 func TestHandledItemTypesMatchesDispatch(t *testing.T) {
-	src, err := os.ReadFile("geometry.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fn := extractFunc(t, string(src), "func tessellateItemDepth")
-	want := map[string]bool{}
-	// Digits are part of the character class because IFC type names contain
-	// them — IfcCartesianTransformationOperator3D, Ifc2DCompositeCurve. A
-	// letters-only class would silently not see a future dispatch case for one
-	// of those, which is the exact divergence this test exists to catch.
-	for _, m := range regexp.MustCompile(`item\.IsA\("(Ifc[A-Za-z0-9]+)"\)`).FindAllStringSubmatch(fn, -1) {
-		want[m[1]] = true
-	}
+	want := dispatchedTypes(t, "geometry.go", "tessellateItemDepth")
 	if len(want) == 0 {
-		t.Fatal("found no item.IsA(...) calls in tessellateItemDepth; update this test")
+		t.Fatal("found no IsA(...) calls in tessellateItemDepth; update this test")
 	}
 
 	got := map[string]bool{}
@@ -128,17 +149,56 @@ func TestHandledItemTypesMatchesDispatch(t *testing.T) {
 	}
 }
 
-// extractFunc returns the source text of the named function, from its
-// declaration to the next top-level closing brace.
-func extractFunc(t *testing.T, src, decl string) string {
+// dispatchedTypes returns every IFC type name passed as a string literal to an
+// IsA call anywhere inside the named function.
+//
+// It parses the file rather than matching source text. The regex this replaced
+// required the literal spelling `item.IsA("Ifc…")`, so a dispatch case added
+// through a differently named receiver, a renamed parameter, or a helper
+// predicate was invisible to it — and the reverse half of this test then
+// blamed handledItemTypes and pushed the author to delete a correct entry.
+// Walking the AST sees any receiver, and the recursion into nested function
+// literals means a case tucked inside a closure still counts.
+func dispatchedTypes(t *testing.T, filename, funcName string) map[string]bool {
 	t.Helper()
-	i := strings.Index(src, decl)
-	if i < 0 {
-		t.Fatalf("declaration %q not found", decl)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", filename, err)
 	}
-	rest := src[i:]
-	if j := strings.Index(rest, "\n}\n"); j >= 0 {
-		return rest[:j]
+	var body *ast.BlockStmt
+	for _, d := range file.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if ok && fd.Name.Name == funcName {
+			body = fd.Body
+			break
+		}
 	}
-	return rest
+	if body == nil {
+		t.Fatalf("function %q not found in %s", funcName, filename)
+	}
+	out := map[string]bool{}
+	ast.Inspect(body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "IsA" || len(call.Args) != 1 {
+			return true
+		}
+		lit, ok := call.Args[0].(*ast.BasicLit)
+		if !ok || lit.Kind != token.STRING {
+			return true
+		}
+		s, err := strconv.Unquote(lit.Value)
+		if err != nil {
+			return true
+		}
+		if strings.HasPrefix(s, "Ifc") {
+			out[s] = true
+		}
+		return true
+	})
+	return out
 }

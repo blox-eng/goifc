@@ -1,0 +1,55 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('obb_boolean_revolved.ifc','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+/* An IfcBooleanClippingResult whose FIRST operand is an IfcRevolvedAreaSolid —
+   a type with no tessellation path at all — and whose second operand is a
+   plain IfcHalfSpaceSolid, which clipMeshByDifference does consume.
+
+   clipMeshByDifference recurses into the first operand through
+   tessellateItemDepth, so the revolved solid's absence makes the whole boolean
+   decline and the element falls back to its OBB box. The boolean wrapper IS in
+   handledItemTypes, so a diagnostic that stops at the wrapper reports nothing
+   for this element and the revolved solid never appears in the gap ranking.
+   countUnhandledBoolean exists to descend past the wrapper and name it.
+
+   The half-space must NOT be counted: it is consumed by halfSpacePlane rather
+   than by tessellateItemDepth, so it is not a gap. */
+#1=IFCPROJECT('0proj',$,'P',$,$,$,$,(#20),#10);
+#10=IFCUNITASSIGNMENT((#11));
+#11=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#20=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#21,$);
+#21=IFCAXIS2PLACEMENT3D(#22,$,$);
+#22=IFCCARTESIANPOINT((0.,0.,0.));
+#30=IFCCARTESIANPOINT((7.,-3.,2.));
+#31=IFCDIRECTION((0.,0.,1.));
+#32=IFCDIRECTION((1.,0.,0.));
+#33=IFCAXIS2PLACEMENT3D(#30,#31,#32);
+#34=IFCLOCALPLACEMENT($,#33);
+#40=IFCCARTESIANPOINT((0.,0.));
+#41=IFCCARTESIANPOINT((2.,0.));
+#42=IFCCARTESIANPOINT((2.,3.));
+#43=IFCCARTESIANPOINT((0.,3.));
+#44=IFCPOLYLINE((#40,#41,#42,#43,#40));
+#45=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,'Rect',#44);
+#50=IFCCARTESIANPOINT((0.,0.,0.));
+#51=IFCAXIS2PLACEMENT3D(#50,$,$);
+#52=IFCCARTESIANPOINT((0.,0.,4.));
+#53=IFCDIRECTION((0.,1.,0.));
+#54=IFCAXIS1PLACEMENT(#52,#53);
+#55=IFCREVOLVEDAREASOLID(#45,#51,#54,90.);
+/* The clipping half-space: an infinite plane at z=1 facing up. */
+#60=IFCCARTESIANPOINT((0.,0.,1.));
+#61=IFCDIRECTION((0.,0.,1.));
+#62=IFCAXIS2PLACEMENT3D(#60,#61,$);
+#63=IFCPLANE(#62);
+#64=IFCHALFSPACESOLID(#63,.F.);
+#65=IFCBOOLEANCLIPPINGRESULT(.DIFFERENCE.,#55,#64);
+#66=IFCSHAPEREPRESENTATION(#20,'Body','Clipping',(#65));
+#67=IFCPRODUCTDEFINITIONSHAPE($,$,(#66));
+#70=IFCBUILDINGELEMENTPROXY('0boolrev',$,'ClippedRevolved',$,$,#34,#67,$);
+ENDSEC;
+END-ISO-10303-21;

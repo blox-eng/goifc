@@ -31,9 +31,12 @@ var handledItemTypes = []string{
 // Without an EXPRESS schema there is no subtype test for
 // IfcGeometricRepresentationItem (see the limitations page), so the exclusion is
 // an explicit list. Add to it only for entities that genuinely carry no shape.
+// IfcAnnotationFillArea is deliberately NOT here: it is an
+// IfcGeometricRepresentationItem carrying OuterBoundary and InnerBoundaries
+// curves, so an element that reaches one and has no other geometry falls back
+// to a box, and this diagnostic must say so.
 var presentationItemTypes = []string{
 	"IfcStyledItem",
-	"IfcAnnotationFillArea",
 	"IfcPresentationLayerAssignment",
 	"IfcPresentationStyleAssignment",
 }
@@ -69,19 +72,22 @@ func presentation(item *step.Instance) bool {
 //
 // It does NOT see every cause of a fallback, and a caller ranking gaps from it
 // needs to know what it is blind to. It reports types for which
-// tessellateItemDepth has no dispatch case at all. Each case it DOES have is
-// an attempt that can decline — a profile that cannot be built, a shell that
-// cannot be closed, a boolean whose operand failed, a mapped item whose source
-// could not be resolved — and tessellateItemDepth then falls through to
-// obbFromItem just the same. Those elements become boxes while their type is
-// absent from this map, so the counts here are a lower bound on the causes,
-// and a type's absence is not evidence that it never falls back. Reporting
-// declined attempts would mean instrumenting the dispatch itself; until that
-// exists, read a model with fallback elements that this map explains nothing
-// about as exactly that — unattributed. It happens: in goifc's public parity
-// corpus, fzk_haus has two OBB elements and this map comes back empty (see
-// docs/coverage.md). The two figures are not commensurable in any case — this
-// map counts representation items, [Scene.Stats] counts elements.
+// tessellateItemDepth has no dispatch case at all, looking THROUGH the two
+// wrappers that would otherwise hide one: an IfcMappedItem is resolved to the
+// items it maps, and a boolean is resolved to its operands (the wrapper is
+// dispatched, so without that the whole operand subtree vanished from the
+// ranking — see countUnhandledBoolean).
+//
+// What remains invisible is a dispatch case that IS entered and declines
+// partway — a profile that cannot be built, a shell that cannot be closed, an
+// extrusion with no direction — after which tessellateItemDepth falls through
+// to obbFromItem just the same. Those elements become boxes while their type is
+// absent from this map, so the counts here are a lower bound on the causes, and
+// a type's absence is not evidence that it never falls back. Reporting declined
+// attempts would mean instrumenting the dispatch itself; until that exists,
+// read a model with fallback elements this map explains nothing about as
+// exactly that — unattributed. The two figures are not commensurable in any
+// case: this map counts representation items, [Scene.Stats] counts elements.
 //
 // Three things about the count that are easy to misread:
 //
@@ -152,8 +158,51 @@ func countUnhandledItem(item *step.Instance, depth int, out map[string]int) {
 		}
 		return
 	}
+	if item.IsA("IfcBooleanClippingResult") || item.IsA("IfcBooleanResult") {
+		countUnhandledBoolean(item, depth, out)
+		return
+	}
 	if handled(item) || presentation(item) {
 		return
 	}
 	out[item.Type()]++
+}
+
+// countUnhandledBoolean attributes a boolean the way clipMeshByDifference
+// actually accepts or rejects one (geometry/clip.go). The wrapper is in
+// handledItemTypes, so without this the whole operand subtree vanished from the
+// ranking: a boolean over an operand with NO dispatch case at all -- the exact
+// thing this map exists to name -- produced an OBB element and no count.
+func countUnhandledBoolean(item *step.Instance, depth int, out map[string]int) {
+	if depth >= maxMapDepth {
+		// clipMeshByDifference declines here too, and the cause is the depth
+		// budget rather than any nameable type. Counting one would misattribute.
+		return
+	}
+	// Only DIFFERENCE is supported. UNION and INTERSECTION are unsupported
+	// operations, not unsupported operands, so the boolean itself is the gap.
+	opV, ok := item.Get(attrBoolOperator)
+	if !ok || opV.Kind != step.KindEnum || opV.Str != "DIFFERENCE" {
+		out[item.Type()]++
+		return
+	}
+	first, ok := item.Ref(attrBoolFirstOperand)
+	if !ok {
+		out[item.Type()]++
+		return
+	}
+	countUnhandledItem(first, depth+1, out)
+
+	second, ok := item.Ref(attrBoolSecondOperand)
+	if !ok {
+		out[item.Type()]++
+		return
+	}
+	// An IfcHalfSpaceSolid second operand is precisely what the supported path
+	// consumes, via halfSpacePlane rather than tessellateItemDepth, so it is
+	// not a gap and must not be counted. Anything else makes
+	// clipMeshByDifference decline, and that operand IS the gap.
+	if !second.IsA("IfcHalfSpaceSolid") {
+		countUnhandledItem(second, depth+1, out)
+	}
 }
