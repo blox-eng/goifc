@@ -14,3 +14,7 @@ current and the doc is history.
 - [Parity and coverage harness](2026-09-21-parity-and-coverage-harness.md)
   — a public IFC corpus, a gate asserting goifc's bounds really bound
   IfcOpenShell's answer, and a frequency-ranked list of the geometry gaps.
+- [Tessellation gaps and the placement DoS](2026-09-24-tessellation-gaps-and-placement-dos.md)
+  — spending that ranking: a stack overflow reachable on untrusted input
+  (issue #54), a missing surface-model dispatch case, and a clipping path made
+  unreachable by exact-keyword type matching (issue #52).
