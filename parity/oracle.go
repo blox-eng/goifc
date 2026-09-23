@@ -3,6 +3,7 @@ package parity
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -32,6 +33,13 @@ const Tolerance = 1e-5
 // smaller, because a bound that under-reports is the one failure a consumer
 // cannot defend against.
 func Contains(outer, inner AABB, tol float64) bool {
+	// A NaN bound compares false against every comparison below, so without
+	// this guard the loop falls straight through and the function reports
+	// containment for a box that is not a box. Gate 1 exists to catch an
+	// under-reporting bound; a NaN bound reports nothing at all.
+	if !Finite(outer) || !Finite(inner) {
+		return false
+	}
 	for i := 0; i < 3; i++ {
 		if outer.Min[i] > inner.Min[i]+tol {
 			return false
@@ -43,9 +51,27 @@ func Contains(outer, inner AABB, tol float64) bool {
 	return true
 }
 
-// Volume returns the box's volume in cubic meters, clamped at zero so a planar
-// or inverted box yields 0 rather than a negative number.
+// Finite reports whether every bound is a real number. Gate 1 compares these
+// bounds and the looseness ratio multiplies them; NaN silently satisfies the
+// first and poisons the second, so a non-finite box is rejected explicitly
+// rather than left to float comparison semantics.
+func Finite(b AABB) bool {
+	for i := 0; i < 3; i++ {
+		if math.IsNaN(b.Min[i]) || math.IsInf(b.Min[i], 0) ||
+			math.IsNaN(b.Max[i]) || math.IsInf(b.Max[i], 0) {
+			return false
+		}
+	}
+	return true
+}
+
+// Volume returns the box's volume in cubic meters, clamped at zero so a planar,
+// inverted, or non-finite box yields 0 rather than a negative number or a NaN
+// that would corrupt every percentile downstream.
 func Volume(b AABB) float64 {
+	if !Finite(b) {
+		return 0
+	}
 	v := 1.0
 	for i := 0; i < 3; i++ {
 		d := b.Max[i] - b.Min[i]

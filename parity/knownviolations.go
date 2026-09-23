@@ -10,19 +10,24 @@ package parity
 // these entries rather than hand-typed, so it cannot drift from what the
 // allowlist actually contains.
 type knownViolation struct {
-	globalID  string
-	axis      string // the worst-shortfall bound, e.g. "min-y"
+	globalID string
+	// axis is the ONE bound this entry covers, e.g. "min-y". The gate compares
+	// per bound: a violation on any other bound of the same element fails as a
+	// new bug, and this bound ceasing to violate fails as a stale entry.
+	axis      string
 	shortfall float64
 	note      string // per-entry context for the published report: what the element is
 }
 
 // knownViolations lists, per public model, every Gate 1 containment violation
 // that is a tracked goifc bug rather than a new failure. This keeps CI green
-// on known state without weakening Contains or Tolerance: a violation not
-// listed here, or one that has grown past its recorded shortfall plus
-// allowlistMargin, still fails the gate (a new or worsened bug). So does a
-// listed entry that no longer violates at all — that means the bug was fixed
-// and the stale entry must be deleted, never left to quietly rot into a lie.
+// on known state without weakening Contains or Tolerance. Each entry is matched
+// per (GlobalID, bound), so the gate still fails on: a violation on an element
+// not listed here; a violation on a bound of a listed element other than the
+// one its entry names; a listed bound that has grown past its recorded
+// shortfall plus allowlistMargin; and a listed bound that no longer violates at
+// all, which means the bug was fixed and the stale entry must be deleted rather
+// than left to quietly rot into a lie.
 //
 // duplex_a: goifc under-reports the world AABB of IfcStairFlight elements by
 // ~0.99 cm on the Y axis. Both known instances are the SAME Revit stair type

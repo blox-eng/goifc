@@ -13,13 +13,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	"github.com/blox-eng/goifc/step"
 )
 
 // envPrivateCorpus names a directory of uncompressed .ifc files that are not
-// redistributable. When set, a model found there wins over the committed
-// fixture. Absent or wrong, every public gate still passes.
+// redistributable. When set, a Private model found there becomes loadable;
+// public models ignore it entirely (see privatePath). Absent or wrong, every
+// public gate still passes.
 const envPrivateCorpus = "GOIFC_PRIVATE_CORPUS"
 
 // Public lists the redistributable models committed under testdata. They are
@@ -47,7 +49,18 @@ func Dir() string { return packageDir }
 
 // privatePath returns the uncompressed path for name under
 // $GOIFC_PRIVATE_CORPUS, and whether it is readable.
+//
+// Only Private names are looked up there. A public model always loads its
+// committed fixture, even when a like-named file sits in the private corpus:
+// otherwise a stray duplex_a.ifc silently redefines a public model, which fails
+// `cmd/coverage -check` for the contributor holding it and — worse — makes the
+// remediation that failure names (`make parity-report`, `make parity-baseline`)
+// write non-redistributable measurements into the published page as if they
+// were the public corpus's own figures.
 func privatePath(name string) (string, bool) {
+	if !slices.Contains(Private, name) {
+		return "", false
+	}
 	root := os.Getenv(envPrivateCorpus)
 	if root == "" {
 		return "", false
@@ -78,8 +91,10 @@ func Available(name string) bool {
 	return ok
 }
 
-// Load parses the named model. A readable private source wins over the
-// committed fixture, so a contributor with the real files measures against them.
+// Load parses the named model. For a Private name a readable private source is
+// the only source; a Public name always comes from its committed fixture, so
+// what the gates and the published page measure does not depend on which files
+// happen to be on the machine.
 func Load(name string) (*step.File, error) {
 	if p, ok := privatePath(name); ok {
 		return loadPlain(p, name)

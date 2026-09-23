@@ -1,6 +1,9 @@
 package parity
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestContains(t *testing.T) {
 	inner := AABB{Min: [3]float64{0, 0, 0}, Max: [3]float64{1, 1, 1}}
@@ -46,5 +49,46 @@ func TestVolume(t *testing.T) {
 	// An inverted box is not negative volume.
 	if got := Volume(AABB{Min: [3]float64{1, 1, 1}, Max: [3]float64{0, 0, 0}}); got != 0 {
 		t.Errorf("Volume() of an inverted box = %v, want 0", got)
+	}
+	// A NaN extent must not propagate: one NaN ratio corrupts sort.Float64s
+	// and every percentile the looseness table publishes.
+	nan := AABB{Min: [3]float64{0, 0, 0}, Max: [3]float64{math.NaN(), 1, 1}}
+	if got := Volume(nan); got != 0 {
+		t.Errorf("Volume() of a NaN box = %v, want 0", got)
+	}
+}
+
+// A non-finite bound compares false against every ordering test, so an
+// unguarded Contains reports containment for a box that is not a box — Gate 1
+// passing on exactly the elements it exists to catch.
+func TestContainsRejectsNonFinite(t *testing.T) {
+	real := AABB{Min: [3]float64{0, 0, 0}, Max: [3]float64{1, 1, 1}}
+	huge := AABB{Min: [3]float64{-10, -10, -10}, Max: [3]float64{10, 10, 10}}
+	bad := []struct {
+		name string
+		box  AABB
+	}{
+		{"NaN min", AABB{Min: [3]float64{math.NaN(), 0, 0}, Max: [3]float64{1, 1, 1}}},
+		{"NaN max", AABB{Min: [3]float64{0, 0, 0}, Max: [3]float64{math.NaN(), 1, 1}}},
+		{"+Inf max", AABB{Min: [3]float64{0, 0, 0}, Max: [3]float64{math.Inf(1), 1, 1}}},
+		{"-Inf min", AABB{Min: [3]float64{math.Inf(-1), 0, 0}, Max: [3]float64{1, 1, 1}}},
+	}
+	for _, tt := range bad {
+		t.Run(tt.name+" as outer", func(t *testing.T) {
+			if Contains(tt.box, real, Tolerance) {
+				t.Error("a non-finite goifc box must never satisfy containment")
+			}
+			if Finite(tt.box) {
+				t.Error("Finite() must reject this box")
+			}
+		})
+		t.Run(tt.name+" as inner", func(t *testing.T) {
+			if Contains(huge, tt.box, Tolerance) {
+				t.Error("a non-finite oracle box must never satisfy containment")
+			}
+		})
+	}
+	if !Finite(real) {
+		t.Error("Finite() must accept a real box")
 	}
 }

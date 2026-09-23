@@ -33,15 +33,17 @@ func shortfallsOf(outer, inner AABB) []axisShortfall {
 	return out
 }
 
-// worst returns the largest shortfall amount, or 0 if sf is empty.
-func worstShortfall(sf []axisShortfall) float64 {
-	var w float64
+// amountOn returns the shortfall recorded for one bound, and whether that bound
+// violates at all. The allowlist is compared per bound, never against a
+// collapsed worst-of-all-axes figure: an entry recorded on min-y must not
+// absorb a fresh violation on max-z just because the old one was larger.
+func amountOn(sf []axisShortfall, bound string) (float64, bool) {
 	for _, s := range sf {
-		if s.amount > w {
-			w = s.amount
+		if s.bound == bound {
+			return s.amount, true
 		}
 	}
-	return w
+	return 0, false
 }
 
 func formatShortfalls(sf []axisShortfall) string {
@@ -172,9 +174,26 @@ func TestGate1BoundsContainOracle(t *testing.T) {
 						gid, formatShortfalls(sf)))
 					continue
 				}
-				if w := worstShortfall(sf); w > kv.shortfall+allowlistMargin {
-					widened = append(widened, fmt.Sprintf("%s: known violation WIDENED from %.6gm to %.6gm (%s)",
-						gid, kv.shortfall, w, formatShortfalls(sf)))
+				// An entry covers exactly one bound. Every OTHER bound that
+				// violates on the same element is a new bug, and keying the
+				// allowlist on GlobalID alone would have absorbed it silently
+				// whenever it stayed smaller than the recorded shortfall.
+				for _, s := range sf {
+					if s.bound == kv.axis {
+						continue
+					}
+					newBugs = append(newBugs, fmt.Sprintf("%s: NEW violation on %s=%.6gm; the allowlist covers only %s on this element",
+						gid, s.bound, s.amount, kv.axis))
+				}
+				amt, stillOnAxis := amountOn(sf, kv.axis)
+				if !stillOnAxis {
+					fixed = append(fixed, fmt.Sprintf("%s: allowlisted %s no longer violates (was %.6gm) -- DELETE this stale known-violations entry",
+						gid, kv.axis, kv.shortfall))
+					continue
+				}
+				if amt > kv.shortfall+allowlistMargin {
+					widened = append(widened, fmt.Sprintf("%s: known violation WIDENED on %s from %.6gm to %.6gm (%s)",
+						gid, kv.axis, kv.shortfall, amt, formatShortfalls(sf)))
 				}
 			}
 			for _, kv := range knownViolations[name] {
@@ -211,6 +230,53 @@ func TestGate1BoundsContainOracle(t *testing.T) {
 					name, len(fixed), len(show), joinLines(show))
 			}
 		})
+	}
+}
+
+// The allowlist is matched per bound. The function this replaced collapsed all
+// six bounds to a single max, so a fresh violation on another bound of an
+// allowlisted element was absorbed whenever it stayed below the recorded
+// shortfall — the exact case below.
+func TestAmountOnIsPerBound(t *testing.T) {
+	sf := []axisShortfall{
+		{"min-y", 0.0099275},
+		{"max-z", 0.006},
+	}
+	if amt, ok := amountOn(sf, "min-y"); !ok || amt != 0.0099275 {
+		t.Errorf("amountOn(min-y) = %v, %v; want 0.0099275, true", amt, ok)
+	}
+	if amt, ok := amountOn(sf, "max-z"); !ok || amt != 0.006 {
+		t.Errorf("amountOn(max-z) = %v, %v; want 0.006, true", amt, ok)
+	}
+	// The bound an allowlist entry names may stop violating while others start.
+	if amt, ok := amountOn(sf, "max-x"); ok || amt != 0 {
+		t.Errorf("amountOn(max-x) = %v, %v; want 0, false", amt, ok)
+	}
+	if _, ok := amountOn(nil, "min-y"); ok {
+		t.Error("amountOn on no shortfalls reported a violating bound")
+	}
+}
+
+// Every allowlist entry must name a bound shortfallsOf can actually produce,
+// or it can never match and the entry silently allows nothing.
+func TestKnownViolationAxesAreRealBounds(t *testing.T) {
+	valid := map[string]bool{}
+	for _, p := range []string{"min", "max"} {
+		for _, a := range []string{"x", "y", "z"} {
+			valid[p+"-"+a] = true
+		}
+	}
+	for model, kvs := range knownViolations {
+		for _, kv := range kvs {
+			if !valid[kv.axis] {
+				t.Errorf("%s: known violation %s has axis %q, which shortfallsOf never emits",
+					model, kv.globalID, kv.axis)
+			}
+			if kv.shortfall <= 0 {
+				t.Errorf("%s: known violation %s has shortfall %v; a non-positive allowance is not a violation",
+					model, kv.globalID, kv.shortfall)
+			}
+		}
 	}
 }
 

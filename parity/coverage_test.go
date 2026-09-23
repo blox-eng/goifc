@@ -79,6 +79,17 @@ func TestGate2CoverageDoesNotRegress(t *testing.T) {
 				t.Errorf("%s: OBB rate rose to %.4f from %.4f — a geometry path regressed",
 					name, gotRate, wantRate)
 			}
+			// An improvement must be recorded too, for the same reason the
+			// element count is an equality: a baseline left at the old, worse
+			// rate is a ratchet that never tightens, and the next regression
+			// back to it passes. Note the nearby `-check` failure on
+			// docs/coverage.md names `make parity-report`, which does NOT
+			// update the baseline — so without this the natural fix leaves the
+			// baseline stale.
+			if gotRate < wantRate-1e-9 {
+				t.Errorf("%s: OBB rate fell to %.4f from %.4f — a geometry gap closed, which is good, but the baseline must record it or a later regression back to %.4f will pass; run `make parity-baseline`",
+					name, gotRate, wantRate, wantRate)
+			}
 		})
 	}
 }
