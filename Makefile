@@ -118,13 +118,14 @@ oracle: ## Diff freshly generated ifcopenshell AABB oracles against the committe
 	@# success after a docker run that had failed or written half a file.
 	@set -eu; \
 	tmp=$$(mktemp -d); \
-	trap 'rm -rf "$$tmp"' EXIT INT TERM; \
+	trap 'rm -rf "$$tmp" || true' EXIT INT TERM; \
 	echo "Generating oracles into $$tmp (nothing under parity/testdata/oracle/ is written)..."; \
 	moved=0; \
 	for m in ifcopenhouse duplex_a fzk_haus; do \
 		gzip -dc parity/testdata/$$m.ifc.gz > "$$tmp/$$m.ifc" \
 			|| { echo "oracle: could not decompress parity/testdata/$$m.ifc.gz"; exit 1; }; \
-		docker run --rm -v "$$tmp":/data -v "$(PWD)/parity/oracle":/src:ro \
+		docker run --rm --user "$$(id -u):$$(id -g)" \
+			-v "$$tmp":/data -v "$(CURDIR)/parity/oracle":/src:ro \
 			aecgeeks/ifcopenshell:latest \
 			python3 /src/dump_oracle.py "/data/$$m.ifc" "/data/$$m.json" \
 			|| { echo "oracle: ifcopenshell failed on $$m — see the Status section of parity/oracle/README.md"; exit 1; }; \

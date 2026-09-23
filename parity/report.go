@@ -40,9 +40,9 @@ func Report() (string, error) {
 	b.WriteString("looser than the true solid (a pitched roof's OBB can hold twice\n")
 	b.WriteString("its volume) or, the failure that actually hurts a consumer,\n")
 	b.WriteString("tighter than it. Gate 1 is precisely what catches the tighter\n")
-	b.WriteString("case — and an under-reporting bound wherever else one arises. The\n")
-	b.WriteString("two stair-flight shortfalls recorded below are Gate 1 firing on a\n")
-	b.WriteString("different cause, not on a fallback box: both of those elements\n")
+	b.WriteString("case — and an under-reporting bound wherever else one arises.\n")
+	fmt.Fprintf(&b, "All %d of the shortfalls recorded below are Gate 1 firing on a\n", knownViolationCount())
+	b.WriteString("different cause, not on a fallback box: those elements\n")
 	b.WriteString("tessellate through the extrusion path, and\n")
 	b.WriteString("`parity/knownviolations.go` attributes their shortfall to how\n")
 	b.WriteString("goifc bounds a stepped solid along that path.\n")
@@ -51,10 +51,16 @@ func Report() (string, error) {
 	b.WriteString("nearly blind to fallback quality by construction — read it as\n")
 	b.WriteString("\"box vs. box\", not as \"goifc matches IfcOpenShell\".\n")
 	b.WriteString("Ratios are printed to four decimal places so \"exactly 1\" and\n")
-	b.WriteString("\"very close to 1\" are distinguishable.\n\n")
+	b.WriteString("\"very close to 1\" are distinguishable.\n")
+	b.WriteString("**Collapsed** is elements excluded from the ratio columns because\n")
+	b.WriteString("goifc's own box has zero volume — flat, inverted, or empty. Their\n")
+	b.WriteString("ratio would be exactly 0, a well-formed number for the worst\n")
+	b.WriteString("possible outcome, which would drag p50 and p90 toward 1.0 and read\n")
+	b.WriteString("as an improvement. Gate 1 fails on them; this column is here so\n")
+	b.WriteString("the page cannot quietly disagree with the gate.\n\n")
 
-	b.WriteString("| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | AABB ratio p50 | p90 | max |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | Collapsed | AABB ratio p50 | p90 | max |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|\n")
 	covs := make(map[string]Coverage, len(Public))
 	for _, name := range Public {
 		c, err := MeasureCoverage(name)
@@ -66,8 +72,8 @@ func Report() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, "| `%s` | %d | %d | %d | %d | %d | %.1f%% | %.4f | %.4f | %.4f |\n",
-			name, c.Total, c.Extrude, c.Brep, c.OBB, c.Empty, 100*OBBRate(c), l.P50, l.P90, l.Max)
+		fmt.Fprintf(&b, "| `%s` | %d | %d | %d | %d | %d | %.1f%% | %d | %.4f | %.4f | %.4f |\n",
+			name, c.Total, c.Extrude, c.Brep, c.OBB, c.Empty, 100*OBBRate(c), l.Collapsed, l.P50, l.P90, l.Max)
 	}
 
 	totals := map[string]int{}
@@ -96,27 +102,25 @@ func Report() (string, error) {
 	b.WriteString("times via one `IfcRepresentationMap` costs accuracy every time it\n")
 	b.WriteString("is placed, so it must rank every time, not once. This means a\n")
 	b.WriteString("type's count can legitimately exceed the number of entities of\n")
-	b.WriteString("that type in the file — for example, `duplex_a` reports 65\n")
-	b.WriteString("occurrences of `IFCFACEBASEDSURFACEMODEL` from 40 such entities\n")
-	b.WriteString("in the file. Keys are the upper-case STEP keyword as parsed\n")
+	b.WriteString("that type in the file. Keys are the upper-case STEP keyword as parsed\n")
 	b.WriteString("(`IFCFACEBASEDSURFACEMODEL`, not `IfcFaceBasedSurfaceModel`);\n")
 	b.WriteString("nothing here changes that casing.\n\n")
 
 	b.WriteString("**Occurrences here and the OBB column above are different\n")
 	b.WriteString("quantities, and neither converts into the other.** This table\n")
 	b.WriteString("counts representation ITEMS, once per element that reaches one;\n")
-	b.WriteString("the OBB column counts ELEMENTS. So `duplex_a`'s 65 occurrences\n")
-	b.WriteString("beside its 69 OBB elements is not a near-match between two\n")
-	b.WriteString("measurements of the same thing — it is two different units that\n")
-	b.WriteString("happen to land close together. Do not subtract them.\n\n")
+	b.WriteString("the OBB column counts ELEMENTS. Two different units: where a\n")
+	b.WriteString("model's two figures land close together that is coincidence, not\n")
+	b.WriteString("agreement. Do not subtract them.\n\n")
 
 	b.WriteString("**This list is also not exhaustive of what falls back.** It names\n")
-	b.WriteString("only types that `tessellateItemDepth` has no case for at all. An\n")
-	b.WriteString("element becomes a box just as readily when a dispatched path IS\n")
-	b.WriteString("attempted and declines partway: an extrusion whose profile cannot\n")
-	b.WriteString("be built, a brep whose shell cannot be closed, a boolean whose\n")
-	b.WriteString("operand failed, a mapped item whose source could not be resolved.\n")
-	b.WriteString("None of that class appears here. Nor do presentation entities\n")
+	b.WriteString("only types that `tessellateItemDepth` has no case for at all,\n")
+	b.WriteString("looking through the two wrappers that would otherwise hide one —\n")
+	b.WriteString("an `IfcMappedItem` is resolved to the items it maps, and a boolean\n")
+	b.WriteString("to its operands. An element becomes a box just as readily when a\n")
+	b.WriteString("dispatched path IS attempted and declines partway: an extrusion\n")
+	b.WriteString("whose profile cannot be built, a brep whose shell cannot be\n")
+	b.WriteString("closed. None of that class appears here. Nor do presentation entities\n")
 	b.WriteString("(`IfcStyledItem` and the like), which this diagnostic excludes as\n")
 	b.WriteString("appearance rather than shape so a colour assignment cannot outrank\n")
 	b.WriteString("a missing solid — they still reach the same fallback, so if one\n")
@@ -243,6 +247,17 @@ func pluralS(n int) string {
 // geometry.UnhandledItemTypes cannot see (the cause is inference; the lack of
 // attribution is measured). Derived rather than written down, so
 // it cannot outlive the measurement it describes.
+// knownViolationCount totals the allowlisted Gate 1 violations across the
+// public corpus, so the prose above cannot state a number the table below
+// contradicts — the two now come from the same place.
+func knownViolationCount() int {
+	n := 0
+	for _, name := range Public {
+		n += len(knownViolations[name])
+	}
+	return n
+}
+
 func unattributedNote(covs map[string]Coverage, perModel map[string]int) string {
 	var names []string
 	for _, name := range Public {

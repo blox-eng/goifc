@@ -20,9 +20,9 @@ point in the file names — the fallback box can come out either
 looser than the true solid (a pitched roof's OBB can hold twice
 its volume) or, the failure that actually hurts a consumer,
 tighter than it. Gate 1 is precisely what catches the tighter
-case — and an under-reporting bound wherever else one arises. The
-two stair-flight shortfalls recorded below are Gate 1 firing on a
-different cause, not on a fallback box: both of those elements
+case — and an under-reporting bound wherever else one arises.
+All 2 of the shortfalls recorded below are Gate 1 firing on a
+different cause, not on a fallback box: those elements
 tessellate through the extrusion path, and
 `parity/knownviolations.go` attributes their shortfall to how
 goifc bounds a stepped solid along that path.
@@ -32,12 +32,18 @@ nearly blind to fallback quality by construction — read it as
 "box vs. box", not as "goifc matches IfcOpenShell".
 Ratios are printed to four decimal places so "exactly 1" and
 "very close to 1" are distinguishable.
+**Collapsed** is elements excluded from the ratio columns because
+goifc's own box has zero volume — flat, inverted, or empty. Their
+ratio would be exactly 0, a well-formed number for the worst
+possible outcome, which would drag p50 and p90 toward 1.0 and read
+as an improvement. Gate 1 fails on them; this column is here so
+the page cannot quietly disagree with the gate.
 
-| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | AABB ratio p50 | p90 | max |
-|---|---|---|---|---|---|---|---|---|---|
-| `ifcopenhouse` | 40 | 34 | 0 | 0 | 6 | 0.0% | 1.0000 | 1.0000 | 1.0000 |
-| `duplex_a` | 218 | 146 | 0 | 69 | 3 | 32.1% | 1.0000 | 1.0000 | 1.1156 |
-| `fzk_haus` | 85 | 16 | 64 | 2 | 3 | 2.4% | 1.0000 | 1.0000 | 1.0334 |
+| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | Collapsed | AABB ratio p50 | p90 | max |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `ifcopenhouse` | 40 | 34 | 0 | 0 | 6 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0000 |
+| `duplex_a` | 218 | 146 | 0 | 69 | 3 | 32.1% | 0 | 1.0000 | 1.0000 | 1.1156 |
+| `fzk_haus` | 85 | 16 | 64 | 2 | 3 | 2.4% | 0 | 1.0000 | 1.0000 | 1.0334 |
 
 ## What falls back, and how often
 
@@ -49,27 +55,25 @@ again — once per element that reaches it. A family placed many
 times via one `IfcRepresentationMap` costs accuracy every time it
 is placed, so it must rank every time, not once. This means a
 type's count can legitimately exceed the number of entities of
-that type in the file — for example, `duplex_a` reports 65
-occurrences of `IFCFACEBASEDSURFACEMODEL` from 40 such entities
-in the file. Keys are the upper-case STEP keyword as parsed
+that type in the file. Keys are the upper-case STEP keyword as parsed
 (`IFCFACEBASEDSURFACEMODEL`, not `IfcFaceBasedSurfaceModel`);
 nothing here changes that casing.
 
 **Occurrences here and the OBB column above are different
 quantities, and neither converts into the other.** This table
 counts representation ITEMS, once per element that reaches one;
-the OBB column counts ELEMENTS. So `duplex_a`'s 65 occurrences
-beside its 69 OBB elements is not a near-match between two
-measurements of the same thing — it is two different units that
-happen to land close together. Do not subtract them.
+the OBB column counts ELEMENTS. Two different units: where a
+model's two figures land close together that is coincidence, not
+agreement. Do not subtract them.
 
 **This list is also not exhaustive of what falls back.** It names
-only types that `tessellateItemDepth` has no case for at all. An
-element becomes a box just as readily when a dispatched path IS
-attempted and declines partway: an extrusion whose profile cannot
-be built, a brep whose shell cannot be closed, a boolean whose
-operand failed, a mapped item whose source could not be resolved.
-None of that class appears here. Nor do presentation entities
+only types that `tessellateItemDepth` has no case for at all,
+looking through the two wrappers that would otherwise hide one —
+an `IfcMappedItem` is resolved to the items it maps, and a boolean
+to its operands. An element becomes a box just as readily when a
+dispatched path IS attempted and declines partway: an extrusion
+whose profile cannot be built, a brep whose shell cannot be
+closed. None of that class appears here. Nor do presentation entities
 (`IfcStyledItem` and the like), which this diagnostic excludes as
 appearance rather than shape so a colour assignment cannot outrank
 a missing solid — they still reach the same fallback, so if one
@@ -77,17 +81,13 @@ ever does yield a box this list will not name it either. So a
 type's absence from this table is not evidence that it never
 falls back, and the counts below are a lower bound on the causes.
 
-Concretely, in this corpus:
-
-- `fzk_haus` has 2 OBB elements and reports no unhandled item type at
-  all, so nothing in the table below accounts for a single one of
-  them. What caused them is invisible to this diagnostic by
-  construction — most likely a dispatched path that declined
-  mid-attempt.
+In this corpus, every model that has a fallback element also reports
+at least one unhandled item type below.
 
 | Item type | Occurrences |
 |---|---|
 | `IFCFACEBASEDSURFACEMODEL` | 65 |
+| `IFCPOLYGONALBOUNDEDHALFSPACE` | 11 |
 
 ## Known Gate 1 violations
 

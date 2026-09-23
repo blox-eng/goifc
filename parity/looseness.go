@@ -12,15 +12,26 @@ type boxPair struct {
 // The ratio is the product metric: closing a geometry gap moves it toward 1.0.
 type Looseness struct {
 	Compared   int     // elements with a usable ratio
-	Degenerate int     // elements whose oracle box has zero volume, so no ratio exists
+	Degenerate int     // elements whose ORACLE box has zero volume, so no ratio exists
+	Collapsed  int     // elements whose GOIFC box has zero volume: flat, inverted, or empty
 	P50        float64 // median ratio
 	P90        float64
 	Max        float64
 }
 
-// summarize computes the ratio distribution, skipping pairs whose oracle box has
-// zero volume. Dividing by those yields +Inf and destroys every percentile, so
-// they are counted separately and reported rather than silently dropped.
+// summarize computes the ratio distribution over the pairs where a ratio means
+// something, counting the two ways it cannot mean anything rather than dropping
+// them silently.
+//
+// A zero-volume ORACLE box would divide to +Inf and destroy every percentile.
+//
+// A zero-volume GOIFC box is the opposite trap: it divides to exactly 0, which
+// is a perfectly well-formed ratio and the worst possible outcome — a flat,
+// inverted, or empty box where a solid should be (geometry.Build leaves
+// BBoxMin == BBoxMax for a zero-vertex element). Left in, it drags p50 and p90
+// DOWN, toward 1.0, so a regression that collapses elements reads on the
+// published page as an improvement. Gate 1 still catches them; this keeps the
+// page from contradicting it.
 func summarize(pairs []boxPair) Looseness {
 	var l Looseness
 	ratios := make([]float64, 0, len(pairs))
@@ -30,7 +41,12 @@ func summarize(pairs []boxPair) Looseness {
 			l.Degenerate++
 			continue
 		}
-		ratios = append(ratios, Volume(p.Got)/wv)
+		gv := Volume(p.Got)
+		if gv <= 0 {
+			l.Collapsed++
+			continue
+		}
+		ratios = append(ratios, gv/wv)
 	}
 	l.Compared = len(ratios)
 	if l.Compared == 0 {
