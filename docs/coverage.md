@@ -20,7 +20,12 @@ point in the file names — the fallback box can come out either
 looser than the true solid (a pitched roof's OBB can hold twice
 its volume) or, the failure that actually hurts a consumer,
 tighter than it. Gate 1 is precisely what catches the tighter
-case; the stair-flight shortfalls recorded below are it firing.
+case — and an under-reporting bound wherever else one arises. The
+two stair-flight shortfalls recorded below are Gate 1 firing on a
+different cause, not on a fallback box: both of those elements
+tessellate through the extrusion path, and
+`parity/knownviolations.go` attributes their shortfall to how
+goifc bounds a stepped solid along that path.
 (IfcOpenShell has no OBB fallback of its own — its oracle boxes
 come from an exact-solid tessellation.) So a ratio of 1.00 here is
 nearly blind to fallback quality by construction — read it as
@@ -64,16 +69,21 @@ element becomes a box just as readily when a dispatched path IS
 attempted and declines partway: an extrusion whose profile cannot
 be built, a brep whose shell cannot be closed, a boolean whose
 operand failed, a mapped item whose source could not be resolved.
-None of that class appears here, so a type's absence from this
-table is not evidence that it never falls back, and the counts
-below are a lower bound on the causes.
+None of that class appears here. Nor do presentation entities
+(`IfcStyledItem` and the like), which this diagnostic excludes as
+appearance rather than shape so a colour assignment cannot outrank
+a missing solid — they still reach the same fallback, so if one
+ever does yield a box this list will not name it either. So a
+type's absence from this table is not evidence that it never
+falls back, and the counts below are a lower bound on the causes.
 
 Concretely, in this corpus:
 
 - `fzk_haus` has 2 OBB elements and reports no unhandled item type at
   all, so nothing in the table below accounts for a single one of
-  them. A dispatched path declining mid-attempt is the cause this
-  diagnostic cannot see, and this is what that looks like.
+  them. What caused them is invisible to this diagnostic by
+  construction — most likely a dispatched path that declined
+  mid-attempt.
 
 | Item type | Occurrences |
 |---|---|
