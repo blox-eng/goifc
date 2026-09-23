@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://blox-eng.github.io/goifc/latest/dev/compatibility/">
       
       
-        <link rel="prev" href="../limitations/">
+        <link rel="prev" href="../coverage/">
       
       
         <link rel="next" href="../changelog/">
@@ -721,6 +721,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1046,6 +1074,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design/2026-09-21-parity-and-coverage-harness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parity and coverage harness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1243,6 +1299,9 @@ against. Concretely, that means:</p>
 </ul>
 <p>It is a statement about which bugs have already been found, not a general
 assurance. Treat it as a map of where the tested ground is.</p>
+<p>What is not scoped to Blox is the accuracy of the geometry itself: that is
+measured against a public IFC corpus and IfcOpenShell, and published in
+<a href="../coverage/">coverage</a> — numbers you can reproduce from a clone.</p>
 <h2 id="reporting-a-break">Reporting a break<a class="headerlink" href="#reporting-a-break" title="Permanent link">&para;</a></h2>
 <p>Open an issue with the IFC file if you can share it, or a reduced one that
 reproduces. The <a href="../step/"><code>step</code> package</a> parses any STEP file, so a minimal

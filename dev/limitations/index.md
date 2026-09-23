@@ -12,6 +12,8 @@ The meshes in the GLB are simplified representations for visualization. They are
 
 Do not clash-detect with them.
 
+Some elements get no mesh at all and come back as a bounding box instead. How many, per model, is measured rather than asserted — see [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md).
+
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not reachable this way.

@@ -629,6 +629,8 @@ The meshes in the GLB are simplified representations for visualization. They are
 
 Do not clash-detect with them.
 
+Some elements get no mesh at all and come back as a bounding box instead. How many, per model, is measured rather than asserted — see [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md).
+
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not reachable this way.
@@ -699,6 +701,8 @@ Blox's import pipeline is the only consumer this library has been hardened again
 
 It is a statement about which bugs have already been found, not a general assurance. Treat it as a map of where the tested ground is.
 
+What is not scoped to Blox is the accuracy of the geometry itself: that is measured against a public IFC corpus and IfcOpenShell, and published in [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md) — numbers you can reproduce from a clone.
+
 ## Reporting a break
 
 Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
@@ -712,6 +716,10 @@ This page is [`CHANGELOG.md`](https://github.com/blox-eng/goifc/blob/main/CHANGE
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
+
+### Added
+
+- `geometry.UnhandledItemTypes` reports, per IFC entity type, how many representation items no tessellation path handles — the items that degrade to a bounding box. It answers "why is this element a box" and ranks which geometry gaps cost the most accuracy on real files. The count is occurrences, once per element that reaches the item, not distinct entities — it resolves through `IfcMappedItem` into the shared geometry it maps to, so a type's count can exceed the number of such entities in the file when several elements share one mapped representation. It also resolves through `IfcBooleanResult`/`IfcBooleanClippingResult` into their operands, because the wrapper itself is dispatched: without that, a boolean over an operand with no tessellation path at all produced a bounding box and no count, hiding the very gap the map exists to rank. A non-`DIFFERENCE` boolean is counted as itself, since there the unsupported thing is the operation rather than an operand. It reports the types that have no tessellation path at all, which is not every cause of a fallback: a dispatched path that is attempted and declines partway — an unbuildable profile, an unclosable shell — degrades to a box just the same, with nothing in this map to name it. Rank gaps from it knowing the counts are a lower bound, and that a type's absence is not evidence it never falls back.
 
 ## v0.10.0 — 2026-09-17
 

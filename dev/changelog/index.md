@@ -8,6 +8,10 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- `geometry.UnhandledItemTypes` reports, per IFC entity type, how many representation items no tessellation path handles — the items that degrade to a bounding box. It answers "why is this element a box" and ranks which geometry gaps cost the most accuracy on real files. The count is occurrences, once per element that reaches the item, not distinct entities — it resolves through `IfcMappedItem` into the shared geometry it maps to, so a type's count can exceed the number of such entities in the file when several elements share one mapped representation. It also resolves through `IfcBooleanResult`/`IfcBooleanClippingResult` into their operands, because the wrapper itself is dispatched: without that, a boolean over an operand with no tessellation path at all produced a bounding box and no count, hiding the very gap the map exists to rank. A non-`DIFFERENCE` boolean is counted as itself, since there the unsupported thing is the operation rather than an operand. It reports the types that have no tessellation path at all, which is not every cause of a fallback: a dispatched path that is attempted and declines partway — an unbuildable profile, an unclosable shell — degrades to a box just the same, with nothing in this map to name it. Rank gaps from it knowing the counts are a lower bound, and that a type's absence is not evidence it never falls back.
+
 ## v0.10.0 — 2026-09-17
 
 ### Added

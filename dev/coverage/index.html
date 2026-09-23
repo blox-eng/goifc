@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/">
+        <link rel="canonical" href="https://blox-eng.github.io/goifc/latest/dev/coverage/">
       
       
-        <link rel="prev" href="../../getting-started/">
+        <link rel="prev" href="../limitations/">
       
       
-        <link rel="next" href="../quantities/">
+        <link rel="next" href="../compatibility/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/goifc-mark.svg">
+      <link rel="icon" href="../assets/goifc-mark.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>The pipeline - goifc</title>
+        <title>Coverage - goifc</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,7 +53,7 @@
       
     
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-pipeline" class="md-skip">
+        <a href="#coverage" class="md-skip">
           Skip to content
         </a>
       
@@ -98,9 +98,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="goifc" class="md-header__button md-logo" aria-label="goifc" data-md-component="logo">
+    <a href=".." title="goifc" class="md-header__button md-logo" aria-label="goifc" data-md-component="logo">
       
-  <img src="../../assets/goifc-mark-dark.svg" alt="logo">
+  <img src="../assets/goifc-mark-dark.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The pipeline
+              Coverage
             
           </span>
         </div>
@@ -245,9 +245,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="goifc" class="md-nav__button md-logo" aria-label="goifc" data-md-component="logo">
+    <a href=".." title="goifc" class="md-nav__button md-logo" aria-label="goifc" data-md-component="logo">
       
-  <img src="../../assets/goifc-mark-dark.svg" alt="logo">
+  <img src="../assets/goifc-mark-dark.svg" alt="logo">
 
     </a>
     goifc
@@ -274,7 +274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -301,7 +301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../getting-started/" class="md-nav__link">
         
   
   
@@ -325,8 +325,6 @@
       
   
   
-    
-  
   
   
     
@@ -339,11 +337,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -364,7 +362,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -379,37 +377,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    The pipeline
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../concepts/pipeline/" class="md-nav__link">
         
   
   
@@ -425,37 +396,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-the-split-matters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why the split matters
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -468,7 +408,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../quantities/" class="md-nav__link">
+      <a href="../concepts/quantities/" class="md-nav__link">
         
   
   
@@ -496,7 +436,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../frames/" class="md-nav__link">
+      <a href="../concepts/frames/" class="md-nav__link">
         
   
   
@@ -583,7 +523,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/sections/" class="md-nav__link">
+      <a href="../guides/sections/" class="md-nav__link">
         
   
   
@@ -611,7 +551,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/storey-plans/" class="md-nav__link">
+      <a href="../guides/storey-plans/" class="md-nav__link">
         
   
   
@@ -639,7 +579,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guides/measuring-silhouettes/" class="md-nav__link">
+      <a href="../guides/measuring-silhouettes/" class="md-nav__link">
         
   
   
@@ -671,8 +611,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -683,11 +625,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -708,7 +650,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -726,7 +668,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../step/" class="md-nav__link">
+      <a href="../step/" class="md-nav__link">
         
   
   
@@ -754,7 +696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../limitations/" class="md-nav__link">
+      <a href="../limitations/" class="md-nav__link">
         
   
   
@@ -779,10 +721,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../coverage/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coverage
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -798,6 +767,48 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-falls-back-and-how-often" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What falls back, and how often
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-gate-1-violations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Gate 1 violations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -810,7 +821,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../compatibility/" class="md-nav__link">
+      <a href="../compatibility/" class="md-nav__link">
         
   
   
@@ -838,7 +849,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../changelog/" class="md-nav__link">
+      <a href="../changelog/" class="md-nav__link">
         
   
   
@@ -925,7 +936,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/" class="md-nav__link">
+      <a href="../design/" class="md-nav__link">
         
   
   
@@ -953,7 +964,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/2026-08-13-arbitrary-section-plane/" class="md-nav__link">
+      <a href="../design/2026-08-13-arbitrary-section-plane/" class="md-nav__link">
         
   
   
@@ -981,7 +992,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/2026-08-15-outward-facing-classification/" class="md-nav__link">
+      <a href="../design/2026-08-15-outward-facing-classification/" class="md-nav__link">
         
   
   
@@ -1009,7 +1020,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../design/2026-09-21-parity-and-coverage-harness/" class="md-nav__link">
+      <a href="../design/2026-09-21-parity-and-coverage-harness/" class="md-nav__link">
         
   
   
@@ -1064,10 +1075,21 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-the-split-matters" class="md-nav__link">
+  <a href="#what-falls-back-and-how-often" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why the split matters
+        What falls back, and how often
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-gate-1-violations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Gate 1 violations
       
     </span>
   </a>
@@ -1091,7 +1113,7 @@
 
 
   
-    <a href="https://github.com/blox-eng/goifc/edit/main/docs/concepts/pipeline.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/blox-eng/goifc/edit/main/docs/coverage.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1099,57 +1121,193 @@
   
 
 
-<h1 id="the-pipeline">The pipeline<a class="headerlink" href="#the-pipeline" title="Permanent link">&para;</a></h1>
-<p><code>Assemble</code> runs three stages. Each one is a package you can use on its own.</p>
+<h1 id="coverage">Coverage<a class="headerlink" href="#coverage" title="Permanent link">&para;</a></h1>
+<p>How much of a real IFC model goifc tessellates, and how loose
+its bounds are against IfcOpenShell. Measured against the public
+corpus only (<a href="https://github.com/blox-eng/goifc/blob/main/parity/corpus.go"><code>parity.Public</code></a>).
+Generated by <code>make parity-report</code> — do not edit by hand.</p>
+<p>The <strong>OBB rate</strong> is the number with real signal: it is the share of
+elements that produced geometry but fell back to a bounding box
+instead of a tessellated shape. The <strong>looseness</strong> columns compare
+goifc's world AABB to IfcOpenShell's world AABB — not to the true
+solid, which the oracle does not store. Those two boxes are
+near-identical for any element both engines tessellate. For one
+that fell back to goifc's own OBB path, the box is built from the
+<code>IfcCartesianPoint</code> coordinates reachable from the element's
+representation, so it coincides with the true solid's world AABB
+only where those points reach the solid's extremes. Where they do
+not — a revolved or otherwise curved sweep has extremes that no
+point in the file names — the fallback box can come out either
+looser than the true solid (a pitched roof's OBB can hold twice
+its volume) or, the failure that actually hurts a consumer,
+tighter than it. Gate 1 is precisely what catches the tighter
+case — and an under-reporting bound wherever else one arises.
+All 2 of the shortfalls recorded below are Gate 1 firing on a
+different cause, not on a fallback box: those elements
+tessellate through the extrusion path, and
+<code>parity/knownviolations.go</code> attributes their shortfall to how
+goifc bounds a stepped solid along that path.
+(IfcOpenShell has no OBB fallback of its own — its oracle boxes
+come from an exact-solid tessellation.) So a ratio of 1.00 here is
+nearly blind to fallback quality by construction — read it as
+"box vs. box", not as "goifc matches IfcOpenShell".
+Ratios are printed to four decimal places so "exactly 1" and
+"very close to 1" are distinguishable.
+<strong>Collapsed</strong> is elements excluded from the ratio columns because
+goifc's own box has zero volume — flat, inverted, or empty. Their
+ratio would be exactly 0, a well-formed number for the worst
+possible outcome, which would drag p50 and p90 toward 1.0 and read
+as an improvement. Gate 1 fails on them; this column is here so
+the page cannot quietly disagree with the gate.</p>
 <table>
 <thead>
 <tr>
-<th>Package</th>
-<th>Does</th>
+<th>Model</th>
+<th>Elements</th>
+<th>Extrude</th>
+<th>Brep</th>
+<th>OBB</th>
+<th>Empty</th>
+<th>OBB rate</th>
+<th>Collapsed</th>
+<th>AABB ratio p50</th>
+<th>p90</th>
+<th>max</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>step</code></td>
-<td>STEP/SPF (ISO 10303-21) tokenizer and entity graph. Schema-agnostic — no EXPRESS.</td>
+<td><code>ifcopenhouse</code></td>
+<td>40</td>
+<td>34</td>
+<td>0</td>
+<td>0</td>
+<td>6</td>
+<td>0.0%</td>
+<td>0</td>
+<td>1.0000</td>
+<td>1.0000</td>
+<td>1.0000</td>
 </tr>
 <tr>
-<td><code>model</code></td>
-<td>Entity graph → semantic <code>[]Element</code>. Ports ifcopenshell's <code>util.element</code>, <code>util.placement</code>, <code>util.unit</code>.</td>
+<td><code>duplex_a</code></td>
+<td>218</td>
+<td>146</td>
+<td>0</td>
+<td>69</td>
+<td>3</td>
+<td>32.1%</td>
+<td>0</td>
+<td>1.0000</td>
+<td>1.0000</td>
+<td>1.1156</td>
 </tr>
 <tr>
-<td><code>geometry</code></td>
-<td>Proxy tessellation, derived quantities, plane sections, and a Y-up GLB whose node names are <code>GlobalId</code>s.</td>
+<td><code>fzk_haus</code></td>
+<td>85</td>
+<td>16</td>
+<td>64</td>
+<td>2</td>
+<td>3</td>
+<td>2.4%</td>
+<td>0</td>
+<td>1.0000</td>
+<td>1.0000</td>
+<td>1.0334</td>
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>bytes ──▶ step.ParseBytes ──▶ *step.File          entity graph, forward + inverse refs
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                                  │
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                                  ▼
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                            model.Extract   ──▶ *model.Result     semantic elements
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                                  │
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                                  ▼
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                            geometry.Build  ──▶ *geometry.Scene   meshes, bboxes, quantities
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                                  │
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                                  ▼
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>                            ifc.Assemble    ──▶ *Assembled        elements + scene
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                  │
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                                  ▼
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                            ifc.BuildImport ──▶ *ImportModel      tree, layers, storey plans
-</code></pre></div>
-<h2 id="why-the-split-matters">Why the split matters<a class="headerlink" href="#why-the-split-matters" title="Permanent link">&para;</a></h2>
-<p><strong><code>step</code> is genuinely standalone.</strong> It parses any STEP file, IFC or not — it
-knows nothing about walls or storeys, only <code>#id=KEYWORD(args)</code> and the reference
-graph between them. If you have a STEP file from a mechanical CAD tool, this
-package still works. See <a href="../../step/">the <code>step</code> package</a>.</p>
-<p><strong><code>model</code> is where IFC semantics enter.</strong> It reads positional attribute indices
-that are stable across IFC2X3 and IFC4 for core entities, resolves placements,
-and normalises units. This is also the layer that carries the schema assumption
-noted in <a href="../../limitations/">limitations</a> — there is no EXPRESS schema behind it.</p>
-<p><strong><code>geometry</code> is the only stage that approximates.</strong> Everything above it is
-lossless with respect to the file. Tessellation is where proxy meshes and
-derived, gross quantities come from, and it is why quantities carry a
-<a href="../quantities/">provenance tag</a>.</p>
+<h2 id="what-falls-back-and-how-often">What falls back, and how often<a class="headerlink" href="#what-falls-back-and-how-often" title="Permanent link">&para;</a></h2>
+<p>Representation-item types that have no tessellation path at all. Closing the top of this list buys the most accuracy.</p>
+<p>Counts are OCCURRENCES, not distinct entities: an <code>IfcMappedItem</code>
+is resolved to the items it maps, and each resolution is counted
+again — once per element that reaches it. A family placed many
+times via one <code>IfcRepresentationMap</code> costs accuracy every time it
+is placed, so it must rank every time, not once. This means a
+type's count can legitimately exceed the number of entities of
+that type in the file. Keys are the upper-case STEP keyword as parsed
+(<code>IFCFACEBASEDSURFACEMODEL</code>, not <code>IfcFaceBasedSurfaceModel</code>);
+nothing here changes that casing.</p>
+<p><strong>Occurrences here and the OBB column above are different
+quantities, and neither converts into the other.</strong> This table
+counts representation ITEMS, once per element that reaches one;
+the OBB column counts ELEMENTS. Two different units: where a
+model's two figures land close together that is coincidence, not
+agreement. Do not subtract them.</p>
+<p><strong>This list is also not exhaustive of what falls back.</strong> It names
+only types that <code>tessellateItemDepth</code> has no case for at all,
+looking through the two wrappers that would otherwise hide one —
+an <code>IfcMappedItem</code> is resolved to the items it maps, and a boolean
+to its operands. An element becomes a box just as readily when a
+dispatched path IS attempted and declines partway: an extrusion
+whose profile cannot be built, a brep whose shell cannot be
+closed. None of that class appears here. Nor do presentation entities
+(<code>IfcStyledItem</code> and the like), which this diagnostic excludes as
+appearance rather than shape so a colour assignment cannot outrank
+a missing solid — they still reach the same fallback, so if one
+ever does yield a box this list will not name it either. So a
+type's absence from this table is not evidence that it never
+falls back, and the counts below are a lower bound on the causes.</p>
+<p>In this corpus, every model that has a fallback element also reports
+at least one unhandled item type below.</p>
+<table>
+<thead>
+<tr>
+<th>Item type</th>
+<th>Occurrences</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>IFCFACEBASEDSURFACEMODEL</code></td>
+<td>65</td>
+</tr>
+<tr>
+<td><code>IFCPOLYGONALBOUNDEDHALFSPACE</code></td>
+<td>11</td>
+</tr>
+</tbody>
+</table>
+<h2 id="known-gate-1-violations">Known Gate 1 violations<a class="headerlink" href="#known-gate-1-violations" title="Permanent link">&para;</a></h2>
+<p>Gate 1 asserts that goifc's AABB contains IfcOpenShell's oracle box
+for every element the oracle and goifc's scene both know. A bound
+that under-reports is always a bug, never a legitimate fallback —
+an OBB fallback box is allowed to be larger than the solid it
+stands for, never smaller.
+The violations below are real, currently open goifc geometry gaps,
+tracked in <code>parity/knownviolations.go</code>'s <code>knownViolations</code> allowlist
+so CI stays green on this known state while still failing on any
+new or worsened violation.</p>
+<p>Across the public corpus the gate compares 331 elements, of which 329
+are contained.</p>
+<p>Against <code>ifcopenhouse</code>, the gate compares 34 elements, and all 34 are contained.</p>
+<p>Against <code>duplex_a</code>, the gate compares 215 elements. 213 are contained; 2 are
+not:</p>
+<table>
+<thead>
+<tr>
+<th>GlobalID</th>
+<th>Axis</th>
+<th>Shortfall</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>1oKjKg9PD3fP1iIwXLh3lK</code></td>
+<td>min-y</td>
+<td>0.009927508 m</td>
+<td>IfcStairFlight, Revit instance 151086 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads)</td>
+</tr>
+<tr>
+<td><code>3KMJUyUe9DfQ2FOCd5ZoiN</code></td>
+<td>max-y</td>
+<td>0.009927222 m</td>
+<td>IfcStairFlight, Revit instance 198878 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads)</td>
+</tr>
+</tbody>
+</table>
+<p>Against <code>fzk_haus</code>, the gate compares 82 elements, and all 82 are contained.</p>
 
 
 
@@ -1236,10 +1394,10 @@ derived, gross quantities come from, and it is why quantities carry a
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "content.code.copy", "content.action.edit", "search.highlight", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "content.code.copy", "content.action.edit", "search.highlight", "search.suggest", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

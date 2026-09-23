@@ -46,6 +46,8 @@ Blox's import pipeline is the only consumer this library has been hardened again
 
 It is a statement about which bugs have already been found, not a general assurance. Treat it as a map of where the tested ground is.
 
+What is not scoped to Blox is the accuracy of the geometry itself: that is measured against a public IFC corpus and IfcOpenShell, and published in [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md) — numbers you can reproduce from a clone.
+
 ## Reporting a break
 
 Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
