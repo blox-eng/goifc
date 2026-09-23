@@ -1,0 +1,49 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('obb_boolean_union.ifc','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+/* An IfcBooleanResult with operator UNION. clipMeshByDifference only accepts
+   DIFFERENCE, so the element falls back to its OBB box — and the cause is the
+   OPERATION, not either operand: both operands here are extrusions the library
+   tessellates perfectly well on their own. So the gap this element represents
+   is IfcBooleanResult(UNION) itself, and that is what must be counted. */
+#1=IFCPROJECT('0proj',$,'P',$,$,$,$,(#20),#10);
+#10=IFCUNITASSIGNMENT((#11));
+#11=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#20=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#21,$);
+#21=IFCAXIS2PLACEMENT3D(#22,$,$);
+#22=IFCCARTESIANPOINT((0.,0.,0.));
+#30=IFCCARTESIANPOINT((0.,0.,0.));
+#31=IFCDIRECTION((0.,0.,1.));
+#32=IFCDIRECTION((1.,0.,0.));
+#33=IFCAXIS2PLACEMENT3D(#30,#31,#32);
+#34=IFCLOCALPLACEMENT($,#33);
+#40=IFCCARTESIANPOINT((0.,0.));
+#41=IFCCARTESIANPOINT((2.,0.));
+#42=IFCCARTESIANPOINT((2.,1.));
+#43=IFCCARTESIANPOINT((0.,1.));
+#44=IFCPOLYLINE((#40,#41,#42,#43,#40));
+#45=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,'RectA',#44);
+#46=IFCCARTESIANPOINT((0.,0.,0.));
+#47=IFCAXIS2PLACEMENT3D(#46,$,$);
+#48=IFCDIRECTION((0.,0.,1.));
+#49=IFCEXTRUDEDAREASOLID(#45,#47,#48,3.);
+#50=IFCCARTESIANPOINT((1.,0.));
+#51=IFCCARTESIANPOINT((3.,0.));
+#52=IFCCARTESIANPOINT((3.,1.));
+#53=IFCCARTESIANPOINT((1.,1.));
+#54=IFCPOLYLINE((#50,#51,#52,#53,#50));
+#55=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,'RectB',#54);
+#56=IFCCARTESIANPOINT((0.,0.,0.));
+#57=IFCAXIS2PLACEMENT3D(#56,$,$);
+#58=IFCDIRECTION((0.,0.,1.));
+#59=IFCEXTRUDEDAREASOLID(#55,#57,#58,3.);
+#60=IFCBOOLEANRESULT(.UNION.,#49,#59);
+#61=IFCSHAPEREPRESENTATION(#20,'Body','CSG',(#60));
+#62=IFCPRODUCTDEFINITIONSHAPE($,$,(#61));
+#70=IFCBUILDINGELEMENTPROXY('0boolunion',$,'UnionedSolids',$,$,#34,#62,$);
+ENDSEC;
+END-ISO-10303-21;

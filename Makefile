@@ -1,4 +1,4 @@
-.PHONY: lint test build clean fmt vet help docs docs-serve docs-deps
+.PHONY: lint test build clean fmt vet help docs docs-serve docs-deps parity parity-report parity-baseline oracle
 
 # Default target
 .DEFAULT_GOAL := help
@@ -91,6 +91,64 @@ docs: $(DOCS_BIN)/mkdocs ## Build the docs site (strict — a broken link fails)
 docs-serve: $(DOCS_BIN)/mkdocs ## Serve the docs at http://127.0.0.1:8000 with live reload
 	$(DOCS_BIN)/mkdocs serve
 
-ci: lint test vulncheck ## Run the blocking CI checks (lint + test + vulncheck)
+parity: ## Run the parity and coverage gates against the public IFC corpus
+	@echo "Running parity gates..."
+	cd parity && CGO_ENABLED=0 go test ./...
+	cd parity && CGO_ENABLED=0 go run ./cmd/coverage -check
+
+parity-report: ## Regenerate docs/coverage.md from the corpus
+	cd parity && CGO_ENABLED=0 go run ./cmd/coverage
+
+parity-baseline: ## Rewrite the committed coverage baseline (after closing a gap)
+	cd parity && CGO_ENABLED=0 go test ./... -run TestGate2 -update-baseline
+
+oracle: ## Diff freshly generated ifcopenshell AABB oracles against the committed ones (maintainer only; needs Docker)
+	@# This target NEVER writes parity/testdata/oracle/, which is what
+	@# parity/oracle/README.md has always prescribed. Those files are the
+	@# measurement Gate 1 and the nine-decimal shortfalls in
+	@# parity/knownviolations.go are defined against: an unconditional copy from
+	@# a half-working image would leave both gates passing against weaker boxes,
+	@# the allowlist quietly meaningless and the published page regenerated to
+	@# different-but-plausible numbers, with nothing to show it happened. So
+	@# generate into a temporary directory, diff, and leave promoting the result
+	@# to a deliberate human act (README: "Promoting a verified regeneration").
+	@#
+	@# One shell, `set -eu`, and an explicit check after every step, because the
+	@# old loop took its exit status from a trailing `rm` and so reported
+	@# success after a docker run that had failed or written half a file.
+	@set -eu; \
+	tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp" || true' EXIT INT TERM; \
+	echo "Generating oracles into $$tmp (nothing under parity/testdata/oracle/ is written)..."; \
+	moved=0; \
+	for m in ifcopenhouse duplex_a fzk_haus; do \
+		gzip -dc parity/testdata/$$m.ifc.gz > "$$tmp/$$m.ifc" \
+			|| { echo "oracle: could not decompress parity/testdata/$$m.ifc.gz"; exit 1; }; \
+		docker run --rm --user "$$(id -u):$$(id -g)" \
+			-v "$$tmp":/data -v "$(CURDIR)/parity/oracle":/src:ro \
+			aecgeeks/ifcopenshell:latest \
+			python3 /src/dump_oracle.py "/data/$$m.ifc" "/data/$$m.json" \
+			|| { echo "oracle: ifcopenshell failed on $$m — see the Status section of parity/oracle/README.md"; exit 1; }; \
+		[ -s "$$tmp/$$m.json" ] \
+			|| { echo "oracle: ifcopenshell wrote no output for $$m"; exit 1; }; \
+		echo "=== $$m"; \
+		if diff -u "parity/testdata/oracle/$$m.json" "$$tmp/$$m.json"; then \
+			echo "    identical to the committed oracle"; \
+		else \
+			moved=1; \
+		fi; \
+	done; \
+	echo ""; \
+	if [ "$$moved" -eq 0 ]; then \
+		echo "oracle: every model reproduces the committed oracle exactly."; \
+	else \
+		echo "oracle: the generated oracles DIFFER from the committed ones, and nothing was overwritten."; \
+		echo "oracle: a shifted oracle moves Gate 1's meaning and invalidates the"; \
+		echo "oracle: knownViolations shortfalls. Read parity/oracle/README.md before"; \
+		echo "oracle: promoting anything."; \
+		exit 1; \
+	fi
+
+ci: lint test vulncheck parity ## Run the blocking CI checks (lint + test + vulncheck + parity)
 
 all: fmt vet lint test build ## Run all checks and build

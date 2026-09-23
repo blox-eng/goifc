@@ -1,0 +1,23 @@
+{
+  "duplex_a": {
+    "total": 218,
+    "extrude": 146,
+    "brep": 0,
+    "obb": 69,
+    "empty": 3
+  },
+  "fzk_haus": {
+    "total": 85,
+    "extrude": 16,
+    "brep": 64,
+    "obb": 2,
+    "empty": 3
+  },
+  "ifcopenhouse": {
+    "total": 40,
+    "extrude": 34,
+    "brep": 0,
+    "obb": 0,
+    "empty": 6
+  }
+}

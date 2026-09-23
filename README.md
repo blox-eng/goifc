@@ -108,6 +108,11 @@ The meshes are proxy geometry for visualization, not a B-rep substitute — do n
 clash-detect with them. The rest of the edges, stated plainly, are in
 [limitations](https://blox-eng.github.io/goifc/latest/limitations/).
 
+How much of a real model is a bound rather than a tessellated shape is measured,
+not asserted: a gate asserts goifc's bounds contain IfcOpenShell's on a public
+IFC corpus, and the fallback rate per model is published in
+[coverage](https://blox-eng.github.io/goifc/latest/coverage/).
+
 ## More
 
 - [The pipeline](https://blox-eng.github.io/goifc/latest/concepts/pipeline/) — `step`,

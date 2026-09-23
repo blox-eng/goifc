@@ -73,10 +73,25 @@ jobs:
           else
             files=''
           fi
+          # docs/coverage.md is GENERATED (cmd/coverage), and the Parity job's
+          # `-check` step is the only thing that proves it still matches the
+          # corpus. Classifying it as docs would make the staleness gate
+          # bypassable by the exact change class it exists to police: a PR that
+          # hand-edits the page — lowering the published OBB rate, deleting the
+          # Known Gate 1 violations table — would skip Parity entirely, so a
+          # fabricated public accuracy number would never be measured against
+          # the corpus at all. ERE has no negative lookahead, so it is matched
+          # ahead of the docs class rather than carved out of it.
+          #
+          # NOTE: Parity is not yet in main's required-status-checks ruleset, so
+          # today a red Parity does not block a merge either way. This filter is
+          # what makes it RUN; adding `Parity` to the ruleset is what will make
+          # it BITE. Both are needed, and the second is a repo setting.
+          #
           # An empty list means we could not tell what changed (force push, new
           # branch, truncated compare). Run everything — the filter is an
           # optimisation and must never be the reason a break slips through.
-          if [ -z "$files" ] || grep -qvE '(\.md$|^docs/|^mkdocs\.yml$|^requirements-docs\.txt$)' <<< "$files"; then
+          if [ -z "$files" ] || grep -qxE 'docs/coverage\.md' <<< "$files" || grep -qvE '(\.md$|^docs/|^mkdocs\.yml$|^requirements-docs\.txt$)' <<< "$files"; then
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "Code changed — running the full suite."
           else
@@ -160,6 +175,43 @@ jobs:
           files: coverage.out
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  parity:
+    name: Parity
+    runs-on: ubuntu-latest
+    needs: [lint, changes]
+    if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      # parity/ is a separate module, so the Test job's ./... never reaches it
+      # and Codecov never sees it. That is deliberate: harness coverage must not
+      # dilute the library's coverage figure. The same separation means the
+      # Lint job's golangci-lint, run at the repo root, never walks into this
+      # module either — so lint it here, or nothing ever does.
+      - name: golangci-lint (parity/)
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          args: --timeout=5m
+          working-directory: parity
+          skip-cache: true
+          skip-save-cache: true
+      - name: Run the parity gates
+        env:
+          CGO_ENABLED: '0'
+        run: cd parity && go test -v ./...
+      - name: Check the published coverage page is current
+        env:
+          CGO_ENABLED: '0'
+        run: cd parity && go run ./cmd/coverage -check
 
   govulncheck:
     name: Vulnerability Scan

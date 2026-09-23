@@ -60,6 +60,10 @@ against. Concretely, that means:
 It is a statement about which bugs have already been found, not a general
 assurance. Treat it as a map of where the tested ground is.
 
+What is not scoped to Blox is the accuracy of the geometry itself: that is
+measured against a public IFC corpus and IfcOpenShell, and published in
+[coverage](coverage.md) — numbers you can reproduce from a clone.
+
 ## Reporting a break
 
 Open an issue with the IFC file if you can share it, or a reduced one that
