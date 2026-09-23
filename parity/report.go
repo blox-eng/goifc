@@ -18,6 +18,17 @@ import (
 // private files happen to be on disk. That would fail `-check` for anyone
 // holding those files, through no fault of theirs.
 func Report() (string, error) {
+	// Measured first, because the prose below states how many shortfalls the
+	// page records and that number must be the measurement, not len(allowlist).
+	// Gate 1 skips an allowlisted element absent from the scene, and the
+	// per-model sections below are gated on measured state, so a stale entry
+	// would have the opening sentence promising a table that is not printed.
+	per, totalCompared, totalContained, err := measureGate1()
+	if err != nil {
+		return "", err
+	}
+	shortfalls := totalCompared - totalContained
+
 	var b strings.Builder
 	b.WriteString("# Coverage\n\n")
 	b.WriteString("How much of a real IFC model goifc tessellates, and how loose\n")
@@ -41,7 +52,7 @@ func Report() (string, error) {
 	b.WriteString("its volume) or, the failure that actually hurts a consumer,\n")
 	b.WriteString("tighter than it. Gate 1 is precisely what catches the tighter\n")
 	b.WriteString("case — and an under-reporting bound wherever else one arises.\n")
-	fmt.Fprintf(&b, "All %d of the shortfalls recorded below are Gate 1 firing on a\n", knownViolationCount())
+	fmt.Fprintf(&b, "All %d of the shortfalls recorded below are Gate 1 firing on a\n", shortfalls)
 	b.WriteString("different cause, not on a fallback box: those elements\n")
 	b.WriteString("tessellate through the extrusion path, and\n")
 	b.WriteString("`parity/knownviolations.go` attributes their shortfall to how\n")
@@ -160,41 +171,6 @@ func Report() (string, error) {
 	b.WriteString("so CI stays green on this known state while still failing on any\n")
 	b.WriteString("new or worsened violation.\n\n")
 
-	// The compared count is the INTERSECTION of the oracle and goifc's scene,
-	// not the oracle's size: an element the oracle knows but goifc's scene does
-	// not is never compared, and printing len(oracle) would overstate what the
-	// gate actually checked. Containment is measured here rather than inferred
-	// from the allowlist's length, so the published "contained" figure is the
-	// same assertion Gate 1 makes rather than an arithmetic restatement of the
-	// allowlist.
-	var totalCompared, totalContained int
-	type gate1 struct{ compared, contained int }
-	per := make(map[string]gate1, len(Public))
-	for _, name := range Public {
-		oracle, err := LoadOracle(name)
-		if err != nil {
-			return "", err
-		}
-		sc, err := SceneOf(name)
-		if err != nil {
-			return "", err
-		}
-		var g gate1
-		for _, e := range sc.Elements {
-			want, ok := oracle[e.GlobalID]
-			if !ok {
-				continue
-			}
-			g.compared++
-			if Contains(ElementBox(e), want, Tolerance) {
-				g.contained++
-			}
-		}
-		per[name] = g
-		totalCompared += g.compared
-		totalContained += g.contained
-	}
-
 	fmt.Fprintf(&b, "Across the public corpus the gate compares %d elements, of which %d\n%s contained.\n\n",
 		totalCompared, totalContained, pluralAre(totalContained))
 
@@ -247,15 +223,48 @@ func pluralS(n int) string {
 // geometry.UnhandledItemTypes cannot see (the cause is inference; the lack of
 // attribution is measured). Derived rather than written down, so
 // it cannot outlive the measurement it describes.
-// knownViolationCount totals the allowlisted Gate 1 violations across the
-// public corpus, so the prose above cannot state a number the table below
-// contradicts — the two now come from the same place.
-func knownViolationCount() int {
-	n := 0
+// gate1 is one model's measured Gate 1 outcome.
+type gate1 struct{ compared, contained int }
+
+// measureGate1 runs Gate 1's own assertion over the public corpus and returns
+// the per-model and total counts.
+//
+// The compared count is the INTERSECTION of the oracle and goifc's scene, not
+// the oracle's size: an element the oracle knows but goifc's scene does not is
+// never compared, and printing len(oracle) would overstate what the gate
+// actually checked. Containment is measured here rather than inferred from the
+// allowlist's length, so every published figure — the totals, the per-model
+// sentences, and the count of shortfalls in the header prose — is the same
+// assertion Gate 1 makes rather than an arithmetic restatement of the
+// allowlist, which can hold an entry for an element no longer in the scene.
+func measureGate1() (map[string]gate1, int, int, error) {
+	var totalCompared, totalContained int
+	per := make(map[string]gate1, len(Public))
 	for _, name := range Public {
-		n += len(knownViolations[name])
+		oracle, err := LoadOracle(name)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		sc, err := SceneOf(name)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		var g gate1
+		for _, e := range sc.Elements {
+			want, ok := oracle[e.GlobalID]
+			if !ok {
+				continue
+			}
+			g.compared++
+			if Contains(ElementBox(e), want, Tolerance) {
+				g.contained++
+			}
+		}
+		per[name] = g
+		totalCompared += g.compared
+		totalContained += g.contained
 	}
-	return n
+	return per, totalCompared, totalContained, nil
 }
 
 func unattributedNote(covs map[string]Coverage, perModel map[string]int) string {
