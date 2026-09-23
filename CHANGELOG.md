@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.11.0 — 2026-09-23
+
 ### Added
 
 - `geometry.UnhandledItemTypes` reports, per IFC entity type, how many
