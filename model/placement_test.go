@@ -94,3 +94,54 @@ func TestLocalPlacementMissingIsIdentity(t *testing.T) {
 		t.Fatalf("no placement should yield identity, got %v", m)
 	}
 }
+
+// A placement that refers to itself recursed forever, producing an
+// unrecoverable `fatal error: stack overflow` — not a panic, so no consumer
+// could defend against it. Reachable from goifc.Assemble on any untrusted
+// file. https://github.com/blox-eng/goifc/issues/54
+func TestLocalPlacement_SelfCycleTerminates(t *testing.T) {
+	f := parseString(t, "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"+
+		"#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n"+
+		"#12=IFCLOCALPLACEMENT(#12,#2);\n"+
+		"#20=IFCWALL('g',$,'W',$,$,#12,$,$,$);\n"+
+		"ENDSEC;\nEND-ISO-10303-21;\n")
+	m := LocalPlacement(f.ByType("IfcWall")[0])
+	// The cyclic ANCESTOR contributes identity; the placement's own
+	// RelativePlacement still applies, so the +1 translation lands once.
+	x, y, z := m.Translation()
+	if math.Abs(x-1) > 1e-9 || math.Abs(y) > 1e-9 || math.Abs(z) > 1e-9 {
+		t.Fatalf("world origin = (%v,%v,%v), want (1,0,0)", x, y, z)
+	}
+}
+
+// A cycle need not be at the root: a tail leading into a loop (A -> B -> C -> B)
+// is what a malformed export actually produces. A parent-only check misses it.
+func TestLocalPlacement_CycleBelowTheRootTerminates(t *testing.T) {
+	f := parseString(t, "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"+
+		"#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n"+
+		"#10=IFCLOCALPLACEMENT(#11,#2);\n"+
+		"#11=IFCLOCALPLACEMENT(#12,#2);\n"+
+		"#12=IFCLOCALPLACEMENT(#11,#2);\n"+
+		"#20=IFCWALL('g',$,'W',$,$,#10,$,$,$);\n"+
+		"ENDSEC;\nEND-ISO-10303-21;\n")
+	x, y, z := LocalPlacement(f.ByType("IfcWall")[0]).Translation()
+	if math.IsNaN(x) || math.IsInf(x, 0) {
+		t.Fatalf("world origin = (%v,%v,%v), want a finite transform", x, y, z)
+	}
+}
+
+// PlacementRelTo pointing at something that is not a placement must yield
+// identity, not a panic. The IsA guard already did this; pin it so the
+// seen-set refactor cannot quietly drop it.
+func TestLocalPlacement_NonPlacementParentIsIdentity(t *testing.T) {
+	f := parseString(t, "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"+
+		"#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n"+
+		"#3=IFCCARTESIANPOINT((7.,7.,7.));\n"+
+		"#10=IFCLOCALPLACEMENT(#3,#2);\n"+
+		"#20=IFCWALL('g',$,'W',$,$,#10,$,$,$);\n"+
+		"ENDSEC;\nEND-ISO-10303-21;\n")
+	x, y, z := LocalPlacement(f.ByType("IfcWall")[0]).Translation()
+	if math.Abs(x-1) > 1e-9 || math.Abs(y) > 1e-9 || math.Abs(z) > 1e-9 {
+		t.Fatalf("world origin = (%v,%v,%v), want (1,0,0) — the bogus parent must contribute identity", x, y, z)
+	}
+}

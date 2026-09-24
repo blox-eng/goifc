@@ -18,14 +18,51 @@ func LocalPlacement(inst *step.Instance) Mat4 {
 	return localPlacementMatrix(place)
 }
 
+// maxPlacementDepth bounds the IfcLocalPlacement.PlacementRelTo chain. Cycle
+// detection is what fixes the bug this file's guard exists for; this cap
+// closes the second door — an ACYCLIC chain of distinct placements long
+// enough to exhaust the stack on its own. Frames on this path run ~680 bytes,
+// so the 1 GB goroutine limit falls near 1.5M of them, and a file that deep is
+// something an uploader can construct.
+//
+// IFC bounds this depth nowhere, so the value is not a schema limit: it is far
+// above any real building's spatial nesting and far below what a stack
+// survives. It also bounds the seen-slice scan above, which is what keeps that
+// scan cheaper than a map allocation per element.
+const maxPlacementDepth = 1024
+
 func localPlacementMatrix(place *step.Instance) Mat4 {
+	return localPlacementChain(place, nil)
+}
+
+// localPlacementChain composes the PlacementRelTo chain, carrying the express
+// IDs already visited so a cycle terminates instead of overflowing the stack.
+//
+// seen is a slice, not a map: maxPlacementDepth bounds it, so the linear scan
+// is at worst a few hundred integer comparisons on a pathological file and a
+// handful on the 2-4 deep chains real buildings produce — and a nil slice
+// allocates nothing for the well-formed case, which is every element of every
+// import.
+func localPlacementChain(place *step.Instance, seen []int) Mat4 {
 	if place == nil || !place.IsA("IfcLocalPlacement") {
 		return Identity()
 	}
+	if len(seen) >= maxPlacementDepth {
+		return Identity()
+	}
+	for _, id := range seen {
+		if id == place.ID() {
+			// A cycle. Return identity rather than a partial compose, so a
+			// malformed placement is indistinguishable from a missing one —
+			// the same answer the !IsA guard above gives.
+			return Identity()
+		}
+	}
+	seen = append(seen, place.ID())
 	// world = parent(PlacementRelTo) * relative(RelativePlacement)
 	parent := Identity()
 	if p, ok := place.Ref(attrPlacementRelTo); ok {
-		parent = localPlacementMatrix(p)
+		parent = localPlacementChain(p, seen)
 	}
 	rel := Identity()
 	if a, ok := place.Ref(attrRelativePlacement); ok {
