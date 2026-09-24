@@ -1,7 +1,9 @@
 package model
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -143,5 +145,49 @@ func TestLocalPlacement_NonPlacementParentIsIdentity(t *testing.T) {
 	x, y, z := LocalPlacement(f.ByType("IfcWall")[0]).Translation()
 	if math.Abs(x-1) > 1e-9 || math.Abs(y) > 1e-9 || math.Abs(z) > 1e-9 {
 		t.Fatalf("world origin = (%v,%v,%v), want (1,0,0) — the bogus parent must contribute identity", x, y, z)
+	}
+}
+
+// A legal chain just under the cap must compose in full: the cap exists to
+// stop an attack, and a cap that truncates real work is a wrong transform
+// reported as a right one. Generated rather than committed as a fixture — a
+// thousand-entity file would be unreadable and the depth is the only thing
+// under test.
+func TestLocalPlacement_DeepLegalChainComposesInFull(t *testing.T) {
+	const n = maxPlacementDepth - 1
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	b.WriteString("#10=IFCLOCALPLACEMENT($,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if math.Abs(x-float64(n)) > 1e-6 {
+		t.Fatalf("x = %v, want %v — each of the %d placements translates +1, so the cap must not truncate", x, float64(n), n)
+	}
+}
+
+// Past the cap the walk stops instead of running until the stack dies. The
+// exact surviving translation is an implementation detail; that it terminates
+// and stays bounded is the contract.
+func TestLocalPlacement_OverDeepChainIsBounded(t *testing.T) {
+	const n = maxPlacementDepth + 50
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	b.WriteString("#10=IFCLOCALPLACEMENT($,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if x > float64(maxPlacementDepth) {
+		t.Fatalf("x = %v, want no more than %d — the cap did not bound the walk", x, maxPlacementDepth)
 	}
 }
