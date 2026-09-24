@@ -18,6 +18,7 @@ var handledItemTypes = []string{
 	"IfcConnectedFaceSet",
 	"IfcOpenShell",
 	"IfcShellBasedSurfaceModel",
+	"IfcFaceBasedSurfaceModel",
 	"IfcBooleanClippingResult",
 	"IfcBooleanResult",
 }

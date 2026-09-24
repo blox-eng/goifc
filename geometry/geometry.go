@@ -120,7 +120,15 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int) ([]f
 		// overall reported Source stayed "brep" (since brep still won on the other
 		// sibling items) — a few stray boxed sub-shells shift the whole element's
 		// AABB by a few mm-cm without ever showing up as a Source mismatch.
-		if v, t, ok := shellBasedSurfaceModelMesh(item); ok {
+		if v, t, ok := surfaceModelMesh(item, attrSbsmBoundary); ok {
+			return scaleVerts(v, unitScale), t, SourceBrep
+		}
+	case item.IsA("IfcFaceBasedSurfaceModel"):
+		// FbsmFaces is a SET of IfcConnectedFaceSet — union their faces, the
+		// same traversal the shell-based case above does over IfcShell.
+		// Without this case duplex_a's 235 nested face sets are unreachable,
+		// and every element built from one becomes a box.
+		if v, t, ok := surfaceModelMesh(item, attrFbsmFaces); ok {
 			return scaleVerts(v, unitScale), t, SourceBrep
 		}
 	case item.IsA("IfcBooleanClippingResult"), item.IsA("IfcBooleanResult"):

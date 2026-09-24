@@ -2,8 +2,8 @@
   "duplex_a": {
     "total": 218,
     "extrude": 146,
-    "brep": 0,
-    "obb": 69,
+    "brep": 65,
+    "obb": 4,
     "empty": 3
   },
   "fzk_haus": {

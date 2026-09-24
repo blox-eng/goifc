@@ -10,15 +10,23 @@ const (
 	attrBoundOrientation = 1 // IfcFaceBound.Orientation
 	attrLoopPolygon      = 0 // IfcPolyLoop.Polygon
 	attrSbsmBoundary     = 0 // IfcShellBasedSurfaceModel.SbsmBoundary
+	attrFbsmFaces        = 0 // IfcFaceBasedSurfaceModel.FbsmFaces
 )
 
-// shellBasedSurfaceModelMesh unions the faces of every shell (IfcClosedShell
-// or IfcOpenShell) in an IfcShellBasedSurfaceModel's SbsmBoundary set, raw
-// units. Used by multi-shell family instances (e.g. a door's frame/leaf/
-// hardware, each its own shell) that mix this representation type with plain
-// IfcFacetedBrep siblings.
-func shellBasedSurfaceModelMesh(sbsm *step.Instance) (verts []float32, tris []uint32, ok bool) {
-	boundaryV, has := sbsm.Get(attrSbsmBoundary)
+// surfaceModelMesh unions the faces of every shell or face set in a surface
+// model's boundary attribute, raw units.
+//
+// Shared by IfcShellBasedSurfaceModel (SbsmBoundary, a SET of IfcShell) and
+// IfcFaceBasedSurfaceModel (FbsmFaces, a SET of IfcConnectedFaceSet). Two
+// different schema entities with the same shape: a set of things brepMesh
+// already tessellates. attr is a parameter rather than assumed, because the
+// two constants agreeing at 0 is a fact about the schema, not a rule.
+//
+// Used by multi-shell family instances (a door's frame/leaf/hardware, each its
+// own shell) that mix these representation types with plain IfcFacetedBrep
+// siblings in the same element.
+func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint32, ok bool) {
+	boundaryV, has := m.Get(attr)
 	if !has || boundaryV.Kind != step.KindList {
 		return nil, nil, false
 	}
