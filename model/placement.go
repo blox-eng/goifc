@@ -18,14 +18,90 @@ func LocalPlacement(inst *step.Instance) Mat4 {
 	return localPlacementMatrix(place)
 }
 
+// maxPlacementDepth bounds the IfcLocalPlacement.PlacementRelTo chain. Cycle
+// detection is what fixes the bug this file's guard exists for; this cap
+// closes the second door — an ACYCLIC chain of distinct placements long
+// enough to exhaust the stack on its own. Frames on this path run ~680 bytes,
+// so the 1 GB goroutine limit falls near 1.5M of them, and a file that deep is
+// something an uploader can construct.
+//
+// IFC bounds this depth nowhere, so the value is not a schema limit: it is far
+// above any real building's spatial nesting and far below what a stack
+// survives.
+const maxPlacementDepth = 1024
+
+// placementSeenInline is the chain depth that fits in placementSeen's inline
+// array. Real placement chains are 2-4 deep, so every element of every
+// well-formed file stays inside it and allocates nothing at all; only a chain
+// deep enough for a linear scan's quadratic term to matter reaches for the
+// map. The distinction is worth drawing because a file can point every one of
+// its elements at a single shared deep chain, which multiplies whatever that
+// chain costs by the element count.
+const placementSeenInline = 16
+
+// placementSeen is the set of express IDs already visited on the current
+// chain. Membership is a scan of the inline array until the chain outgrows it,
+// and O(1) in the map after that.
+type placementSeen struct {
+	n      int
+	inline [placementSeenInline]int
+	set    map[int]struct{}
+}
+
+func (s *placementSeen) has(id int) bool {
+	if s.set != nil {
+		_, ok := s.set[id]
+		return ok
+	}
+	for _, v := range s.inline[:s.n] {
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *placementSeen) add(id int) {
+	if s.set == nil {
+		if s.n < placementSeenInline {
+			s.inline[s.n] = id
+			s.n++
+			return
+		}
+		s.set = make(map[int]struct{}, 2*placementSeenInline)
+		for _, v := range s.inline {
+			s.set[v] = struct{}{}
+		}
+	}
+	s.set[id] = struct{}{}
+	s.n++
+}
+
 func localPlacementMatrix(place *step.Instance) Mat4 {
+	var seen placementSeen
+	return localPlacementChain(place, &seen)
+}
+
+// localPlacementChain composes the PlacementRelTo chain, carrying the express
+// IDs already visited so a cycle terminates instead of overflowing the stack.
+func localPlacementChain(place *step.Instance, seen *placementSeen) Mat4 {
 	if place == nil || !place.IsA("IfcLocalPlacement") {
 		return Identity()
 	}
+	if seen.n >= maxPlacementDepth {
+		return Identity()
+	}
+	if seen.has(place.ID()) {
+		// A cycle. Return identity rather than a partial compose, so a
+		// malformed placement is indistinguishable from a missing one —
+		// the same answer the !IsA guard above gives.
+		return Identity()
+	}
+	seen.add(place.ID())
 	// world = parent(PlacementRelTo) * relative(RelativePlacement)
 	parent := Identity()
 	if p, ok := place.Ref(attrPlacementRelTo); ok {
-		parent = localPlacementMatrix(p)
+		parent = localPlacementChain(p, seen)
 	}
 	rel := Identity()
 	if a, ok := place.Ref(attrRelativePlacement); ok {

@@ -1,7 +1,9 @@
 package model
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -92,5 +94,152 @@ func TestLocalPlacementMissingIsIdentity(t *testing.T) {
 	m := LocalPlacement(f.ByType("IfcWall")[0])
 	if m != Identity() {
 		t.Fatalf("no placement should yield identity, got %v", m)
+	}
+}
+
+// A placement that refers to itself recursed forever, producing an
+// unrecoverable `fatal error: stack overflow` — not a panic, so no consumer
+// could defend against it. Reachable from goifc.Assemble on any untrusted
+// file. https://github.com/blox-eng/goifc/issues/54
+func TestLocalPlacement_SelfCycleTerminates(t *testing.T) {
+	f := parseString(t, "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"+
+		"#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n"+
+		"#12=IFCLOCALPLACEMENT(#12,#2);\n"+
+		"#20=IFCWALL('g',$,'W',$,$,#12,$,$,$);\n"+
+		"ENDSEC;\nEND-ISO-10303-21;\n")
+	m := LocalPlacement(f.ByType("IfcWall")[0])
+	// The cyclic ANCESTOR contributes identity; the placement's own
+	// RelativePlacement still applies, so the +1 translation lands once.
+	x, y, z := m.Translation()
+	if math.Abs(x-1) > 1e-9 || math.Abs(y) > 1e-9 || math.Abs(z) > 1e-9 {
+		t.Fatalf("world origin = (%v,%v,%v), want (1,0,0)", x, y, z)
+	}
+}
+
+// A cycle need not be at the root: a tail leading into a loop (A -> B -> C -> B)
+// is what a malformed export actually produces. A parent-only check misses it.
+func TestLocalPlacement_CycleBelowTheRootTerminates(t *testing.T) {
+	f := parseString(t, "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"+
+		"#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n"+
+		"#10=IFCLOCALPLACEMENT(#11,#2);\n"+
+		"#11=IFCLOCALPLACEMENT(#12,#2);\n"+
+		"#12=IFCLOCALPLACEMENT(#11,#2);\n"+
+		"#20=IFCWALL('g',$,'W',$,$,#10,$,$,$);\n"+
+		"ENDSEC;\nEND-ISO-10303-21;\n")
+	x, y, z := LocalPlacement(f.ByType("IfcWall")[0]).Translation()
+	if math.IsNaN(x) || math.IsInf(x, 0) {
+		t.Fatalf("world origin = (%v,%v,%v), want a finite transform", x, y, z)
+	}
+}
+
+// PlacementRelTo pointing at something that is not a placement must yield
+// identity, not a panic. The IsA guard already did this; pin it so the
+// seen-set refactor cannot quietly drop it.
+func TestLocalPlacement_NonPlacementParentIsIdentity(t *testing.T) {
+	f := parseString(t, "ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"+
+		"#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n"+
+		"#3=IFCCARTESIANPOINT((7.,7.,7.));\n"+
+		"#10=IFCLOCALPLACEMENT(#3,#2);\n"+
+		"#20=IFCWALL('g',$,'W',$,$,#10,$,$,$);\n"+
+		"ENDSEC;\nEND-ISO-10303-21;\n")
+	x, y, z := LocalPlacement(f.ByType("IfcWall")[0]).Translation()
+	if math.Abs(x-1) > 1e-9 || math.Abs(y) > 1e-9 || math.Abs(z) > 1e-9 {
+		t.Fatalf("world origin = (%v,%v,%v), want (1,0,0) — the bogus parent must contribute identity", x, y, z)
+	}
+}
+
+// A legal chain just under the cap must compose in full: the cap exists to
+// stop an attack, and a cap that truncates real work is a wrong transform
+// reported as a right one. Generated rather than committed as a fixture — a
+// thousand-entity file would be unreadable and the depth is the only thing
+// under test.
+func TestLocalPlacement_DeepLegalChainComposesInFull(t *testing.T) {
+	const n = maxPlacementDepth - 1
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	b.WriteString("#10=IFCLOCALPLACEMENT($,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if math.Abs(x-float64(n)) > 1e-6 {
+		t.Fatalf("x = %v, want %v — each of the %d placements translates +1, so the cap must not truncate", x, float64(n), n)
+	}
+}
+
+// Past the cap the walk stops instead of running until the stack dies. The
+// exact surviving translation is an implementation detail; that it terminates
+// and stays bounded is the contract.
+func TestLocalPlacement_OverDeepChainIsBounded(t *testing.T) {
+	const n = maxPlacementDepth + 50
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	b.WriteString("#10=IFCLOCALPLACEMENT($,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if x > float64(maxPlacementDepth) {
+		t.Fatalf("x = %v, want no more than %d — the cap did not bound the walk", x, maxPlacementDepth)
+	}
+}
+
+// The exact boundary. A chain of exactly maxPlacementDepth composes in full:
+// the guard is checked on entry before the append, so call number k enters
+// with len(seen) == k-1, and the 1024th placement enters with len(seen) ==
+// 1023 — just under. Pinning the exact value is what catches a cap that
+// silently narrows by one entity, which the n-1 case above cannot see: a
+// chain one short of the cap fits under a cap of 1023 just as well as 1024.
+func TestLocalPlacement_ExactlyAtCapComposesInFull(t *testing.T) {
+	const n = maxPlacementDepth
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	b.WriteString("#10=IFCLOCALPLACEMENT($,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if math.Abs(x-float64(n)) > 1e-6 {
+		t.Fatalf("x = %v, want %v — a chain of exactly maxPlacementDepth must compose in full; a smaller x means the cap narrowed by one", x, float64(n))
+	}
+}
+
+// Membership has two implementations: a scan of the inline array while the
+// chain is short, and a map once it outgrows placementSeenInline. Every cycle
+// test above is shallow, so all of them exercise only the scan; the deep tests
+// cross the threshold but are acyclic, so they only ever get "not present"
+// from the map. This is the one case that asks the MAP whether an ID is
+// present and needs the answer yes — a hand-off bug that dropped the already
+// visited IDs when building the map would make this chain run to the cap
+// instead of stopping, and nothing else here would notice.
+func TestLocalPlacement_CycleBeyondTheInlineSetTerminates(t *testing.T) {
+	const n = placementSeenInline * 4
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	// The head of the chain points back at its own root, so the walk reaches
+	// #10 a second time only after the set has spilled into the map.
+	b.WriteString("#10=IFCLOCALPLACEMENT(#69,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if x != float64(n) {
+		t.Fatalf("x = %v, want %v — the cycle must be caught at the repeated root, after exactly the %d distinct placements", x, float64(n), n)
 	}
 }
