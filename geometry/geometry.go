@@ -123,6 +123,14 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int) ([]f
 		if v, t, ok := surfaceModelMesh(item, attrSbsmBoundary); ok {
 			return scaleVerts(v, unitScale), t, SourceBrep
 		}
+	case item.IsA("IfcFaceBasedSurfaceModel"):
+		// FbsmFaces is a SET of IfcConnectedFaceSet — union their faces, the
+		// same traversal the shell-based case above does over IfcShell.
+		// Without this case duplex_a's 235 nested face sets are unreachable,
+		// and every element built from one becomes a box.
+		if v, t, ok := surfaceModelMesh(item, attrFbsmFaces); ok {
+			return scaleVerts(v, unitScale), t, SourceBrep
+		}
 	case item.IsA("IfcBooleanClippingResult"), item.IsA("IfcBooleanResult"):
 		if v, t, s, ok := clipMeshByDifference(item, unitScale, depth); ok {
 			return v, t, s
