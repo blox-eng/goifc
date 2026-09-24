@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.11.1 — 2026-09-24
+
 ## v0.11.0 — 2026-09-23
 
 ### Added
