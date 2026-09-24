@@ -321,3 +321,60 @@ func TestBoundedHalfSpace_NearRectangularBoundaryDeclines(t *testing.T) {
 		t.Errorf("world max-z = %v, want the unclipped 3 — declining must not under-report", e.BBoxMax[2])
 	}
 }
+
+// TestBoundedHalfSpace_FarFromOriginBoundaryStillClips guards the gate's
+// NUMERICS, which tightening its tolerance made load-bearing. Area is
+// translation invariant; a raw shoelace sum is not. A millimetre file placed
+// on a site grid carries boundary coordinates near 1e6, whose pairwise
+// products land near 1e12 while the area they cancel down to is ~1e2 — so the
+// sum arrives carrying a relative error around 1e-6, six orders of magnitude
+// coarser than the 1e-12 gate. The gate would then decline a perfectly good
+// rectangle and the element would fall back to a box, silently losing the
+// coverage this whole path exists to win.
+//
+// The mutation moves the polygon's Position by -1000000.13 in u and v and
+// adds the same offset back to every boundary point, so the footprint occupies
+// the same place in the world and the only thing that changes is the magnitude
+// of the numbers the shoelace sum sees. The fractional part matters: on exact
+// powers of ten the cancellation happens to come out clean, and the raw sum
+// only misreports once the mantissa is actually crowded. The expected result is therefore
+// identical to the unmutated fixture: a real clip, max-z 1.5.
+func TestBoundedHalfSpace_FarFromOriginBoundaryStillClips(t *testing.T) {
+	src, err := os.ReadFile("testdata/synthetic/clipped_by_bounded_halfspace.ifc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := string(src)
+	for _, rep := range [][2]string{
+		{"#55=IFCCARTESIANPOINT((0.,0.,0.));", "#55=IFCCARTESIANPOINT((-1000000.13,-1000000.13,0.));"},
+		{"#57=IFCCARTESIANPOINT((-10.,-10.));", "#57=IFCCARTESIANPOINT((999990.13,999990.13));"},
+		{"#58=IFCCARTESIANPOINT((10.,-10.));", "#58=IFCCARTESIANPOINT((1000010.13,999990.13));"},
+		{"#59=IFCCARTESIANPOINT((10.,10.));", "#59=IFCCARTESIANPOINT((1000010.13,1000010.13));"},
+		{"#60=IFCCARTESIANPOINT((-10.,10.));", "#60=IFCCARTESIANPOINT((999990.13,1000010.13));"},
+	} {
+		next := strings.Replace(mutated, rep[0], rep[1], 1)
+		if next == mutated {
+			t.Fatalf("fixture line %q not found — the fixture changed and this test did not", rep[0])
+		}
+		mutated = next
+	}
+	f, err := step.Parse(strings.NewReader(mutated))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := model.Extract(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := s.Elements[0]
+	if e.Source == SourceOBB {
+		t.Fatalf("Source = %q — a rectangle far from the origin declined; the gate is reading cancellation noise, not a real area deficit", e.Source)
+	}
+	if math.Abs(e.BBoxMax[2]-1.5) > 1e-6 {
+		t.Errorf("world max-z = %v, want 1.5 — the same clip the unmutated fixture produces", e.BBoxMax[2])
+	}
+}

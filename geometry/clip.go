@@ -151,10 +151,21 @@ func clipTrianglesByBoundedPlane(verts []float32, tris []uint32, origin, normal 
 	// while still sitting four orders of magnitude above the ~1e-16 relative
 	// error a float64 shoelace sum carries. Anything the gate now admits is
 	// below the precision at which the bound is checked at all.
+	// Shoelace terms are computed RELATIVE to poly[0]. Area is translation
+	// invariant, but the raw sum is not numerically: a millimetre file placed
+	// on a site grid carries coordinates near 1e6, whose products are ~1e12
+	// while the area they cancel down to is ~1e2, so the sum arrives with a
+	// relative error near 1e-6 — six orders of magnitude coarser than the gate
+	// below. A perfectly good rectangle would then be declined and the element
+	// would fall back to a box, losing exactly the coverage this path exists
+	// to win. Subtracting one vertex first keeps every product O(side^2), so
+	// the error stays at the float64 floor where the gate expects it.
 	var shoelace float64
 	for i := range poly {
 		j := (i + 1) % len(poly)
-		shoelace += poly[i][0]*poly[j][1] - poly[j][0]*poly[i][1]
+		ax, ay := poly[i][0]-poly[0][0], poly[i][1]-poly[0][1]
+		bx, by := poly[j][0]-poly[0][0], poly[j][1]-poly[0][1]
+		shoelace += ax*by - bx*ay
 	}
 	polyArea := math.Abs(shoelace) / 2
 	aabbArea := (uMax - uMin) * (vMax - vMin)
