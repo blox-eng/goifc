@@ -78,15 +78,18 @@ jobs:
           # corpus. Classifying it as docs would make the staleness gate
           # bypassable by the exact change class it exists to police: a PR that
           # hand-edits the page — lowering the published OBB rate, deleting the
-          # Known Gate 1 violations table — would skip Parity entirely, so a
-          # fabricated public accuracy number would never be measured against
-          # the corpus at all. ERE has no negative lookahead, so it is matched
-          # ahead of the docs class rather than carved out of it.
+          # Known Gate 1 violations table — would skip Parity, and a SKIPPED
+          # required check satisfies the ruleset, so a fabricated public
+          # accuracy number would merge green. ERE has no negative lookahead,
+          # so it is matched ahead of the docs class rather than carved out of
+          # it.
           #
-          # NOTE: Parity is not yet in main's required-status-checks ruleset, so
-          # today a red Parity does not block a merge either way. This filter is
-          # what makes it RUN; adding `Parity` to the ruleset is what will make
-          # it BITE. Both are needed, and the second is a repo setting.
+          # That skipped-satisfies-required behaviour is measured, not assumed:
+          # PR #55 (docs-only) reached mergeStateStatus=CLEAN with Lint, Test,
+          # Vulnerability Scan and Parity all reporting "skipping", while every
+          # one of them is a required check on main. It is what makes this
+          # filter safe for ordinary docs PRs and load-bearing for this one
+          # file.
           #
           # An empty list means we could not tell what changed (force push, new
           # branch, truncated compare). Run everything — the filter is an
