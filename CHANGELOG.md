@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.12.1 — 2026-09-24
+
 ## v0.12.0 — 2026-09-24
 
 ## v0.11.1 — 2026-09-24
