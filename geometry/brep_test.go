@@ -69,10 +69,19 @@ func TestFaceBasedSurfaceModel_Tessellates(t *testing.T) {
 // its OBB box. Returning an empty mesh that still claims SourceBrep would
 // produce a zero-volume element — the "Collapsed" case the coverage page
 // exists to surface, reported as a success.
+//
+// Note what the second case does and does not pin. surfaceModelMesh and
+// brepMesh do not type-check set members: brepMesh reads attribute 0 of
+// whatever it is handed. An IfcCartesianPoint's attribute 0 is Coordinates,
+// which IS a list, so it gets that far — and declines only because the list
+// holds reals rather than entity references. So this pins "attribute 0 is not
+// a list of face refs", not "the member is rejected for having the wrong
+// type". A wrong-typed member whose attribute 0 happened to be a list of
+// references would still be walked as a shell.
 func TestFaceBasedSurfaceModel_EmptyDeclines(t *testing.T) {
 	for _, tc := range []struct{ name, faces string }{
 		{"empty set", "()"},
-		{"non-face-set member", "(#22)"}, // an IfcCartesianPoint
+		{"member whose attribute 0 is not a list of face refs", "(#22)"}, // an IfcCartesianPoint
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, err := step.Parse(strings.NewReader(
