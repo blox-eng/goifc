@@ -268,3 +268,56 @@ func TestBoundedHalfSpace_RectangularBoundaryStillClips(t *testing.T) {
 		t.Errorf("world max-z = %v, want 1.5 — a rectangular boundary must still clip", e.BBoxMax[2])
 	}
 }
+
+// TestBoundedHalfSpace_NearRectangularBoundaryDeclines pins the tightness of
+// the area gate, not merely its presence. An area tolerance buys a LINEAR
+// deviation of order sqrt(relEps) * L, because a corner cut of side d costs
+// only d^2/2 of area: on this 20x20 boundary a 2.8 mm chamfer loses 3.9e-6 of
+// 400, a ratio of ~1e-8. That sits comfortably under a 1e-6 relative
+// tolerance, so the gate would have ADMITTED a boundary that is visibly not
+// its own AABB, and the AABB clip would then have removed the corner the real
+// footprint leaves intact — under-reporting the bound, which is the one
+// failure this package cannot allow.
+//
+// The mutation replaces the (-10,-10) corner with the two ends of a 2.8 mm
+// chamfer, leaving the AABB itself unchanged at 20x20, so the only thing
+// under test is the area deficit.
+func TestBoundedHalfSpace_NearRectangularBoundaryDeclines(t *testing.T) {
+	src, err := os.ReadFile("testdata/synthetic/clipped_by_bounded_halfspace.ifc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := string(src)
+	for _, rep := range [][2]string{
+		{"#57=IFCCARTESIANPOINT((-10.,-10.));", "#57=IFCCARTESIANPOINT((-9.9972,-10.));\n#157=IFCCARTESIANPOINT((-10.,-9.9972));"},
+		{"#61=IFCPOLYLINE((#57,#58,#59,#60,#57));", "#61=IFCPOLYLINE((#57,#58,#59,#60,#157,#57));"},
+	} {
+		next := strings.Replace(mutated, rep[0], rep[1], 1)
+		if next == mutated {
+			t.Fatalf("fixture line %q not found — the fixture changed and this test did not", rep[0])
+		}
+		mutated = next
+	}
+	f, err := step.Parse(strings.NewReader(mutated))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := model.Extract(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Elements) != 1 {
+		t.Fatalf("elements = %d, want 1", len(s.Elements))
+	}
+	e := s.Elements[0]
+	if e.Source != SourceOBB {
+		t.Fatalf("Source = %q, want %q — a chamfered boundary is not its own AABB and must decline", e.Source, SourceOBB)
+	}
+	if e.BBoxMax[2] < 3-1e-6 {
+		t.Errorf("world max-z = %v, want the unclipped 3 — declining must not under-report", e.BBoxMax[2])
+	}
+}

@@ -142,6 +142,15 @@ func clipTrianglesByBoundedPlane(verts []float32, tris []uint32, origin, normal 
 	// count check would reject a rectangle carrying one redundant collinear
 	// vertex (e.g. corpus instance #4266 in duplex_a) and lose accuracy that
 	// this test correctly keeps.
+	//
+	// The epsilon is TIGHT rather than merely small, because an area
+	// tolerance buys a LINEAR deviation of order sqrt(relEps) * L: a corner
+	// cut of side d costs only d^2/2 of area, so a loose relEps admits a
+	// visible notch. At 1e-12 the admissible cut is ~1e-6 * L — micrometres
+	// on a metre-scale polygon, an order of magnitude under Gate 1's 1e-5 m —
+	// while still sitting four orders of magnitude above the ~1e-16 relative
+	// error a float64 shoelace sum carries. Anything the gate now admits is
+	// below the precision at which the bound is checked at all.
 	var shoelace float64
 	for i := range poly {
 		j := (i + 1) % len(poly)
@@ -149,7 +158,7 @@ func clipTrianglesByBoundedPlane(verts []float32, tris []uint32, origin, normal 
 	}
 	polyArea := math.Abs(shoelace) / 2
 	aabbArea := (uMax - uMin) * (vMax - vMin)
-	const relEps = 1e-6
+	const relEps = 1e-12
 	if polyArea < aabbArea*(1-relEps) {
 		return nil, nil, false
 	}
