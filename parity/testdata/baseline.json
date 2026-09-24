@@ -1,16 +1,16 @@
 {
   "duplex_a": {
     "total": 218,
-    "extrude": 146,
+    "extrude": 150,
     "brep": 65,
-    "obb": 4,
+    "obb": 0,
     "empty": 3
   },
   "fzk_haus": {
     "total": 85,
-    "extrude": 16,
+    "extrude": 18,
     "brep": 64,
-    "obb": 2,
+    "obb": 0,
     "empty": 3
   },
   "ifcopenhouse": {
