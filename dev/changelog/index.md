@@ -10,9 +10,25 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## v0.12.1 — 2026-09-24
 
+### Fixed
+
+- A boolean clip whose second operand is an `IfcPolygonalBoundedHalfSpace` or `IfcBoxedHalfSpace` is now applied instead of the element degrading to a bounding box. The gate tested `IsA("IfcHalfSpaceSolid")`, and `step.Instance.IsA` matches the exact type keyword only — so the subtypes never passed, and the bounded-clipping path below the gate was unreachable. That is Revit's standard mitred wall/slab/beam join. On the public corpus the box-fallback rate goes from 1.9% to **0.0%** on `duplex_a` and from 2.4% to **0.0%** on `fzk_haus`, and `UnhandledItemTypes` no longer reports `IFCPOLYGONALBOUNDEDHALFSPACE`. The freed elements land as extrusions, since a clipped mesh keeps the source of its first operand.
+
+The bounded clip only applies when the boundary polygon is its own axis-aligned bounding box — a rectangle, which is what Revit exports. For any other shape, clipping against the AABB would remove more material than the real boolean does and under-report the element, so the clip declines and the element keeps the conservative box. The rectangle test compares the polygon's shoelace area with its AABB's area at a relative tolerance of 1e-12, computed relative to the first vertex: on a site-placed millimetre model the raw sum cancels coordinates near 1e6 and would misjudge the area.
+
 ## v0.12.0 — 2026-09-24
 
+### Added
+
+- `IfcFaceBasedSurfaceModel` is tessellated. It had no dispatch case, so every element built from one degraded to a bounding box; it was the largest entry in the measured gap list. `duplex_a` goes from a **32.1%** box-fallback rate to **1.9%** — 65 elements move from box to brep, and nothing else moves. The surface model shares its traversal with `IfcShellBasedSurfaceModel`: both are a set of face sets that `brepMesh` already tessellates.
+
 ## v0.11.1 — 2026-09-24
+
+### Fixed
+
+- A self-referencing or cyclic `IfcLocalPlacement.PlacementRelTo` chain no longer kills the process. Placement composition recursed with no cycle check and no depth bound, so `#12=IFCLOCALPLACEMENT(,#12);` overflowed the stack — a `fatal error`, not a panic, so `recover()` could not catch it. It was reachable from `goifc.Assemble` on arbitrary input, and every release through v0.11.0 is affected: upgrade if you import files you did not author.
+
+The chain walk now detects cycles and is capped at 1024 levels. Both are needed: IFC bounds placement depth nowhere, so a cap alone would have to be tight enough to truncate legal chains, and detection alone would still let a crafted acyclic chain of a million placements exhaust the stack. A cyclic or over-deep chain resolves to the identity for the part it cannot compose — the same answer a missing placement gives. Real buildings nest two to four deep, and at that depth the walk allocates nothing.
 
 ## v0.11.0 — 2026-09-23
 
