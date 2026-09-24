@@ -1,9 +1,12 @@
 package geometry
 
 import (
+	"math"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
 )
 
@@ -133,3 +136,81 @@ DATA;
 ENDSEC;
 END-ISO-10303-21;
 `
+
+// clip.go gated its second operand on IsA("IfcHalfSpaceSolid"), and IsA is
+// exact-keyword only — there is no EXPRESS schema behind it. So the SUBTYPE
+// IfcPolygonalBoundedHalfSpace never passed, and the bounded-clipping path
+// below it was dead code on all 11 corpus instances.
+// https://github.com/blox-eng/goifc/issues/52
+func TestBoundedHalfSpace_ClipIsReachedThroughDispatch(t *testing.T) {
+	f, err := step.ParseFile("testdata/synthetic/clipped_by_bounded_halfspace.ifc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := model.Extract(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := s.Elements[0]
+	if e.Source == SourceOBB {
+		t.Fatalf("source = %q — the clip declined and the element fell back to a box", e.Source)
+	}
+	// The half space's material (removed) side is above z=1.5, so the bottom
+	// half survives. A max-z of 3 means no clip happened; a MIN-z of 1.5 means
+	// the AgreementFlag sign is inverted and the wrong half was removed —
+	// which is exactly the risk the design doc flags, so fail loudly.
+	if math.Abs(e.BBoxMax[2]-1.5) > 1e-6 {
+		t.Errorf("world max-z = %v, want 1.5 (min-z = %v)", e.BBoxMax[2], e.BBoxMin[2])
+	}
+	if math.Abs(e.BBoxMin[2]) > 1e-6 {
+		t.Errorf("world min-z = %v, want 0", e.BBoxMin[2])
+	}
+}
+
+// Once the gate opens, malformed half spaces reach halfSpacePlane and
+// clipTrianglesByBoundedPlane for the first time. Each must decline into the
+// safe OBB fallback rather than produce a wrong plane or index past a short
+// ring.
+func TestBoundedHalfSpace_MalformedDeclinesToBox(t *testing.T) {
+	src, err := os.ReadFile("testdata/synthetic/clipped_by_bounded_halfspace.ifc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, old, new string }{
+		{"base surface is not a plane", "#54=IFCPLANE(#53);", "#54=IFCCARTESIANPOINT((0.,0.,1.5));"},
+		{"boundary has two points", "#61=IFCPOLYLINE((#57,#58,#59,#60,#57));", "#61=IFCPOLYLINE((#57,#58));"},
+		{"position is absent", "#62=IFCPOLYGONALBOUNDEDHALFSPACE(#54,.F.,#56,#61);", "#62=IFCPOLYGONALBOUNDEDHALFSPACE(#54,.F.,$,#61);"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mutated := strings.Replace(string(src), tc.old, tc.new, 1)
+			if mutated == string(src) {
+				t.Fatalf("fixture line %q not found — the fixture changed and this test did not", tc.old)
+			}
+			f, err := step.Parse(strings.NewReader(mutated))
+			if err != nil {
+				t.Fatal(err)
+			}
+			r, err := model.Extract(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := Build(f, r)
+			if err != nil {
+				t.Fatalf("Build errored on a malformed half space: %v — it must degrade, not fail", err)
+			}
+			if len(s.Elements) != 1 {
+				t.Fatalf("elements = %d, want 1", len(s.Elements))
+			}
+			// The box is the conservative superset: larger than truth is safe,
+			// smaller is the one failure a quantities consumer cannot defend
+			// against.
+			if s.Elements[0].BBoxMax[2] < 3-1e-6 {
+				t.Errorf("world max-z = %v, want the unclipped 3 — a declined clip must not shrink the bound", s.Elements[0].BBoxMax[2])
+			}
+		})
+	}
+}

@@ -27,6 +27,21 @@ const (
 // (IfcPolygonalBoundedHalfSpace, Revit's usual wall/slab/beam miter-join cut).
 // Returns ok=false for a non-DIFFERENCE operator or a non-planar base surface,
 // letting the caller fall back to the (safe, conservative-superset) OBB path.
+// isHalfSpaceSolid reports whether inst is an IfcHalfSpaceSolid or one of its
+// two subtypes.
+//
+// step.Instance.IsA matches the exact type keyword — there is no EXPRESS
+// schema behind this library, so a supertype test must enumerate its subtypes
+// by hand (see docs/limitations.md). Gating on the supertype keyword alone
+// silently excluded every IfcPolygonalBoundedHalfSpace in the corpus, which is
+// Revit's standard mitred wall/slab/beam join, and left the bounded-clipping
+// path below as dead code.
+func isHalfSpaceSolid(inst *step.Instance) bool {
+	return inst.IsA("IfcHalfSpaceSolid") ||
+		inst.IsA("IfcPolygonalBoundedHalfSpace") ||
+		inst.IsA("IfcBoxedHalfSpace")
+}
+
 func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]float32, []uint32, GeomSource, bool) {
 	if depth >= maxMapDepth {
 		return nil, nil, SourceOBB, false
@@ -43,7 +58,7 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]
 	if !ok {
 		return nil, nil, SourceOBB, false
 	}
-	if !second.IsA("IfcHalfSpaceSolid") {
+	if !isHalfSpaceSolid(second) {
 		return nil, nil, SourceOBB, false
 	}
 	origin, normal, agreeInside, ok := halfSpacePlane(second)
