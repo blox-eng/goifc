@@ -19,14 +19,6 @@ const (
 	attrPlanePosition = 0 // IfcPlane.Position
 )
 
-// clipMeshByDifference tessellates DIFFERENCE(A, B) where A is any first
-// operand (recursed through tessellateItemDepth, so it transparently handles
-// an extrude/brep/mapped/nested-boolean first operand) and B is an
-// IfcHalfSpaceSolid — plain (the common "cut by an infinite plane" pattern
-// used for roof-line/gable-end clips) or bounded by a 2D polygon footprint
-// (IfcPolygonalBoundedHalfSpace, Revit's usual wall/slab/beam miter-join cut).
-// Returns ok=false for a non-DIFFERENCE operator or a non-planar base surface,
-// letting the caller fall back to the (safe, conservative-superset) OBB path.
 // isHalfSpaceSolid reports whether inst is an IfcHalfSpaceSolid or one of its
 // two subtypes.
 //
@@ -42,6 +34,14 @@ func isHalfSpaceSolid(inst *step.Instance) bool {
 		inst.IsA("IfcBoxedHalfSpace")
 }
 
+// clipMeshByDifference tessellates DIFFERENCE(A, B) where A is any first
+// operand (recursed through tessellateItemDepth, so it transparently handles
+// an extrude/brep/mapped/nested-boolean first operand) and B is an
+// IfcHalfSpaceSolid — plain (the common "cut by an infinite plane" pattern
+// used for roof-line/gable-end clips) or bounded by a 2D polygon footprint
+// (IfcPolygonalBoundedHalfSpace, Revit's usual wall/slab/beam miter-join cut).
+// Returns ok=false for a non-DIFFERENCE operator or a non-planar base surface,
+// letting the caller fall back to the (safe, conservative-superset) OBB path.
 func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]float32, []uint32, GeomSource, bool) {
 	if depth >= maxMapDepth {
 		return nil, nil, SourceOBB, false
