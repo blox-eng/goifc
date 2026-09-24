@@ -203,7 +203,7 @@ func countUnhandledBoolean(item *step.Instance, depth int, out map[string]int) {
 	// consumes, via halfSpacePlane rather than tessellateItemDepth, so it is
 	// not a gap and must not be counted. Anything else makes
 	// clipMeshByDifference decline, and that operand IS the gap.
-	if !second.IsA("IfcHalfSpaceSolid") {
+	if !isHalfSpaceSolid(second) {
 		countUnhandledItem(second, depth+1, out)
 	}
 }

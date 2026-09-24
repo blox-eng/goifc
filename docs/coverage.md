@@ -42,8 +42,8 @@ the page cannot quietly disagree with the gate.
 | Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | Collapsed | AABB ratio p50 | p90 | max |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `ifcopenhouse` | 40 | 34 | 0 | 0 | 6 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0000 |
-| `duplex_a` | 218 | 146 | 65 | 4 | 3 | 1.9% | 0 | 1.0000 | 1.0000 | 1.1156 |
-| `fzk_haus` | 85 | 16 | 64 | 2 | 3 | 2.4% | 0 | 1.0000 | 1.0000 | 1.0334 |
+| `duplex_a` | 218 | 150 | 65 | 0 | 3 | 0.0% | 0 | 1.0000 | 1.0000 | 1.1156 |
+| `fzk_haus` | 85 | 18 | 64 | 0 | 3 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0334 |
 
 ## What falls back, and how often
 
@@ -86,7 +86,7 @@ at least one unhandled item type below.
 
 | Item type | Occurrences |
 |---|---|
-| `IFCPOLYGONALBOUNDEDHALFSPACE` | 11 |
+| _none_ | 0 |
 
 ## Known Gate 1 violations
 

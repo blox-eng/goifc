@@ -74,7 +74,7 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		// SHRINK the first operand, so skipping the half-space subtree entirely
 		// and keeping the (uncut) first operand's own extent is a safe,
 		// conservative superset of the true clipped extent.
-		if inst.IsA("IfcHalfSpaceSolid") || inst.IsA("IfcPolygonalBoundedHalfSpace") || inst.IsA("IfcBoxedHalfSpace") {
+		if isHalfSpaceSolid(inst) {
 			return
 		}
 		if inst.IsA("IfcCartesianPoint") {
