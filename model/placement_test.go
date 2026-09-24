@@ -215,3 +215,31 @@ func TestLocalPlacement_ExactlyAtCapComposesInFull(t *testing.T) {
 		t.Fatalf("x = %v, want %v — a chain of exactly maxPlacementDepth must compose in full; a smaller x means the cap narrowed by one", x, float64(n))
 	}
 }
+
+// Membership has two implementations: a scan of the inline array while the
+// chain is short, and a map once it outgrows placementSeenInline. Every cycle
+// test above is shallow, so all of them exercise only the scan; the deep tests
+// cross the threshold but are acyclic, so they only ever get "not present"
+// from the map. This is the one case that asks the MAP whether an ID is
+// present and needs the answer yes — a hand-off bug that dropped the already
+// visited IDs when building the map would make this chain run to the cap
+// instead of stopping, and nothing else here would notice.
+func TestLocalPlacement_CycleBeyondTheInlineSetTerminates(t *testing.T) {
+	const n = placementSeenInline * 4
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	// The head of the chain points back at its own root, so the walk reaches
+	// #10 a second time only after the set has spilled into the map.
+	b.WriteString("#10=IFCLOCALPLACEMENT(#69,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if x != float64(n) {
+		t.Fatalf("x = %v, want %v — the cycle must be caught at the repeated root, after exactly the %d distinct placements", x, float64(n), n)
+	}
+}

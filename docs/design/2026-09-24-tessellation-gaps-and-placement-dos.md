@@ -191,17 +191,27 @@ go to get unblocked.
 const maxPlacementDepth = 1024
 ```
 
-The helper takes `seen []int` of express IDs and returns `Identity()` on a
-repeated ID or on exceeding the cap. Returning identity rather than a partial
-compose keeps a malformed placement indistinguishable from a missing one,
-which is what `placement.go:22` already does for a non-`IfcLocalPlacement`
-value — the degenerate path stays uniform.
+The helper carries the set of express IDs already on the chain and returns
+`Identity()` on a repeated ID or on exceeding the cap. Returning identity
+rather than a partial compose keeps a malformed placement indistinguishable
+from a missing one, which is what `placement.go:22` already does for a
+non-`IfcLocalPlacement` value — the degenerate path stays uniform.
+
+Note what that identity is and is not. It is the value the ANCESTOR call
+returns at the point the cycle closes; the callers below it keep composing
+their own relative placements on the way back out. So the transform a cyclic
+chain finally yields is generally NOT the identity — a self-cycle on a
+placement that translates +1 yields a +1 translation, not identity. The
+contract is that the walk terminates with a bounded, well-defined transform,
+not that the answer is identity.
 
 **Tests**, written first, each failing before the fix:
 
 - A direct self-cycle, as a synthetic fixture under `model/testdata/synthetic/`,
-  asserting `Identity()` rather than a crash. The unit test states the bug; a
-  fuzz seed alone only asserts "did not crash".
+  asserting the composed transform rather than a crash — for a placement that
+  translates +1, that is a +1 translation, since only the ancestor call returns
+  identity. The unit test states the bug; a fuzz seed alone only asserts "did
+  not crash".
 - A two-node mutual cycle (`A → B → A`), which a parent-only check would miss.
 - A legal chain just under the cap, asserting the transform still composes —
   pinning that the cap does not truncate real work. Generated in the test
@@ -297,8 +307,13 @@ part most likely to be cut short under time pressure.
    violations" is an assertion rather than a comparison.
 2. **Apply the fix, re-run `make parity`.** Gate 2 is *expected to fail* here:
    it fails in both directions by design, and a closed gap moves the rate. A
-   Gate 2 **pass** at this step means the change did nothing and the dispatch
-   case is not being reached.
+   Gate 2 **pass** at this step means the rate did not move — which is a
+   prompt to investigate, not a diagnosis. The dispatch case may never be
+   reached, or it may be reached and then decline inside its mesh helper (a
+   partial tessellation, a boundary the gate refuses), which is a legitimate
+   outcome that leaves the rate alone. What establishes that the new path
+   RUNS is the synthetic geometry test asserting a non-OBB source on a fixture
+   built for it; Gate 2 measures what that path is worth across the corpus.
 3. **Diff Gate 1.** Any `GlobalID` violating that was not violating before is
    root-caused. Both `#53` stair entries must still be present and still
    violating; if the change incidentally fixes them, the stale-entry check

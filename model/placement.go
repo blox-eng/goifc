@@ -27,38 +27,77 @@ func LocalPlacement(inst *step.Instance) Mat4 {
 //
 // IFC bounds this depth nowhere, so the value is not a schema limit: it is far
 // above any real building's spatial nesting and far below what a stack
-// survives. It also bounds the seen-slice scan above, which is what keeps that
-// scan cheaper than a map allocation per element.
+// survives.
 const maxPlacementDepth = 1024
 
+// placementSeenInline is the chain depth that fits in placementSeen's inline
+// array. Real placement chains are 2-4 deep, so every element of every
+// well-formed file stays inside it and allocates nothing at all; only a chain
+// deep enough for a linear scan's quadratic term to matter reaches for the
+// map. The distinction is worth drawing because a file can point every one of
+// its elements at a single shared deep chain, which multiplies whatever that
+// chain costs by the element count.
+const placementSeenInline = 16
+
+// placementSeen is the set of express IDs already visited on the current
+// chain. Membership is a scan of the inline array until the chain outgrows it,
+// and O(1) in the map after that.
+type placementSeen struct {
+	n      int
+	inline [placementSeenInline]int
+	set    map[int]struct{}
+}
+
+func (s *placementSeen) has(id int) bool {
+	if s.set != nil {
+		_, ok := s.set[id]
+		return ok
+	}
+	for _, v := range s.inline[:s.n] {
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *placementSeen) add(id int) {
+	if s.set == nil {
+		if s.n < placementSeenInline {
+			s.inline[s.n] = id
+			s.n++
+			return
+		}
+		s.set = make(map[int]struct{}, 2*placementSeenInline)
+		for _, v := range s.inline {
+			s.set[v] = struct{}{}
+		}
+	}
+	s.set[id] = struct{}{}
+	s.n++
+}
+
 func localPlacementMatrix(place *step.Instance) Mat4 {
-	return localPlacementChain(place, nil)
+	var seen placementSeen
+	return localPlacementChain(place, &seen)
 }
 
 // localPlacementChain composes the PlacementRelTo chain, carrying the express
 // IDs already visited so a cycle terminates instead of overflowing the stack.
-//
-// seen is a slice, not a map: maxPlacementDepth bounds it, so the linear scan
-// is at worst a few hundred integer comparisons on a pathological file and a
-// handful on the 2-4 deep chains real buildings produce — and a nil slice
-// allocates nothing for the well-formed case, which is every element of every
-// import.
-func localPlacementChain(place *step.Instance, seen []int) Mat4 {
+func localPlacementChain(place *step.Instance, seen *placementSeen) Mat4 {
 	if place == nil || !place.IsA("IfcLocalPlacement") {
 		return Identity()
 	}
-	if len(seen) >= maxPlacementDepth {
+	if seen.n >= maxPlacementDepth {
 		return Identity()
 	}
-	for _, id := range seen {
-		if id == place.ID() {
-			// A cycle. Return identity rather than a partial compose, so a
-			// malformed placement is indistinguishable from a missing one —
-			// the same answer the !IsA guard above gives.
-			return Identity()
-		}
+	if seen.has(place.ID()) {
+		// A cycle. Return identity rather than a partial compose, so a
+		// malformed placement is indistinguishable from a missing one —
+		// the same answer the !IsA guard above gives.
+		return Identity()
 	}
-	seen = append(seen, place.ID())
+	seen.add(place.ID())
 	// world = parent(PlacementRelTo) * relative(RelativePlacement)
 	parent := Identity()
 	if p, ok := place.Ref(attrPlacementRelTo); ok {
