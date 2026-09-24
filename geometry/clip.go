@@ -99,12 +99,20 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]
 // intersection of kept fragments, would be silently wrong here: it would also
 // remove material outside the footprint that a real clip leaves untouched).
 //
-// This computes it correctly, approximating the polygon footprint by its own
-// axis-aligned bounding box in the polygon's local (u,v) plane — EXACT when
-// the boundary is itself a rectangle (the overwhelmingly common Revit case:
-// wall/slab/beam end-miter cuts export as a rectangular "cookie cutter"), and
-// a safe superset (keeps slightly more than truth) for any other convex or
-// concave boundary, since footprint ⊆ its own AABB.
+// This approximates the polygon footprint by its own axis-aligned bounding
+// box in the polygon's local (u,v) plane. That approximation is EXACT when
+// the boundary IS its own AABB — a rectangle, the overwhelmingly common
+// Revit case (wall/slab/beam end-miter cuts export as a rectangular "cookie
+// cutter"). For any other shape it is a safe SUBSET of the true footprint
+// (footprint ⊆ its own AABB), which means it would UNDER-report: the kept
+// set is (off-material) ∪ (material ∩ outside-footprint), and since
+// outside(AABB) ⊆ outside(footprint), approximating the footprint by its AABB
+// removes MORE material than the real boolean does, tightening the bound
+// below truth. That is the one failure a quantities consumer cannot defend
+// against, so anything that is not its own AABB is declined here rather than
+// approximated, and the caller falls back to the conservative OBB. A per-edge
+// half-plane clip against the polygon's actual edges (rather than its AABB)
+// would handle the general convex case exactly, if this is ever revisited.
 func clipTrianglesByBoundedPlane(verts []float32, tris []uint32, origin, normal v3, agreeInside bool, hs *step.Instance) ([]float32, []uint32, bool) {
 	polyPos, ok := hs.Ref(attrHSPosition)
 	if !ok {
@@ -123,6 +131,27 @@ func clipTrianglesByBoundedPlane(verts []float32, tris []uint32, origin, normal 
 	for _, p := range poly[1:] {
 		uMin, uMax = math.Min(uMin, p[0]), math.Max(uMax, p[0])
 		vMin, vMax = math.Min(vMin, p[1]), math.Max(vMax, p[1])
+	}
+	// Decline any boundary that is not its own AABB: compare the polygon's
+	// true area (shoelace) against its AABB's area. The shoelace formula is
+	// closure-agnostic — wraps the index modulo len(poly), so it works
+	// whether or not the boundary repeats its first point as its last (a
+	// duplicated closing point just contributes a zero-area term). Epsilon is
+	// relative to the AABB area, not absolute, since these are raw file units
+	// that may be millimetres (areas in the millions) or metres. A vertex
+	// count check would reject a rectangle carrying one redundant collinear
+	// vertex (e.g. corpus instance #4266 in duplex_a) and lose accuracy that
+	// this test correctly keeps.
+	var shoelace float64
+	for i := range poly {
+		j := (i + 1) % len(poly)
+		shoelace += poly[i][0]*poly[j][1] - poly[j][0]*poly[i][1]
+	}
+	polyArea := math.Abs(shoelace) / 2
+	aabbArea := (uMax - uMin) * (vMax - vMin)
+	const relEps = 1e-6
+	if polyArea < aabbArea*(1-relEps) {
+		return nil, nil, false
 	}
 	// materialFrag = the (candidate-for-removal) piece on the half-space's
 	// material side; the rest of the mesh is unconditionally kept. Per
@@ -168,10 +197,15 @@ func halfSpacePlane(hs *step.Instance) (origin, normal v3, agreeInside bool, ok 
 		return v3{}, v3{}, false, false
 	}
 	origin, _, _, normal = planeFrame(pos)
-	agreeInside = true
-	if av, has := hs.Get(attrHSAgreementFlag); has && av.Kind == step.KindBool {
-		agreeInside = av.B
+	// AgreementFlag is mandatory in the schema. Guessing which side to keep
+	// when it is absent or malformed gives a 50% chance of removing the
+	// WRONG half — and one of those two outcomes under-reports, which this
+	// package cannot risk. Decline instead of defaulting.
+	av, has := hs.Get(attrHSAgreementFlag)
+	if !has || av.Kind != step.KindBool {
+		return v3{}, v3{}, false, false
 	}
+	agreeInside = av.B
 	return origin, normal, agreeInside, true
 }
 

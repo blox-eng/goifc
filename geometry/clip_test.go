@@ -214,3 +214,57 @@ func TestBoundedHalfSpace_MalformedDeclinesToBox(t *testing.T) {
 		})
 	}
 }
+
+// TestBoundedHalfSpace_NonRectangularBoundaryDeclines pins the fix for the
+// inverted safety argument in clipTrianglesByBoundedPlane's old doc comment.
+// The approximation replaces the polygon footprint with its own AABB in the
+// polygon's local (u,v) frame. The kept set is
+// (off-material) ∪ (material ∩ outside-footprint); since footprint ⊆ its
+// AABB, outside(AABB) ⊆ outside(footprint), so approximating the footprint
+// by its AABB removes MORE material than the true boolean does — the bound
+// comes out TIGHTER than truth, i.e. it under-reports. That is the one
+// failure this package cannot allow, so a boundary that is not its own AABB
+// (a triangle here) must be declined and the element must fall back to the
+// safe OBB, not silently clipped as a genuine tessellation.
+//
+// The fixture is a 2x2x3 box DIFFERENCEd with a triangular boundary
+// (-1,-1),(3,-1),(-1,3) whose hypotenuse u+v=2 leaves the box's (2,2) corner
+// OUTSIDE the triangle (u+v=4 > 2), so the true clip never touches that
+// corner and the unclipped max-z (3) must survive.
+func TestBoundedHalfSpace_NonRectangularBoundaryDeclines(t *testing.T) {
+	f, r := loadFileAndModel(t, "clipped_by_triangular_halfspace.ifc")
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Elements) != 1 {
+		t.Fatalf("elements = %d, want 1", len(s.Elements))
+	}
+	e := s.Elements[0]
+	if e.Source != SourceOBB {
+		t.Fatalf("Source = %q, want %q — a triangular boundary must decline to the safe fallback, not tessellate as a genuine clip", e.Source, SourceOBB)
+	}
+	if e.BBoxMax[2] < 3-1e-6 {
+		t.Errorf("world max-z = %v, want the unclipped 3 — declining must not under-report the corner the triangle misses", e.BBoxMax[2])
+	}
+}
+
+// TestBoundedHalfSpace_RectangularBoundaryStillClips is the positive
+// companion to the decline test above: it pins that the area-vs-AABB gate
+// only rejects boundaries that are NOT their own AABB, not every bounded
+// half space — otherwise "always decline" would trivially satisfy the
+// non-rectangular test above while silently undoing the whole PR.
+func TestBoundedHalfSpace_RectangularBoundaryStillClips(t *testing.T) {
+	f, r := loadFileAndModel(t, "clipped_by_bounded_halfspace.ifc")
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := s.Elements[0]
+	if e.Source == SourceOBB {
+		t.Fatal("rectangular boundary declined to OBB, want it to clip")
+	}
+	if math.Abs(e.BBoxMax[2]-1.5) > 1e-6 {
+		t.Errorf("world max-z = %v, want 1.5 — a rectangular boundary must still clip", e.BBoxMax[2])
+	}
+}
