@@ -191,3 +191,27 @@ func TestLocalPlacement_OverDeepChainIsBounded(t *testing.T) {
 		t.Fatalf("x = %v, want no more than %d — the cap did not bound the walk", x, maxPlacementDepth)
 	}
 }
+
+// The exact boundary. A chain of exactly maxPlacementDepth composes in full:
+// the guard is checked on entry before the append, so call number k enters
+// with len(seen) == k-1, and the 1024th placement enters with len(seen) ==
+// 1023 — just under. Pinning the exact value is what catches a cap that
+// silently narrows by one entity, which the n-1 case above cannot see: a
+// chain one short of the cap fits under a cap of 1023 just as well as 1024.
+func TestLocalPlacement_ExactlyAtCapComposesInFull(t *testing.T) {
+	const n = maxPlacementDepth
+	var b strings.Builder
+	b.WriteString("ISO-10303-21;\nHEADER;\nFILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n")
+	b.WriteString("#1=IFCCARTESIANPOINT((1.,0.,0.));\n#2=IFCAXIS2PLACEMENT3D(#1,$,$);\n")
+	b.WriteString("#10=IFCLOCALPLACEMENT($,#2);\n")
+	for i := 1; i < n; i++ {
+		fmt.Fprintf(&b, "#%d=IFCLOCALPLACEMENT(#%d,#2);\n", 10+i, 9+i)
+	}
+	fmt.Fprintf(&b, "#900000=IFCWALL('g',$,'W',$,$,#%d,$,$,$);\n", 10+n-1)
+	b.WriteString("ENDSEC;\nEND-ISO-10303-21;\n")
+
+	x, _, _ := LocalPlacement(parseString(t, b.String()).ByType("IfcWall")[0]).Translation()
+	if math.Abs(x-float64(n)) > 1e-6 {
+		t.Fatalf("x = %v, want %v — a chain of exactly maxPlacementDepth must compose in full; a smaller x means the cap narrowed by one", x, float64(n))
+	}
+}
