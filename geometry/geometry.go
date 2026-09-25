@@ -131,6 +131,13 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int) ([]f
 		if v, t, ok := surfaceModelMesh(item, attrFbsmFaces); ok {
 			return scaleVerts(v, unitScale), t, SourceBrep
 		}
+	case item.IsA("IfcTriangulatedFaceSet"), item.IsA("IfcTriangulatedIrregularNetwork"), item.IsA("IfcPolygonalFaceSet"):
+		// IFC4's native tessellated body. Its points live in an
+		// IfcCartesianPointList3D, which the OBB fallback below also reads, so a
+		// declined set still gets a box.
+		if v, t, ok := faceSetMesh(item); ok {
+			return scaleVerts(v, unitScale), t, SourceBrep
+		}
 	case item.IsA("IfcBooleanClippingResult"), item.IsA("IfcBooleanResult"):
 		if v, t, s, ok := clipMeshByDifference(item, unitScale, depth); ok {
 			return v, t, s

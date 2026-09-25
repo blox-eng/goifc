@@ -19,6 +19,31 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- IFC4 tessellated bodies are tessellated: `IfcTriangulatedFaceSet`, its IFC4X3
+  subtype `IfcTriangulatedIrregularNetwork`, and `IfcPolygonalFaceSet`. This is
+  the body SketchUp, BlenderBIM and Revit's IFC4 Reference View export. Before,
+  these elements did not even fall back to a box: the fallback only read
+  `IfcCartesianPoint`, and a face set keeps its points in an
+  `IfcCartesianPointList3D`, so the element came back with no triangles and a
+  zero bounding box — a total under-report. On a SketchUp 2024 IFC4X3 export,
+  every element with geometry went from vanished to meshed (0 of 10 to 10 of 10).
+  No parity corpus model uses these entities, so the published coverage numbers
+  do not move.
+
+  `PnIndex` remapping is honoured, and only the points triangles reference reach
+  the mesh, so an unused point in a shared list cannot inflate the bounds. The
+  original IFC4 release's `NormalIndex`, which sits where `PnIndex` now does, is
+  recognised and ignored rather than boxing the set. An index out of range, a
+  referenced point without three coordinates, or a face that is not a polygon
+  declines the whole set rather than meshing it in part, since a partial mesh
+  would under-report; a declined set now falls back to a box over its point list
+  instead of vanishing. A polygonal face keeps every loop vertex even where the
+  ear-clipper gives up on a degenerate loop, so its bounds stay whole. Holes in
+  `IfcIndexedPolygonalFaceWithVoids` are filled, which over-reports: the same
+  trade-off the brep path already makes for inner face bounds.
+
 ## v0.12.1 — 2026-09-24
 
 ### Fixed
