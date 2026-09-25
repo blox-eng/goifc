@@ -85,6 +85,19 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 				pts = append(pts, v3{c[0], c[1], 0})
 			}
 		}
+		// Tessellated face sets keep their points in a list, not as
+		// IfcCartesianPoint entities. Without this a declined face set's element
+		// found no points, got no box, and vanished. Every well-formed entry
+		// counts: a box over them all is a superset of whatever the set meshes.
+		if inst.IsA("IfcCartesianPointList3D") {
+			if listV, ok := inst.Get(attrPointListCoords); ok && listV.Kind == step.KindList {
+				for _, pv := range listV.List {
+					if c, ok := numbersOf(pv); ok && len(c) == 3 {
+						pts = append(pts, v3{c[0], c[1], c[2]})
+					}
+				}
+			}
+		}
 		// IfcExtrudedAreaSolid stores its Z extent as a scalar Depth, not a
 		// CartesianPoint — a plain point-walk never sees the extruded top ring.
 		// This bites when the solid is buried under an unsupported boolean op

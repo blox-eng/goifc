@@ -19,6 +19,9 @@ var handledItemTypes = []string{
 	"IfcOpenShell",
 	"IfcShellBasedSurfaceModel",
 	"IfcFaceBasedSurfaceModel",
+	"IfcTriangulatedFaceSet",
+	"IfcTriangulatedIrregularNetwork",
+	"IfcPolygonalFaceSet",
 	"IfcBooleanClippingResult",
 	"IfcBooleanResult",
 }
