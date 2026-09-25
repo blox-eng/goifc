@@ -102,6 +102,34 @@ func TestTriangulatedIrregularNetwork_Tessellates(t *testing.T) {
 	wantBox(t, e, [3]float64{10, 20, 5}, [3]float64{11, 21, 6})
 }
 
+// A network's Flags mark each triangle: -2 is an invisible void, -1 an
+// invisible hole, 0-7 only record breaklines. The spec says negative faces are
+// not displayed, so they must not reach the mesh — here they reach out to a
+// point at (5, 5) that would otherwise stretch the bounds.
+func TestTriangulatedIrregularNetwork_SkipsInvisibleTriangles(t *testing.T) {
+	e := buildFaceSet(t,
+		"#60=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(1.,0.,0.),(1.,1.,0.),(0.,1.,0.),(5.,5.,0.)));\n"+
+			"#61=IFCTRIANGULATEDIRREGULARNETWORK(#60,$,.F.,((1,2,3),(1,3,4),(3,5,4),(2,5,3)),$,(0,3,-2,-1));\n")
+	if e.Source != SourceBrep {
+		t.Fatalf("source = %q, want brep", e.Source)
+	}
+	if len(e.Tris) != 6 {
+		t.Errorf("got %d triangle indices, want 6 (the two visible triangles)", len(e.Tris))
+	}
+	wantBox(t, e, [3]float64{10, 20, 5}, [3]float64{11, 21, 5})
+}
+
+// A void is excluded "without falling back on any other geometry", so a network
+// whose every triangle is invisible yields nothing — not the box the fallback
+// would build over its points.
+func TestTriangulatedIrregularNetwork_AllInvisibleIsEmpty(t *testing.T) {
+	e := buildFaceSet(t, unitCubePoints+
+		"#61=IFCTRIANGULATEDIRREGULARNETWORK(#60,$,.F.,((1,2,3),(1,3,4)),$,(-2,-1));\n")
+	if len(e.Tris) != 0 {
+		t.Errorf("got %d triangle indices, want none: invisible triangles must not fall back to a box", len(e.Tris))
+	}
+}
+
 // The original IFC4 release (2013) had NormalIndex, a list of index lists, in
 // the slot ADD2 later gave to PnIndex. Normals do not affect the mesh, so that
 // shape is ignored rather than read as a malformed PnIndex that would box every
@@ -189,6 +217,8 @@ func TestFaceSet_MalformedDeclines(t *testing.T) {
 		{"no triangles", unitCubePoints + "#61=IFCTRIANGULATEDFACESET(#60,$,.T.,(),$);\n"},
 		{"PnIndex past the point list", unitCubePoints + "#61=IFCTRIANGULATEDFACESET(#60,$,.T.,((1,2,3)),(1,2,9));\n"},
 		{"corner past the end of PnIndex", unitCubePoints + "#61=IFCTRIANGULATEDFACESET(#60,$,.T.,((1,2,5)),(1,2,3,4));\n"},
+		{"network Flags shorter than the triangle list", unitCubePoints + "#61=IFCTRIANGULATEDIRREGULARNETWORK(#60,$,.F.,((1,2,3),(1,3,4)),$,(0));\n"},
+		{"network Flags of reals", unitCubePoints + "#61=IFCTRIANGULATEDIRREGULARNETWORK(#60,$,.F.,((1,2,3),(1,3,4)),$,(0.,0.));\n"},
 		{"PnIndex of reals", unitCubePoints + "#61=IFCTRIANGULATEDFACESET(#60,$,.T.,((1,2,3)),(1.,2.,3.));\n"},
 		{"referenced point with two coordinates", "#60=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(1.,0.),(0.,1.,0.)));\n#61=IFCTRIANGULATEDFACESET(#60,$,.T.,((1,2,3)),$);\n"},
 		{"polygon face index past the point list", unitCubePoints + "#50=IFCINDEXEDPOLYGONALFACE((1,2,3));\n#51=IFCINDEXEDPOLYGONALFACE((1,2,9));\n#61=IFCPOLYGONALFACESET(#60,.F.,(#50,#51),$);\n"},

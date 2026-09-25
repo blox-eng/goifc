@@ -7,6 +7,7 @@ const (
 	attrFaceSetCoords    = 0 // IfcTessellatedFaceSet.Coordinates
 	attrTfsCoordIndex    = 3 // IfcTriangulatedFaceSet.CoordIndex
 	attrTfsPnIndex       = 4 // IfcTriangulatedFaceSet.PnIndex
+	attrTinFlags         = 5 // IfcTriangulatedIrregularNetwork.Flags
 	attrPfsFaces         = 2 // IfcPolygonalFaceSet.Faces
 	attrPfsPnIndex       = 3 // IfcPolygonalFaceSet.PnIndex
 	attrIndexedFaceCoord = 0 // IfcIndexedPolygonalFace.CoordIndex
@@ -28,6 +29,11 @@ func isIndexedPolygonalFace(inst *step.Instance) bool {
 // or a face that is not a polygon declines the whole set, because a partial
 // mesh is smaller than the element and would under-report its bounds instead of
 // falling back to the box.
+//
+// The one exception to "declined sets are boxed" is a triangulated irregular
+// network whose every triangle is flagged invisible: it returns ok with no
+// triangles, because the spec excludes a void "without falling back on any
+// other geometry".
 func faceSetMesh(item *step.Instance) (verts []float32, tris []uint32, ok bool) {
 	coords, ok := item.Ref(attrFaceSetCoords)
 	if !ok {
@@ -58,17 +64,32 @@ func triangulatedMesh(item *step.Instance, pts []step.Value) ([]float32, []uint3
 	if !has || triV.Kind != step.KindList || len(triV.List) == 0 {
 		return nil, nil, false
 	}
+	// A network flags each triangle: -2 is an invisible void, -1 an invisible
+	// hole, 0-7 record breaklines only. Negative triangles are not part of the
+	// surface, so they are validated like the rest but kept out of the mesh.
+	var flags []int64
+	if item.IsA("IfcTriangulatedIrregularNetwork") {
+		flagsV, _ := item.Get(attrTinFlags)
+		if flags, ok = intsOf(flagsV); !ok || len(flags) != len(triV.List) {
+			return nil, nil, false
+		}
+	}
 	var m faceSetBuilder
-	for _, tv := range triV.List {
+	for i, tv := range triV.List {
 		corners, ok := intsOf(tv)
 		if !ok || len(corners) != 3 {
 			return nil, nil, false
 		}
-		for _, c := range corners {
-			p, ok := idx.point(c)
-			if !ok {
+		var tri [3]v3
+		for j, c := range corners {
+			if tri[j], ok = idx.point(c); !ok {
 				return nil, nil, false
 			}
+		}
+		if flags != nil && flags[i] < 0 {
+			continue
+		}
+		for _, p := range tri {
 			m.tris = append(m.tris, m.vertex(p))
 		}
 	}

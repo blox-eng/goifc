@@ -44,6 +44,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   `IfcIndexedPolygonalFaceWithVoids` are filled, which over-reports: the same
   trade-off the brep path already makes for inner face bounds.
 
+  A triangulated irregular network's triangles flagged invisible (`-2` void,
+  `-1` hole) are left out of the mesh, as the spec requires. A network whose
+  every triangle is invisible yields no geometry rather than a box, since the
+  spec excludes a void "without falling back on any other geometry".
+
 ## v0.12.1 — 2026-09-24
 
 ### Fixed
