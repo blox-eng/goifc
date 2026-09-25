@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.13.0 — 2026-09-25
+
 ### Added
 
 - IFC4 tessellated bodies are tessellated: `IfcTriangulatedFaceSet`, its IFC4X3 subtype `IfcTriangulatedIrregularNetwork`, and `IfcPolygonalFaceSet`. This is the body SketchUp, BlenderBIM and Revit's IFC4 Reference View export. Before, these elements did not even fall back to a box: the fallback only read `IfcCartesianPoint`, and a face set keeps its points in an `IfcCartesianPointList3D`, so the element came back with no triangles and a zero bounding box — a total under-report. On a SketchUp 2024 IFC4X3 export, every element with geometry went from vanished to meshed (0 of 10 to 10 of 10). No parity corpus model uses these entities, so the published coverage numbers do not move.
