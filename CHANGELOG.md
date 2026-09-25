@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.13.0 — 2026-09-25
+
 ### Added
 
 - IFC4 tessellated bodies are tessellated: `IfcTriangulatedFaceSet`, its IFC4X3
