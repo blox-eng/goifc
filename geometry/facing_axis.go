@@ -43,6 +43,19 @@ const sideAreaTol = 0.01
 // plain wall and smaller on a stepped one. IfcOpenShell trusts winding here for
 // the same reason: nothing else distinguishes the two faces of a wall.
 func sideAreaDir(w []v3, tris []uint32, dir v3) float64 {
+	return sideAreaWithin(w, tris, dir, sideAreaTol)
+}
+
+// flatSideArea is the area of the faces lying flat against dir, within
+// axisMergeCos. It is the far side's measure: on the side a wall does not
+// present, a face leaning toward it is a joint — a mitre closing onto the next
+// wall — and never a surface a layer is applied to, so counting it the way
+// sideAreaDir does would read a mitred room's inner faces as its outer ones.
+func flatSideArea(w []v3, tris []uint32, dir v3) float64 {
+	return sideAreaWithin(w, tris, dir, axisMergeCos)
+}
+
+func sideAreaWithin(w []v3, tris []uint32, dir v3, floor float64) float64 {
 	l := math.Sqrt(dotv(dir, dir))
 	if !(l > 0) {
 		return 0
@@ -64,7 +77,7 @@ func sideAreaDir(w []v3, tris []uint32, dir v3) float64 {
 		if ln < 1e-15 {
 			continue // degenerate triangle
 		}
-		if dotv(n, u)/ln <= sideAreaTol {
+		if dotv(n, u)/ln <= floor {
 			continue // the far side, or edge-on
 		}
 		total += ln / 2
