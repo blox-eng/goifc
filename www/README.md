@@ -21,18 +21,24 @@ Inlining a small script instead is not an option either: `_headers` sets
 `script-src 'self'` with no `'unsafe-inline'`, and that is worth more than a
 toggle on an error page.
 
-The drawing runs the pipeline in the order the packages do: `step` (the pieces
-arrive scattered, the way entities come off the file), `model` (each one
-resolves to its placement and a storey stands), `geometry` (a plane cuts
-through the walls, and the cut face is the pair of closed rings `SectionOn`
-returns). Every claim on the page has to be true of the code on `main`. If a
-change to the library makes one of them false, the page changes in the same
-pull request.
+The drawing is the goifc mark, brought to life the way openblox.sh animates its
+own: one solid in, measured parts out. STEP lines are read one at a time, each
+landing as a strip of the solid, and the two parts drop out beneath it at the
+same combined width. Hovering (or tapping) measures them. Both are the same box
+with the same opening, and they report different volumes because they report
+different things: the left one the modeller's authored net quantity (`qto`), the
+right one a volume derived from the mesh, which counts the opening in (`geometry`,
+gross) — drawn as what it is, a dashed bound. The figures are one consistent
+illustrative element, worked out in `app.js`. Every claim on the page has to be
+true of the code on `main`; if a change to the library makes one false, the page
+changes in the same pull request.
 
 The argument for goifc — what the numbers mean, which of them are bounds, where
 the edges are — lives in the documentation. This page's job is to say what
-goifc is and get out of the way. Its copy is taken from `README.md` and
-`docs/index.md`; change it there first, so there is never a third version.
+goifc is and get out of the way. It describes what goifc does and never
+compares it to anything; the ambition is carried by the coverage numbers it
+links to, not announced. Its copy matches `README.md` and `docs/index.md` —
+change all three together, so there is never a third version.
 
 The reference documentation is a separate site — MkDocs, in `docs/`, deployed
 with mike to `docs.goifc.org` by `.github/workflows/docs.yml`. This directory is

@@ -16,9 +16,10 @@
 [![codecov](https://codecov.io/gh/blox-eng/goifc/branch/main/graph/badge.svg)](https://codecov.io/gh/blox-eng/goifc)
 [![govulncheck](https://img.shields.io/badge/govulncheck-enforced-00ADD8.svg)](.github/workflows/ci.yml)
 
-Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
-One `go get`, one static binary.
+Read IFC in Go. Parse the file, walk the semantics, tessellate the geometry, get
+the numbers — each one labelled with where it came from.
 
+**[goifc.org](https://goifc.org)** ·
 **[Documentation](https://docs.goifc.org/latest/)** — guides, concepts and the
 compatibility policy.
 
@@ -26,17 +27,6 @@ compatibility policy.
 [`step`](https://pkg.go.dev/github.com/blox-eng/goifc/step) ·
 [`model`](https://pkg.go.dev/github.com/blox-eng/goifc/model) ·
 [`geometry`](https://pkg.go.dev/github.com/blox-eng/goifc/geometry)
-
-## Should you use it
-
-Pick goifc when deployment cost dominates and bounding numbers are good enough.
-Pick IfcOpenShell when the geometry has to be exact — it is the better library,
-and it is also a C++ toolchain, a Python runtime, and a container several times
-the size of the service using it. goifc is the subset you need to parse the
-file, walk the semantics, and tessellate enough to get numbers.
-
-The [feature-by-feature comparison](https://docs.goifc.org/latest/)
-is on the docs site.
 
 ## Install
 
@@ -109,8 +99,9 @@ clash-detect with them. The rest of the edges, stated plainly, are in
 [limitations](https://docs.goifc.org/latest/limitations/).
 
 How much of a real model is a bound rather than a tessellated shape is measured,
-not asserted: a gate asserts goifc's bounds contain IfcOpenShell's on a public
-IFC corpus, and the fallback rate per model is published in
+not asserted: a gate asserts goifc's bounds contain an independent reference
+implementation's on a public IFC corpus, and the fallback rate per model is
+published in
 [coverage](https://docs.goifc.org/latest/coverage/).
 
 ## More
