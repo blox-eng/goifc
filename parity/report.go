@@ -167,10 +167,16 @@ func Report() (string, error) {
 	b.WriteString("that under-reports is always a bug, never a legitimate fallback —\n")
 	b.WriteString("an OBB fallback box is allowed to be larger than the solid it\n")
 	b.WriteString("stands for, never smaller.\n")
-	b.WriteString("The violations below are real, currently open goifc geometry gaps,\n")
-	b.WriteString("tracked in `parity/knownviolations.go`'s `knownViolations` allowlist\n")
-	b.WriteString("so CI stays green on this known state while still failing on any\n")
-	b.WriteString("new or worsened violation.\n\n")
+	if shortfalls > 0 {
+		b.WriteString("The violations below are real, currently open goifc geometry gaps,\n")
+		b.WriteString("tracked in `parity/knownviolations.go`'s `knownViolations` allowlist\n")
+		b.WriteString("so CI stays green on this known state while still failing on any\n")
+		b.WriteString("new or worsened violation.\n")
+	} else {
+		b.WriteString("The `knownViolations` allowlist in `parity/knownviolations.go` is\n")
+		b.WriteString("empty, so any violation fails the gate.\n")
+	}
+	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "Across the public corpus the gate compares %d elements, of which %d\n%s contained.\n\n",
 		totalCompared, totalContained, pluralAre(totalContained))

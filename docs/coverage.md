@@ -91,10 +91,8 @@ for every element the oracle and goifc's scene both know. A bound
 that under-reports is always a bug, never a legitimate fallback —
 an OBB fallback box is allowed to be larger than the solid it
 stands for, never smaller.
-The violations below are real, currently open goifc geometry gaps,
-tracked in `parity/knownviolations.go`'s `knownViolations` allowlist
-so CI stays green on this known state while still failing on any
-new or worsened violation.
+The `knownViolations` allowlist in `parity/knownviolations.go` is
+empty, so any violation fails the gate.
 
 Across the public corpus the gate compares 331 elements, of which 331
 are contained.
