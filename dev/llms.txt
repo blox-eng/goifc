@@ -12,25 +12,25 @@ Meshes are element-local; placements and bounding boxes are world.
 
 ## Getting started
 
-- [Home](https://blox-eng.github.io/goifc/latest/dev/index.md)
-- [Getting started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md)
+- [Home](https://docs.goifc.org/latest/index.md)
+- [Getting started](https://docs.goifc.org/latest/getting-started/index.md)
 
 ## Concepts
 
-- [Local and world frames](https://blox-eng.github.io/goifc/latest/dev/concepts/frames/index.md)
-- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md)
-- [Quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md)
+- [Local and world frames](https://docs.goifc.org/latest/concepts/frames/index.md)
+- [The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md)
+- [Quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md)
 
 ## Guides
 
-- [Measuring silhouettes](https://blox-eng.github.io/goifc/latest/dev/guides/measuring-silhouettes/index.md)
-- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)
-- [Storey plans](https://blox-eng.github.io/goifc/latest/dev/guides/storey-plans/index.md)
+- [Measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/index.md)
+- [Sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md)
+- [Storey plans](https://docs.goifc.org/latest/guides/storey-plans/index.md)
 
 ## Reference
 
-- [The step package](https://blox-eng.github.io/goifc/latest/dev/step/index.md)
-- [Limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md)
-- [Compatibility](https://blox-eng.github.io/goifc/latest/dev/compatibility/index.md)
-- [Changelog](https://blox-eng.github.io/goifc/latest/dev/changelog/index.md)
+- [The step package](https://docs.goifc.org/latest/step/index.md)
+- [Limitations](https://docs.goifc.org/latest/limitations/index.md)
+- [Compatibility](https://docs.goifc.org/latest/compatibility/index.md)
+- [Changelog](https://docs.goifc.org/latest/changelog/index.md)
 

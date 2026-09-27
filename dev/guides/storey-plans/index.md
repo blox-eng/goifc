@@ -22,7 +22,7 @@ for _, plan := range m.StoreyPlans {
 }
 ```
 
-Each [`StoreyPlan`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyPlan) carries its storey's `GlobalID`, an `Elevation`, and the [`StoreyEntity`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyEntity) values that draw on it. Loops are the same `geometry.Loop` described in [sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) — same roles, same winding, same hole convention.
+Each [`StoreyPlan`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyPlan) carries its storey's `GlobalID`, an `Elevation`, and the [`StoreyEntity`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyEntity) values that draw on it. Loops are the same `geometry.Loop` described in [sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md) — same roles, same winding, same hole convention.
 
 The rest of this page is the part godoc cannot tell you: where the cut height comes from, and which storeys silently produce nothing.
 

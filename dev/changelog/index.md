@@ -8,6 +8,15 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Changed
+
+- The documentation moved to <https://docs.goifc.org/latest/>. The old `blox-eng.github.io/goifc/` URLs redirect there once the custom domain is live. Every deploy now checks that the custom domain is still set at the `gh-pages` root and restores it if a deploy dropped it.
+- goifc has a landing page at <https://goifc.org>, in `www/`.
+
+### Fixed
+
+- The docs' canonical URLs, sitemap and `llms.txt` pointed at `/latest/dev/`, a prefix that does not exist. They now point at `/latest/`.
+
 ## v0.13.0 — 2026-09-25
 
 ### Added
@@ -59,7 +68,7 @@ Both return `ok == false` rather than a figure nobody can trust, and a caller mu
 
 Both measure the same outline the same wherever the model sits. That is worth stating because `SilhouetteOn` projects WORLD coordinates and `ElevationPlane` has no origin to subtract them against, so a model on a national grid arrives at x≈4.6e5, y≈4.7e6 — the rings are recentred before measurement so neither the figure nor the refusal depends on it.
 
-The polygons must already be in ONE plane's frame; nothing here can detect a mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail it can see. See [measuring silhouettes](https://blox-eng.github.io/goifc/latest/guides/measuring-silhouettes/).
+The polygons must already be in ONE plane's frame; nothing here can detect a mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail it can see. See [measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/).
 
 ## v0.9.3 — 2026-09-02
 

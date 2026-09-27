@@ -4,7 +4,7 @@ The edges, stated plainly. Each is a chosen boundary, not an undiagnosed bug.
 
 ## Geometry-derived volume is gross, not net
 
-Tier-2 volumes are un-subtracted solids: a wall over-reports by its windows and doors. See [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) — the tag exists so you can tell tier 1 from tier 2 and treat tier 2 as a bound.
+Tier-2 volumes are un-subtracted solids: a wall over-reports by its windows and doors. See [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) — the tag exists so you can tell tier 1 from tier 2 and treat tier 2 as a bound.
 
 ## Tessellated geometry is proxy geometry
 
@@ -12,7 +12,7 @@ The meshes in the GLB are simplified representations for visualization. They are
 
 Do not clash-detect with them.
 
-Some elements get no mesh at all and come back as a bounding box instead. How many, per model, is measured rather than asserted — see [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md).
+Some elements get no mesh at all and come back as a bounding box instead. How many, per model, is measured rather than asserted — see [coverage](https://docs.goifc.org/latest/coverage/index.md).
 
 ## No EXPRESS schema
 
@@ -24,14 +24,14 @@ The `step` layer below it is honest about the same boundary: `IsA` and `ByType` 
 
 A triangle only contributes a crossing segment when it has a vertex strictly above and one strictly below. A face that merely touches the plane cannot close a ring.
 
-This is a known gap with a test pinning it. See [sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md).
+This is a known gap with a test pinning it. See [sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md).
 
 ## Storeys with no contained mesh produce no plan
 
-`BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://blox-eng.github.io/goifc/latest/dev/guides/storey-plans/index.md).
+`BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://docs.goifc.org/latest/guides/storey-plans/index.md).
 
 ## Scope of hardening
 
 The well-trodden path is `BuildImport` on architectural IFC exports, because that is what Blox's import pipeline exercises. Off that path — MEP-heavy models, structural-analysis exports, non-architectural STEP — expect to find edges.
 
-Finding one is a useful bug report. See [compatibility](https://blox-eng.github.io/goifc/latest/dev/compatibility/index.md) for what is and is not promised.
+Finding one is a useful bug report. See [compatibility](https://docs.goifc.org/latest/compatibility/index.md) for what is and is not promised.

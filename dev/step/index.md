@@ -72,5 +72,5 @@ Semantic model (`IFCElement[]`), geometry, quantities, and the EXPRESS schema la
 
 ## Also see
 
-- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md) — where `step` sits relative to `model` and `geometry`.
+- [The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md) — where `step` sits relative to `model` and `geometry`.
 - [`step` on pkg.go.dev](https://pkg.go.dev/github.com/blox-eng/goifc/step) — the generated API reference.

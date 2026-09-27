@@ -6,7 +6,7 @@ Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar. 
 go get github.com/blox-eng/goifc
 ```
 
-[Get started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md) [API reference](https://pkg.go.dev/github.com/blox-eng/goifc)
+[Get started](https://docs.goifc.org/latest/getting-started/index.md) [API reference](https://pkg.go.dev/github.com/blox-eng/goifc)
 
 ## Why this exists
 
@@ -27,23 +27,23 @@ So the question was never "is IfcOpenShell better." It is. The question was how 
 
 Pick goifc when deployment cost dominates and bounding numbers are good enough. Pick IfcOpenShell when the geometry has to be exact.
 
-Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md).
+Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://docs.goifc.org/latest/limitations/index.md).
 
 ## Where to go next
 
-- **[Getting started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md)**
+- **[Getting started](https://docs.goifc.org/latest/getting-started/index.md)**
 
   Install, parse a file, and get elements with quantities out of it.
 
-- **[The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md)**
+- **[The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md)**
 
   Three stages — `step`, `model`, `geometry` — each usable on its own.
 
-- **[Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)**
+- **[Sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md)**
 
   Cut the tessellated model with any plane and get closed 2D rings back.
 
-- **[The `step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md)**
+- **[The `step` package](https://docs.goifc.org/latest/step/index.md)**
 
   A schema-agnostic STEP/SPF parser that works on any STEP file, IFC or not.
 

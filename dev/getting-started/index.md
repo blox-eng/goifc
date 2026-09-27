@@ -68,7 +68,7 @@ func main() {
 }
 ```
 
-`e.QuantitySource` says whether the number is the modeller's or a bound derived from the proxy mesh. A tier-2 volume is gross — read [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) before you put these numbers in front of anyone.
+`e.QuantitySource` says whether the number is the modeller's or a bound derived from the proxy mesh. A tier-2 volume is gross — read [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) before you put these numbers in front of anyone.
 
 ## Quickstart: walking the tree
 
@@ -90,6 +90,6 @@ Because nodes are emitted parents-first, you can create each row as you walk and
 
 ## Next
 
-- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md) — what each of the three stages does, and how to use one on its own.
-- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) — cutting the model with a plane.
-- [Limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md) — the edges, stated plainly.
+- [The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md) — what each of the three stages does, and how to use one on its own.
+- [Sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md) — cutting the model with a plane.
+- [Limitations](https://docs.goifc.org/latest/limitations/index.md) — the edges, stated plainly.

@@ -20,7 +20,7 @@ Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar. 
 go get github.com/blox-eng/goifc
 ```
 
-[Get started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md) [API reference](https://pkg.go.dev/github.com/blox-eng/goifc)
+[Get started](https://docs.goifc.org/latest/getting-started/index.md) [API reference](https://pkg.go.dev/github.com/blox-eng/goifc)
 
 ## Why this exists
 
@@ -41,23 +41,23 @@ So the question was never "is IfcOpenShell better." It is. The question was how 
 
 Pick goifc when deployment cost dominates and bounding numbers are good enough. Pick IfcOpenShell when the geometry has to be exact.
 
-Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md).
+Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://docs.goifc.org/latest/limitations/index.md).
 
 ## Where to go next
 
-- **[Getting started](https://blox-eng.github.io/goifc/latest/dev/getting-started/index.md)**
+- **[Getting started](https://docs.goifc.org/latest/getting-started/index.md)**
 
   Install, parse a file, and get elements with quantities out of it.
 
-- **[The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md)**
+- **[The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md)**
 
   Three stages — `step`, `model`, `geometry` — each usable on its own.
 
-- **[Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)**
+- **[Sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md)**
 
   Cut the tessellated model with any plane and get closed 2D rings back.
 
-- **[The `step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md)**
+- **[The `step` package](https://docs.goifc.org/latest/step/index.md)**
 
   A schema-agnostic STEP/SPF parser that works on any STEP file, IFC or not.
 
@@ -139,7 +139,7 @@ func main() {
 }
 ```
 
-`e.QuantitySource` says whether the number is the modeller's or a bound derived from the proxy mesh. A tier-2 volume is gross — read [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) before you put these numbers in front of anyone.
+`e.QuantitySource` says whether the number is the modeller's or a bound derived from the proxy mesh. A tier-2 volume is gross — read [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) before you put these numbers in front of anyone.
 
 ## Quickstart: walking the tree
 
@@ -161,9 +161,9 @@ Because nodes are emitted parents-first, you can create each row as you walk and
 
 ## Next
 
-- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md) — what each of the three stages does, and how to use one on its own.
-- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) — cutting the model with a plane.
-- [Limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md) — the edges, stated plainly.
+- [The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md) — what each of the three stages does, and how to use one on its own.
+- [Sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md) — cutting the model with a plane.
+- [Limitations](https://docs.goifc.org/latest/limitations/index.md) — the edges, stated plainly.
 # Concepts
 
 # Local and world frames
@@ -249,11 +249,11 @@ bytes ──▶ step.ParseBytes ──▶ *step.File          entity graph, forw
 
 ## Why the split matters
 
-**`step` is genuinely standalone.** It parses any STEP file, IFC or not — it knows nothing about walls or storeys, only `#id=KEYWORD(args)` and the reference graph between them. If you have a STEP file from a mechanical CAD tool, this package still works. See [the `step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md).
+**`step` is genuinely standalone.** It parses any STEP file, IFC or not — it knows nothing about walls or storeys, only `#id=KEYWORD(args)` and the reference graph between them. If you have a STEP file from a mechanical CAD tool, this package still works. See [the `step` package](https://docs.goifc.org/latest/step/index.md).
 
-**`model` is where IFC semantics enter.** It reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities, resolves placements, and normalises units. This is also the layer that carries the schema assumption noted in [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md) — there is no EXPRESS schema behind it.
+**`model` is where IFC semantics enter.** It reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities, resolves placements, and normalises units. This is also the layer that carries the schema assumption noted in [limitations](https://docs.goifc.org/latest/limitations/index.md) — there is no EXPRESS schema behind it.
 
-**`geometry` is the only stage that approximates.** Everything above it is lossless with respect to the file. Tessellation is where proxy meshes and derived, gross quantities come from, and it is why quantities carry a [provenance tag](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md).
+**`geometry` is the only stage that approximates.** Everything above it is lossless with respect to the file. Tessellation is where proxy meshes and derived, gross quantities come from, and it is why quantities carry a [provenance tag](https://docs.goifc.org/latest/concepts/quantities/index.md).
 
 # Quantities and provenance
 
@@ -311,7 +311,7 @@ for i := range a.Result.Elements {
 
 The warning above is about mixing tiers. There is a second way a sum goes wrong, and it is inside one tier: **elements that overlap**.
 
-Two elements cladding one facade plane — a wall and the band in front of it — each report their own area, and adding the two counts the strip they share twice. Measure them as one surface instead, with the overlap counted once: see [measuring silhouettes](https://blox-eng.github.io/goifc/latest/dev/guides/measuring-silhouettes/index.md).
+Two elements cladding one facade plane — a wall and the band in front of it — each report their own area, and adding the two counts the strip they share twice. Measure them as one surface instead, with the overlap counted once: see [measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/index.md).
 # Guides
 
 # Measuring silhouettes
@@ -375,7 +375,7 @@ Do not build one polygon around the largest ring. Every other patch then becomes
 
 `PolygonsFromLoops` nests by containment, not by winding. It refuses (`ok == false`) a loop that is too short, not finite or encloses nothing, loops whose edges cross or run along each other, a loop that passes through another at a corner, and a loop that touches another at every point it could be tested by. Give it the loops of **one** element; combining elements is the union's job.
 
-Winding decides nothing here. The rings are filled even-odd, exactly as [`Loop`](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) says a renderer may treat them, so an outline that has been stored, re-serialized and read back still measures correctly even if something along the way had its own opinion about orientation.
+Winding decides nothing here. The rings are filled even-odd, exactly as [`Loop`](https://docs.goifc.org/latest/guides/sections/index.md) says a renderer may treat them, so an outline that has been stored, re-serialized and read back still measures correctly even if something along the way had its own opinion about orientation.
 
 One frame, or nothing
 
@@ -515,7 +515,7 @@ for _, plan := range m.StoreyPlans {
 }
 ```
 
-Each [`StoreyPlan`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyPlan) carries its storey's `GlobalID`, an `Elevation`, and the [`StoreyEntity`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyEntity) values that draw on it. Loops are the same `geometry.Loop` described in [sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) — same roles, same winding, same hole convention.
+Each [`StoreyPlan`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyPlan) carries its storey's `GlobalID`, an `Elevation`, and the [`StoreyEntity`](https://pkg.go.dev/github.com/blox-eng/goifc#StoreyEntity) values that draw on it. Loops are the same `geometry.Loop` described in [sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md) — same roles, same winding, same hole convention.
 
 The rest of this page is the part godoc cannot tell you: where the cut height comes from, and which storeys silently produce nothing.
 
@@ -612,7 +612,7 @@ Semantic model (`IFCElement[]`), geometry, quantities, and the EXPRESS schema la
 
 ## Also see
 
-- [The pipeline](https://blox-eng.github.io/goifc/latest/dev/concepts/pipeline/index.md) — where `step` sits relative to `model` and `geometry`.
+- [The pipeline](https://docs.goifc.org/latest/concepts/pipeline/index.md) — where `step` sits relative to `model` and `geometry`.
 - [`step` on pkg.go.dev](https://pkg.go.dev/github.com/blox-eng/goifc/step) — the generated API reference.
 
 # Limitations
@@ -621,7 +621,7 @@ The edges, stated plainly. Each is a chosen boundary, not an undiagnosed bug.
 
 ## Geometry-derived volume is gross, not net
 
-Tier-2 volumes are un-subtracted solids: a wall over-reports by its windows and doors. See [quantities and provenance](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) — the tag exists so you can tell tier 1 from tier 2 and treat tier 2 as a bound.
+Tier-2 volumes are un-subtracted solids: a wall over-reports by its windows and doors. See [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) — the tag exists so you can tell tier 1 from tier 2 and treat tier 2 as a bound.
 
 ## Tessellated geometry is proxy geometry
 
@@ -629,7 +629,7 @@ The meshes in the GLB are simplified representations for visualization. They are
 
 Do not clash-detect with them.
 
-Some elements get no mesh at all and come back as a bounding box instead. How many, per model, is measured rather than asserted — see [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md).
+Some elements get no mesh at all and come back as a bounding box instead. How many, per model, is measured rather than asserted — see [coverage](https://docs.goifc.org/latest/coverage/index.md).
 
 ## No EXPRESS schema
 
@@ -641,17 +641,17 @@ The `step` layer below it is honest about the same boundary: `IsA` and `ByType` 
 
 A triangle only contributes a crossing segment when it has a vertex strictly above and one strictly below. A face that merely touches the plane cannot close a ring.
 
-This is a known gap with a test pinning it. See [sections and floor plans](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md).
+This is a known gap with a test pinning it. See [sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md).
 
 ## Storeys with no contained mesh produce no plan
 
-`BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://blox-eng.github.io/goifc/latest/dev/guides/storey-plans/index.md).
+`BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://docs.goifc.org/latest/guides/storey-plans/index.md).
 
 ## Scope of hardening
 
 The well-trodden path is `BuildImport` on architectural IFC exports, because that is what Blox's import pipeline exercises. Off that path — MEP-heavy models, structural-analysis exports, non-architectural STEP — expect to find edges.
 
-Finding one is a useful bug report. See [compatibility](https://blox-eng.github.io/goifc/latest/dev/compatibility/index.md) for what is and is not promised.
+Finding one is a useful bug report. See [compatibility](https://docs.goifc.org/latest/compatibility/index.md) for what is and is not promised.
 
 # Compatibility
 
@@ -671,22 +671,22 @@ v0.2.0 renamed `geometry.LoopBelow` to `geometry.LoopSilhouette`. That was a **s
 
 Where a change would otherwise touch both the API and data already on disk, the wire format is what gets preserved. Source you can fix with a compiler error to guide you; a silent data migration you cannot.
 
-Every break is written down in the [changelog](https://blox-eng.github.io/goifc/latest/dev/changelog/index.md).
+Every break is written down in the [changelog](https://docs.goifc.org/latest/changelog/index.md).
 
 ## Serialization contracts
 
 Some string values are load-bearing beyond the Go API, because consumers persist them and match them as literals:
 
-| Values                          | Where                                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `"qto"`, `"geometry"`, `"none"` | `QuantitySource` — see [quantities](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) |
-| `"cut"`, `"below"`              | `LoopRole` — see [sections](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)             |
+| Values                          | Where                                                                                           |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `"qto"`, `"geometry"`, `"none"` | `QuantitySource` — see [quantities](https://docs.goifc.org/latest/concepts/quantities/index.md) |
+| `"cut"`, `"below"`              | `LoopRole` — see [sections](https://docs.goifc.org/latest/guides/sections/index.md)             |
 
 These do not change without a coordinated consumer migration, independently of what the Go identifiers are called.
 
 ## Schema support
 
-IFC2X3 and IFC4 core entities, via positional attribute indices that are stable across both. There is no EXPRESS schema — see [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md).
+IFC2X3 and IFC4 core entities, via positional attribute indices that are stable across both. There is no EXPRESS schema — see [limitations](https://docs.goifc.org/latest/limitations/index.md).
 
 ## Go version
 
@@ -701,11 +701,11 @@ Blox's import pipeline is the only consumer this library has been hardened again
 
 It is a statement about which bugs have already been found, not a general assurance. Treat it as a map of where the tested ground is.
 
-What is not scoped to Blox is the accuracy of the geometry itself: that is measured against a public IFC corpus and IfcOpenShell, and published in [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md) — numbers you can reproduce from a clone.
+What is not scoped to Blox is the accuracy of the geometry itself: that is measured against a public IFC corpus and IfcOpenShell, and published in [coverage](https://docs.goifc.org/latest/coverage/index.md) — numbers you can reproduce from a clone.
 
 ## Reporting a break
 
-Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
+Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://docs.goifc.org/latest/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
 
 Source
 
@@ -716,6 +716,15 @@ This page is [`CHANGELOG.md`](https://github.com/blox-eng/goifc/blob/main/CHANGE
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
+
+### Changed
+
+- The documentation moved to <https://docs.goifc.org/latest/>. The old `blox-eng.github.io/goifc/` URLs redirect there once the custom domain is live. Every deploy now checks that the custom domain is still set at the `gh-pages` root and restores it if a deploy dropped it.
+- goifc has a landing page at <https://goifc.org>, in `www/`.
+
+### Fixed
+
+- The docs' canonical URLs, sitemap and `llms.txt` pointed at `/latest/dev/`, a prefix that does not exist. They now point at `/latest/`.
 
 ## v0.13.0 — 2026-09-25
 
@@ -768,7 +777,7 @@ Both return `ok == false` rather than a figure nobody can trust, and a caller mu
 
 Both measure the same outline the same wherever the model sits. That is worth stating because `SilhouetteOn` projects WORLD coordinates and `ElevationPlane` has no origin to subtract them against, so a model on a national grid arrives at x≈4.6e5, y≈4.7e6 — the rings are recentred before measurement so neither the figure nor the refusal depends on it.
 
-The polygons must already be in ONE plane's frame; nothing here can detect a mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail it can see. See [measuring silhouettes](https://blox-eng.github.io/goifc/latest/guides/measuring-silhouettes/).
+The polygons must already be in ONE plane's frame; nothing here can detect a mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail it can see. See [measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/).
 
 ## v0.9.3 — 2026-09-02
 

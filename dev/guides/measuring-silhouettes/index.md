@@ -59,7 +59,7 @@ Do not build one polygon around the largest ring. Every other patch then becomes
 
 `PolygonsFromLoops` nests by containment, not by winding. It refuses (`ok == false`) a loop that is too short, not finite or encloses nothing, loops whose edges cross or run along each other, a loop that passes through another at a corner, and a loop that touches another at every point it could be tested by. Give it the loops of **one** element; combining elements is the union's job.
 
-Winding decides nothing here. The rings are filled even-odd, exactly as [`Loop`](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md) says a renderer may treat them, so an outline that has been stored, re-serialized and read back still measures correctly even if something along the way had its own opinion about orientation.
+Winding decides nothing here. The rings are filled even-odd, exactly as [`Loop`](https://docs.goifc.org/latest/guides/sections/index.md) says a renderer may treat them, so an outline that has been stored, re-serialized and read back still measures correctly even if something along the way had its own opinion about orientation.
 
 One frame, or nothing
 

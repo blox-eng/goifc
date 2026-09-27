@@ -16,22 +16,22 @@ v0.2.0 renamed `geometry.LoopBelow` to `geometry.LoopSilhouette`. That was a **s
 
 Where a change would otherwise touch both the API and data already on disk, the wire format is what gets preserved. Source you can fix with a compiler error to guide you; a silent data migration you cannot.
 
-Every break is written down in the [changelog](https://blox-eng.github.io/goifc/latest/dev/changelog/index.md).
+Every break is written down in the [changelog](https://docs.goifc.org/latest/changelog/index.md).
 
 ## Serialization contracts
 
 Some string values are load-bearing beyond the Go API, because consumers persist them and match them as literals:
 
-| Values                          | Where                                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `"qto"`, `"geometry"`, `"none"` | `QuantitySource` — see [quantities](https://blox-eng.github.io/goifc/latest/dev/concepts/quantities/index.md) |
-| `"cut"`, `"below"`              | `LoopRole` — see [sections](https://blox-eng.github.io/goifc/latest/dev/guides/sections/index.md)             |
+| Values                          | Where                                                                                           |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `"qto"`, `"geometry"`, `"none"` | `QuantitySource` — see [quantities](https://docs.goifc.org/latest/concepts/quantities/index.md) |
+| `"cut"`, `"below"`              | `LoopRole` — see [sections](https://docs.goifc.org/latest/guides/sections/index.md)             |
 
 These do not change without a coordinated consumer migration, independently of what the Go identifiers are called.
 
 ## Schema support
 
-IFC2X3 and IFC4 core entities, via positional attribute indices that are stable across both. There is no EXPRESS schema — see [limitations](https://blox-eng.github.io/goifc/latest/dev/limitations/index.md).
+IFC2X3 and IFC4 core entities, via positional attribute indices that are stable across both. There is no EXPRESS schema — see [limitations](https://docs.goifc.org/latest/limitations/index.md).
 
 ## Go version
 
@@ -46,8 +46,8 @@ Blox's import pipeline is the only consumer this library has been hardened again
 
 It is a statement about which bugs have already been found, not a general assurance. Treat it as a map of where the tested ground is.
 
-What is not scoped to Blox is the accuracy of the geometry itself: that is measured against a public IFC corpus and IfcOpenShell, and published in [coverage](https://blox-eng.github.io/goifc/latest/dev/coverage/index.md) — numbers you can reproduce from a clone.
+What is not scoped to Blox is the accuracy of the geometry itself: that is measured against a public IFC corpus and IfcOpenShell, and published in [coverage](https://docs.goifc.org/latest/coverage/index.md) — numbers you can reproduce from a clone.
 
 ## Reporting a break
 
-Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://blox-eng.github.io/goifc/latest/dev/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
+Open an issue with the IFC file if you can share it, or a reduced one that reproduces. The [`step` package](https://docs.goifc.org/latest/step/index.md) parses any STEP file, so a minimal repro is often only a few entities.
