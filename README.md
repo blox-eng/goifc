@@ -19,7 +19,7 @@
 Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
 One `go get`, one static binary.
 
-**[Documentation](https://blox-eng.github.io/goifc/)** — guides, concepts and the
+**[Documentation](https://docs.goifc.org/latest/)** — guides, concepts and the
 compatibility policy.
 
 **API reference:** [`ifc`](https://pkg.go.dev/github.com/blox-eng/goifc) ·
@@ -35,7 +35,7 @@ and it is also a C++ toolchain, a Python runtime, and a container several times
 the size of the service using it. goifc is the subset you need to parse the
 file, walk the semantics, and tessellate enough to get numbers.
 
-The [feature-by-feature comparison](https://blox-eng.github.io/goifc/latest/)
+The [feature-by-feature comparison](https://docs.goifc.org/latest/)
 is on the docs site.
 
 ## Install
@@ -92,7 +92,7 @@ The package is named `ifc`, not `goifc` — alias the import as above.
 `Assemble` gives you a flat list. `ifc.BuildImport(f)` is the other entry point:
 the same elements as a parents-first tree with spatial containers, per-type
 material layers and pre-baked floor plans — the call Blox actually ships. See
-[getting started](https://blox-eng.github.io/goifc/latest/getting-started/).
+[getting started](https://docs.goifc.org/latest/getting-started/).
 
 ## The numbers are labelled, and some of them are bounds
 
@@ -102,29 +102,29 @@ the proxy mesh (**gross** — a wall over-reports by its windows and doors), and
 `"none"` where neither exists, never a fabricated `0.0`.
 
 That tag is the most important thing to understand before trusting a total:
-[quantities and provenance](https://blox-eng.github.io/goifc/latest/concepts/quantities/).
+[quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/).
 
 The meshes are proxy geometry for visualization, not a B-rep substitute — do not
 clash-detect with them. The rest of the edges, stated plainly, are in
-[limitations](https://blox-eng.github.io/goifc/latest/limitations/).
+[limitations](https://docs.goifc.org/latest/limitations/).
 
 How much of a real model is a bound rather than a tessellated shape is measured,
 not asserted: a gate asserts goifc's bounds contain IfcOpenShell's on a public
 IFC corpus, and the fallback rate per model is published in
-[coverage](https://blox-eng.github.io/goifc/latest/coverage/).
+[coverage](https://docs.goifc.org/latest/coverage/).
 
 ## More
 
-- [The pipeline](https://blox-eng.github.io/goifc/latest/concepts/pipeline/) — `step`,
+- [The pipeline](https://docs.goifc.org/latest/concepts/pipeline/) — `step`,
   `model` and `geometry`, each usable on its own.
-- [Sections and floor plans](https://blox-eng.github.io/goifc/latest/guides/sections/) —
+- [Sections and floor plans](https://docs.goifc.org/latest/guides/sections/) —
   cut the model with any plane, get closed 2D rings back.
-- [Storey plans](https://blox-eng.github.io/goifc/latest/guides/storey-plans/) — what
+- [Storey plans](https://docs.goifc.org/latest/guides/storey-plans/) — what
   `BuildImport` pre-bakes per `IfcBuildingStorey`.
-- [Local and world frames](https://blox-eng.github.io/goifc/latest/concepts/frames/) —
+- [Local and world frames](https://docs.goifc.org/latest/concepts/frames/) —
   meshes are local, bounding boxes are world, and mixing them is wrong without
   erroring.
-- [The `step` package](https://blox-eng.github.io/goifc/latest/step/) — parses any STEP
+- [The `step` package](https://docs.goifc.org/latest/step/) — parses any STEP
   file, IFC or not.
 
 ## Compatibility
@@ -136,7 +136,7 @@ architectural IFC exports; off that path, expect to find edges.
 
 Both of those have a fuller answer, including the serialization contracts that
 hold steady even when the Go API does not, in the
-[compatibility policy](https://blox-eng.github.io/goifc/latest/compatibility/).
+[compatibility policy](https://docs.goifc.org/latest/compatibility/).
 
 ## Contributing
 

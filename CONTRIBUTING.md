@@ -25,7 +25,7 @@ editor does not format on save; CI will not reformat for you.
 
 ## Documentation
 
-The site at <https://blox-eng.github.io/goifc/> is built from `docs/` with
+The site at <https://docs.goifc.org/latest/> is built from `docs/` with
 MkDocs. To preview a change locally:
 
 ```bash
@@ -43,6 +43,11 @@ overwritten by the include.
 
 Docs deploy automatically on merge to `main` and on `v*` tags. It is deliberately
 not a required check: a Pages outage should never block a merge.
+
+The landing page at <https://goifc.org> is a separate site: hand-written HTML in
+`www/`, no build step, deployed by Cloudflare Pages. Preview it with
+`python3 -m http.server --directory www`, and see [`www/README.md`](www/README.md)
+before changing it. It never links into the docs by relative path.
 
 ## Pull requests
 

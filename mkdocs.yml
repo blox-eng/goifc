@@ -2,9 +2,12 @@ site_name: goifc
 site_description: Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
 # mike serves every version under its own prefix and writes only a root
 # index.html redirect — there is no per-page redirect at the bare root. So the
-# canonical URL, and every URL emitted into llms.txt, must carry the `latest`
-# alias or it 404s.
-site_url: https://blox-eng.github.io/goifc/latest/
+# canonical URL, and every URL emitted into llms.txt and the sitemap, must carry
+# the `latest` alias or it 404s. That alias is added by the mike plugin's
+# canonical_version below, not here: mike appends the version to site_url on
+# every deploy, so a site_url that already ended in /latest/ came out as
+# /latest/dev/ — a prefix that does not exist.
+site_url: https://docs.goifc.org/
 repo_url: https://github.com/blox-eng/goifc
 repo_name: blox-eng/goifc
 # Wires the "edit this page" pencil on every page straight to the file on main.
@@ -56,6 +59,11 @@ theme:
 
 plugins:
   - search
+  # Listed explicitly only to set canonical_version; mike injects itself
+  # otherwise. Every deployed version, dev included, names /latest/ as the
+  # canonical page, which is the one a search engine or an agent should keep.
+  - mike:
+      canonical_version: latest
   # Emits /llms.txt so an agent pulling these docs gets the prose without the
   # navigation chrome. Cheap to publish, and this library is one an agent is
   # plausibly reading on a user's behalf.
