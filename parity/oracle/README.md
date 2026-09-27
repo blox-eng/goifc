@@ -84,7 +84,7 @@ with the committed numbers being world-space, but that is inference from the
 data, not a record from the run.
 
 What this means for a reader: Gate 1 is reproducible against *these bytes* —
-anyone can clone and run it, and the two `knownViolations` shortfalls are
+anyone can clone and run it, and any `knownViolations` shortfall is
 measured to nine decimals against them. It is not yet reproducible from
 IfcOpenShell source. Closing that gap needs a working image pinned by digest
 (Status above), after which a regeneration verified by `make oracle` can be
@@ -93,13 +93,14 @@ promoted and this section stamped with the real version.
 ## Before trusting a regeneration
 
 **Never point a regeneration at `testdata/oracle/` casually, and never trust
-its output without diffing it first.** `parity/knownviolations.go` records two
-Gate 1 shortfalls to nine decimal places, measured against the exact bytes
-committed in `testdata/oracle/`. A regeneration under a different IfcOpenShell
-version, a different `aecgeeks/ifcopenshell` image tag, or different
-`ifcopenshell.geom` settings (`USE_WORLD_COORDS` in particular) will shift
-those numbers and either break Gate 1 or silently invalidate the allowlist and
-the published coverage page together — with no visible error, since a shifted
+its output without diffing it first.** Gate 1, any shortfall
+`parity/knownviolations.go` records to nine decimal places, and the published
+coverage page are all measured against the exact bytes committed in
+`testdata/oracle/`. A regeneration under a different IfcOpenShell version, a
+different `aecgeeks/ifcopenshell` image tag, or different `ifcopenshell.geom`
+settings (`USE_WORLD_COORDS` in particular) will shift those boxes and either
+break Gate 1 or silently invalidate the allowlist and the coverage page
+together — with no visible error, since a shifted
 oracle just produces a different-but-plausible AABB.
 
 `make oracle` is built to enforce exactly that: temporary directory, diff, no

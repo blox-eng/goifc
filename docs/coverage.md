@@ -21,11 +21,7 @@ looser than the true solid (a pitched roof's OBB can hold twice
 its volume) or, the failure that actually hurts a consumer,
 tighter than it. Gate 1 is precisely what catches the tighter
 case — and an under-reporting bound wherever else one arises.
-All 2 of the shortfalls recorded below are Gate 1 firing on a
-different cause, not on a fallback box: those elements
-tessellate through the extrusion path, and
-`parity/knownviolations.go` attributes their shortfall to how
-goifc bounds a stepped solid along that path.
+None is recorded below: every compared element is contained.
 (IfcOpenShell has no OBB fallback of its own — its oracle boxes
 come from an exact-solid tessellation.) So a ratio of 1.00 here is
 nearly blind to fallback quality by construction — read it as
@@ -95,23 +91,15 @@ for every element the oracle and goifc's scene both know. A bound
 that under-reports is always a bug, never a legitimate fallback —
 an OBB fallback box is allowed to be larger than the solid it
 stands for, never smaller.
-The violations below are real, currently open goifc geometry gaps,
-tracked in `parity/knownviolations.go`'s `knownViolations` allowlist
-so CI stays green on this known state while still failing on any
-new or worsened violation.
+The `knownViolations` allowlist in `parity/knownviolations.go` is
+empty, so any violation fails the gate.
 
-Across the public corpus the gate compares 331 elements, of which 329
+Across the public corpus the gate compares 331 elements, of which 331
 are contained.
 
 Against `ifcopenhouse`, the gate compares 34 elements, and all 34 are contained.
 
-Against `duplex_a`, the gate compares 215 elements. 213 are contained; 2 are
-not:
-
-| GlobalID | Axis | Shortfall | What it is |
-|---|---|---|---|
-| `1oKjKg9PD3fP1iIwXLh3lK` | min-y | 0.009927508 m | IfcStairFlight, Revit instance 151086 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads) |
-| `3KMJUyUe9DfQ2FOCd5ZoiN` | max-y | 0.009927222 m | IfcStairFlight, Revit instance 198878 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads) |
+Against `duplex_a`, the gate compares 215 elements, and all 215 are contained.
 
 Against `fzk_haus`, the gate compares 82 elements, and all 82 are contained.
 

@@ -52,11 +52,12 @@ func Report() (string, error) {
 	b.WriteString("its volume) or, the failure that actually hurts a consumer,\n")
 	b.WriteString("tighter than it. Gate 1 is precisely what catches the tighter\n")
 	b.WriteString("case — and an under-reporting bound wherever else one arises.\n")
-	fmt.Fprintf(&b, "All %d of the shortfalls recorded below are Gate 1 firing on a\n", shortfalls)
-	b.WriteString("different cause, not on a fallback box: those elements\n")
-	b.WriteString("tessellate through the extrusion path, and\n")
-	b.WriteString("`parity/knownviolations.go` attributes their shortfall to how\n")
-	b.WriteString("goifc bounds a stepped solid along that path.\n")
+	if shortfalls == 0 {
+		b.WriteString("None is recorded below: every compared element is contained.\n")
+	} else {
+		fmt.Fprintf(&b, "The %d shortfall%s recorded below %s tracked, each with its cause,\n", shortfalls, pluralS(shortfalls), pluralAre(shortfalls))
+		b.WriteString("in `parity/knownviolations.go`.\n")
+	}
 	b.WriteString("(IfcOpenShell has no OBB fallback of its own — its oracle boxes\n")
 	b.WriteString("come from an exact-solid tessellation.) So a ratio of 1.00 here is\n")
 	b.WriteString("nearly blind to fallback quality by construction — read it as\n")
@@ -166,10 +167,16 @@ func Report() (string, error) {
 	b.WriteString("that under-reports is always a bug, never a legitimate fallback —\n")
 	b.WriteString("an OBB fallback box is allowed to be larger than the solid it\n")
 	b.WriteString("stands for, never smaller.\n")
-	b.WriteString("The violations below are real, currently open goifc geometry gaps,\n")
-	b.WriteString("tracked in `parity/knownviolations.go`'s `knownViolations` allowlist\n")
-	b.WriteString("so CI stays green on this known state while still failing on any\n")
-	b.WriteString("new or worsened violation.\n\n")
+	if shortfalls > 0 {
+		b.WriteString("The violations below are real, currently open goifc geometry gaps,\n")
+		b.WriteString("tracked in `parity/knownviolations.go`'s `knownViolations` allowlist\n")
+		b.WriteString("so CI stays green on this known state while still failing on any\n")
+		b.WriteString("new or worsened violation.\n")
+	} else {
+		b.WriteString("The `knownViolations` allowlist in `parity/knownviolations.go` is\n")
+		b.WriteString("empty, so any violation fails the gate.\n")
+	}
+	b.WriteString("\n")
 
 	fmt.Fprintf(&b, "Across the public corpus the gate compares %d elements, of which %d\n%s contained.\n\n",
 		totalCompared, totalContained, pluralAre(totalContained))

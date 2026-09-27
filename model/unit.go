@@ -50,6 +50,12 @@ func unitAssignment(f *step.File) *step.Instance {
 // topLevelLengthUnit returns the top-level LENGTHUNIT member of the file's
 // IfcUnitAssignment.Units, if any.
 func topLevelLengthUnit(f *step.File) (*step.Instance, bool) {
+	return topLevelUnit(f, "LENGTHUNIT")
+}
+
+// topLevelUnit returns the member of the file's IfcUnitAssignment.Units whose
+// UnitType is unitType, if any.
+func topLevelUnit(f *step.File, unitType string) (*step.Instance, bool) {
 	ua := unitAssignment(f)
 	if ua == nil {
 		return nil, false
@@ -62,7 +68,7 @@ func topLevelLengthUnit(f *step.File) (*step.Instance, bool) {
 		if u.Kind != step.KindRef || u.Ref == nil {
 			continue
 		}
-		if enumEq(u.Ref, attrUnitType, "LENGTHUNIT") {
+		if enumEq(u.Ref, attrUnitType, unitType) {
 			return u.Ref, true
 		}
 	}
@@ -170,6 +176,24 @@ func UnitScale(f *step.File) float64 {
 		}
 	}
 	return 1.0
+}
+
+// PlaneAngleScale returns radians per the file's plane angle unit, resolved the
+// way UnitScale resolves the length unit. ok is false when the file declares no
+// resolvable PLANEANGLEUNIT: unlike length there is no safe default, because a
+// degree read as a radian is a different angle, not a scaled one.
+func PlaneAngleScale(f *step.File) (float64, bool) {
+	u, ok := topLevelUnit(f, "PLANEANGLEUNIT")
+	if !ok {
+		return 0, false
+	}
+	switch {
+	case u.IsA("IfcSIUnit"):
+		return siScale(u), true
+	case u.IsA("IfcConversionBasedUnit"):
+		return conversionScale(u)
+	}
+	return 0, false
 }
 
 // UnitIsUnhandled reports whether the file's top-level length unit is neither a

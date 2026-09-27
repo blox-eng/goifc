@@ -30,7 +30,14 @@ func faceSetIFC(data string) string {
 
 func buildFaceSet(t *testing.T, data string) Element {
 	t.Helper()
-	f, err := step.Parse(strings.NewReader(faceSetIFC(data)))
+	return buildFaceSetWith(t, faceSetIFC(data))
+}
+
+// buildFaceSetWith builds a complete fixture, for one that edits faceSetIFC's
+// output rather than only adding to it.
+func buildFaceSetWith(t *testing.T, src string) Element {
+	t.Helper()
+	f, err := step.Parse(strings.NewReader(src))
 	if err != nil {
 		t.Fatal(err)
 	}
