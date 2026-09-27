@@ -79,8 +79,9 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
   /* Off-screen until focused, and clipped rather than pushed to a negative
-     offset so it adds no height to a page whose whole promise is one screen. */
-  .skip {
+     offset so it adds no height to a page whose whole promise is one screen.
+     .sr is the same thing, minus the reveal on focus. */
+  .skip, .sr {
     position: absolute;
     width: 1px; height: 1px;
     overflow: hidden;

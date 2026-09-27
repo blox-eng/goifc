@@ -7,12 +7,18 @@
 
   var cmdtext = document.getElementById('cmdtext');
   var copy = document.getElementById('copy');
+  // The button keeps its accessible name, so the change of label is not
+  // announced; the result is said once, through a status region beside it.
+  var copied = document.getElementById('copied');
   copy.addEventListener('click', function () {
     if (!navigator.clipboard) return;
     navigator.clipboard.writeText(cmdtext.textContent).then(function () {
       copy.textContent = 'Copied';
       copy.dataset.done = '1';
-      setTimeout(function () { copy.textContent = 'Copy'; copy.dataset.done = '0'; }, 1600);
+      copied.textContent = 'Copied to the clipboard';
+      setTimeout(function () {
+        copy.textContent = 'Copy'; copy.dataset.done = '0'; copied.textContent = '';
+      }, 1600);
     }, function () {});
   });
 
@@ -36,8 +42,12 @@
   themeBtn.addEventListener('click', function () {
     root.dataset.theme = isDark() ? 'light' : 'dark';
     syncTheme();
+    repaint();
   });
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncTheme);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    syncTheme();
+    repaint();
+  });
   syncTheme();
 
   /* ---- the storey ----------------------------------------------------
@@ -285,8 +295,13 @@
   host.addEventListener('blur', function () { cutThrough(false); });
   host.addEventListener('click', function () { t0 = null; });
 
-  if (window.ResizeObserver) new ResizeObserver(resize).observe(canvas);
-  window.addEventListener('resize', resize);
+  // Under reduced motion there is no frame loop to pick up a new theme or a
+  // resized canvas, so those paint the one still frame again themselves.
+  function repaint() { if (reduceQ.matches) draw(0); }
+  function refit() { resize(); repaint(); }
+
+  if (window.ResizeObserver) new ResizeObserver(refit).observe(canvas);
+  window.addEventListener('resize', refit);
   resize();
   if (reduceQ.matches) { draw(0); } else { requestAnimationFrame(frame); }
 })();
