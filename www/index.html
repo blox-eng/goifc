@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>goifc — read an IFC model from Go</title>
-<meta name="description" content="Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar. One go get, one static binary.">
+<title>goifc — read IFC in Go</title>
+<meta name="description" content="Read IFC in Go. Parse the file, walk the semantics, tessellate the geometry, get the numbers — each one labelled with where it came from.">
 <link rel="canonical" href="https://goifc.org/">
 <link rel="icon" href="assets/goifc-mark.svg" type="image/svg+xml">
 <link rel="icon" href="assets/goifc-mark-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
@@ -14,8 +14,8 @@
 
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://goifc.org/">
-<meta property="og:title" content="goifc — read an IFC model from Go">
-<meta property="og:description" content="No CGO, no IfcOpenShell, no OCCT, no Python sidecar. One go get, one static binary.">
+<meta property="og:title" content="goifc — read IFC in Go">
+<meta property="og:description" content="Parse the file, walk the semantics, tessellate the geometry, get the numbers — each one labelled with where it came from.">
 <meta property="og:image" content="https://goifc.org/assets/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
 </head>
@@ -54,11 +54,10 @@
 
   <main class="stage">
     <div>
-      <h1>Read an IFC model from Go.</h1>
+      <h1>Read IFC in Go.</h1>
       <p class="sub">
-        <b>No CGO, no IfcOpenShell, no OCCT, no Python sidecar.</b>
-        One <code>go get</code>, one static binary — parse the file, walk the
-        semantics, tessellate enough to get numbers.
+        Parse the file, walk the semantics, tessellate the geometry, get the
+        numbers — <b>each one labelled with where it came from.</b>
       </p>
 
       <div class="install" id="quick-start">
@@ -70,24 +69,20 @@
         <p class="meta">
           <span>Go 1.25+ · the package is named <b>ifc</b> · one dependency</span>
           <a href="https://docs.goifc.org/latest/getting-started/">getting started ↗</a>
+          <a href="https://docs.goifc.org/latest/coverage/">coverage ↗</a>
           <a href="https://pkg.go.dev/github.com/blox-eng/goifc">API reference ↗</a>
         </p>
       </div>
     </div>
 
     <div class="blocks" id="blocks" tabindex="0"
-         aria-label="A storey assembles in three stages: step reads the file, model places each element, geometry tessellates it. Cut through it to see a section.">
+         aria-label="The goifc mark assembles as a file is read: lines of STEP become one solid, and two measured parts drop out beneath it. Measure them to see where each number came from.">
       <canvas id="stage"></canvas>
-      <ol class="stages" aria-hidden="true">
-        <li id="s-step">step</li>
-        <li id="s-model">model</li>
-        <li id="s-geometry">geometry</li>
-      </ol>
       <p class="reveal">
-        <b>Cut with any plane.</b>
-        Closed 2D rings back, in metres.
+        <b>Every number says where it came from.</b>
+        qto is authored. geometry is a bound.
       </p>
-      <p class="hint">cut through</p>
+      <p class="hint">measure it</p>
     </div>
   </main>
 

@@ -1,5 +1,5 @@
 site_name: goifc
-site_description: Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
+site_description: Read IFC in Go. Parse the file, walk the semantics, tessellate the geometry, get the numbers — each one labelled with where it came from.
 # mike serves every version under its own prefix and writes only a root
 # index.html redirect — there is no per-page redirect at the bare root. So the
 # canonical URL, and every URL emitted into llms.txt and the sitemap, must carry
