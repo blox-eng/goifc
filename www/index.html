@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>goifc — read an IFC model from Go</title>
+<meta name="description" content="Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar. One go get, one static binary.">
+<link rel="canonical" href="https://goifc.org/">
+<link rel="icon" href="assets/goifc-mark.svg" type="image/svg+xml">
+<link rel="icon" href="assets/goifc-mark-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+<link rel="preload" href="assets/fonts/plex-sans-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://goifc.org/">
+<meta property="og:title" content="goifc — read an IFC model from Go">
+<meta property="og:description" content="No CGO, no IfcOpenShell, no OCCT, no Python sidecar. One go get, one static binary.">
+<meta property="og:image" content="https://goifc.org/assets/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+<a class="skip" href="#quick-start">Skip to the install command</a>
+
+<div class="screen">
+
+  <header class="chrome">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M 3 7 L 12 3 L 21 7 L 12 11 Z"/>
+        <path d="M 3 7 L 12 11 L 12 15 L 3 11 Z" opacity=".52"/>
+        <path d="M 21 7 L 12 11 L 12 15 L 21 11 Z" opacity=".28"/>
+        <path d="M 3 18 L 7 16 L 11 18 L 7 20 Z"/>
+        <path d="M 3 18 L 7 20 L 7 23 L 3 21 Z" opacity=".52"/>
+        <path d="M 11 18 L 7 20 L 7 23 L 11 21 Z" opacity=".28"/>
+        <path d="M 13 18 L 17 16 L 21 18 L 17 20 Z"/>
+        <path d="M 13 18 L 17 20 L 17 23 L 13 21 Z" opacity=".52"/>
+        <path d="M 21 18 L 17 20 L 17 23 L 21 21 Z" opacity=".28"/>
+      </svg>
+      goifc
+    </a>
+    <nav class="links">
+      <a href="https://docs.goifc.org/latest/">Docs</a>
+      <a href="https://github.com/blox-eng/goifc" aria-label="GitHub" title="GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="iconbtn" id="theme" aria-label="Switch to dark theme" title="Switch theme">
+        <svg id="theme-icon" viewBox="0 0 16 16" aria-hidden="true"></svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="stage">
+    <div>
+      <h1>Read an IFC model from Go.</h1>
+      <p class="sub">
+        <b>No CGO, no IfcOpenShell, no OCCT, no Python sidecar.</b>
+        One <code>go get</code>, one static binary — parse the file, walk the
+        semantics, tessellate enough to get numbers.
+      </p>
+
+      <div class="install" id="quick-start">
+        <div class="cmd">
+          <code id="cmdline"><span class="p">$</span> <span id="cmdtext">go get github.com/blox-eng/goifc</span></code>
+          <button class="copy" id="copy" aria-label="Copy the command">Copy</button>
+        </div>
+        <p class="meta">
+          <span>Go 1.25+ · the package is named <b>ifc</b> · one dependency</span>
+          <a href="https://docs.goifc.org/latest/getting-started/">getting started ↗</a>
+          <a href="https://pkg.go.dev/github.com/blox-eng/goifc">API reference ↗</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="blocks" id="blocks" tabindex="0"
+         aria-label="A storey assembles in three stages: step reads the file, model places each element, geometry tessellates it. Cut through it to see a section.">
+      <canvas id="stage"></canvas>
+      <ol class="stages" aria-hidden="true">
+        <li id="s-step">step</li>
+        <li id="s-model">model</li>
+        <li id="s-geometry">geometry</li>
+      </ol>
+      <p class="reveal">
+        <b>Cut with any plane.</b>
+        Closed 2D rings back, in metres.
+      </p>
+      <p class="hint">cut through</p>
+    </div>
+  </main>
+
+  <footer class="chrome foot">
+    <a class="attrib" href="https://bloxng.com">
+      <span class="mark" aria-hidden="true"></span>
+      Blox Engineering
+    </a>
+    <span class="foot-right">
+      <a href="https://github.com/blox-eng/goifc/blob/main/LICENSE">MIT</a>
+      <a href="https://github.com/blox-eng/goifc/releases">Releases ↗</a>
+    </span>
+  </footer>
+
+</div>
+
+<script src="app.js" defer></script>
+
+</body>
+</html>

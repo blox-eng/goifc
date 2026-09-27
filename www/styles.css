@@ -1,0 +1,318 @@
+/* Self-hosted: a library whose point is carrying no runtime you did not ask
+   for should not phone a font CDN on every visit either. Latin subset only,
+   and the licence ships beside them in assets/fonts/LICENSE.txt. */
+@font-face {
+  font-family: 'Plex Sans';
+  src: url('assets/fonts/plex-sans-var.woff2') format('woff2');
+  font-weight: 100 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Plex Condensed';
+  src: url('assets/fonts/plex-sans-condensed-600.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Plex Mono';
+  src: url('assets/fonts/plex-mono-400.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Plex Mono';
+  src: url('assets/fonts/plex-mono-500.woff2') format('woff2');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+
+  :root {
+    --bg: #f4f5f1;
+    --surface: #fbfbf8;
+    --ink: #0e1113;
+    --ink-rgb: 14, 17, 19;
+    --muted: #5a605c;
+    --rule: #dbddd4;
+    --accent: #0b7285;
+    --accent-rgb: 11, 114, 133;
+    --accent-soft: #dceff2;
+
+    --sans: 'Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --display: 'Plex Condensed', 'Plex Sans', ui-sans-serif, sans-serif;
+    --mono: 'Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --gutter: clamp(1.25rem, 3.5vw, 2.75rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0f10;
+      --surface: #15181a;
+      --ink: #e7eae3;
+      --ink-rgb: 231, 234, 227;
+      --muted: #949c97;
+      --rule: #262c2f;
+      --accent: #5cc8dc;
+      --accent-rgb: 92, 200, 220;
+      --accent-soft: #0f2a30;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0f10;
+    --surface: #15181a;
+    --ink: #e7eae3;
+    --ink-rgb: 231, 234, 227;
+    --muted: #949c97;
+    --rule: #262c2f;
+    --accent: #5cc8dc;
+    --accent-rgb: 92, 200, 220;
+    --accent-soft: #0f2a30;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 1rem/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    transition: background 260ms ease, color 260ms ease;
+  }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  /* Off-screen until focused, and clipped rather than pushed to a negative
+     offset so it adds no height to a page whose whole promise is one screen. */
+  .skip {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .skip:focus {
+    width: auto; height: auto;
+    overflow: visible;
+    clip-path: none;
+    left: var(--gutter);
+    top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    z-index: 10;
+    background: var(--surface);
+    border: 1px solid var(--ink);
+    padding: 0.5rem 0.75rem;
+    font: 500 0.8125rem/1 var(--mono);
+    text-decoration: none;
+  }
+
+  .screen {
+    min-height: 100%;
+    display: grid;
+    /* minmax(0,...), not auto: an auto track takes its minimum from the widest
+       item, and the command line is `white-space: nowrap`, so the track — and
+       with it the whole page — would grow to fit it rather than let it scroll
+       in its own box. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    padding: var(--gutter);
+    gap: clamp(1rem, 3vh, 2rem);
+  }
+
+  .chrome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    font: 600 1.15rem/1 var(--display);
+    letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+  .brand svg { width: 22px; height: 22px; display: block; fill: currentColor; }
+
+  .links { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.1rem; }
+  .links a, .iconbtn {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted);
+    text-decoration: none;
+    font: 500 0.8125rem/1 var(--mono);
+    letter-spacing: 0.04em;
+    transition: color 130ms ease;
+  }
+  .links a:hover, .iconbtn:hover { color: var(--ink); }
+  .links svg, .iconbtn svg { width: 17px; height: 17px; fill: currentColor; display: block; }
+  .iconbtn { appearance: none; background: none; border: 0; padding: 0; cursor: pointer; }
+  .sep { width: 1px; height: 15px; background: var(--rule); }
+
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+    align-items: center;
+    gap: clamp(1.5rem, 4vw, 4rem);
+  }
+
+  h1 {
+    font: 600 clamp(2.3rem, 5.2vw, 4.3rem)/0.97 var(--display);
+    letter-spacing: -0.022em;
+    margin: 0;
+    max-width: 15ch;
+    text-wrap: balance;
+  }
+
+  .sub {
+    margin: 1.15rem 0 0;
+    max-width: 46ch;
+    color: var(--muted);
+    font-size: clamp(0.95rem, 1.2vw, 1.1rem);
+  }
+  .sub b { color: var(--ink); font-weight: 500; }
+
+  .sub code { font: 400 0.92em/1 var(--mono); color: var(--ink); }
+
+  .install { margin-top: clamp(1.25rem, 3vh, 1.75rem); max-width: 40rem; }
+
+  .cmd { display: flex; align-items: stretch; border: 1px solid var(--rule); background: var(--surface); }
+  .cmd code {
+    flex: 1; min-width: 0;
+    padding: 0.95rem 1.1rem;
+    font: 400 clamp(0.8125rem, 1vw, 0.9375rem)/1.5 var(--mono);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .cmd code .p { color: var(--muted); }
+  .copy {
+    appearance: none; background: none; border: 0;
+    border-left: 1px solid var(--rule);
+    padding: 0 1rem;
+    color: var(--muted);
+    font: 500 0.6875rem/1 var(--mono);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; transition: color 130ms ease;
+  }
+  .copy:hover { color: var(--ink); }
+  .copy[data-done="1"] { color: var(--accent); }
+
+  .meta {
+    display: flex; flex-wrap: wrap; align-items: center;
+    gap: 0.4rem 1rem; margin: 0.7rem 0 0;
+    font: 400 0.75rem/1.5 var(--mono); color: var(--muted);
+  }
+  .meta a { color: var(--muted); text-underline-offset: 0.2em; }
+  .meta a:hover { color: var(--ink); }
+  .meta b { color: var(--ink); font-weight: 500; }
+
+  /* --- the storey ---------------------------------------------------- */
+
+  .blocks {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    cursor: crosshair;
+  }
+  .blocks canvas { width: 100%; height: 100%; display: block; }
+
+  /* The message is not printed on the page. You have to look inside. */
+  .reveal {
+    position: absolute;
+    inset: auto 0 1%;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 420ms ease, transform 420ms ease;
+    font: 400 clamp(0.7rem, 0.95vw, 0.8125rem)/1.7 var(--mono);
+    color: var(--muted);
+  }
+  .reveal b { display: block; color: var(--ink); font-weight: 500; }
+  .blocks[data-open="1"] .reveal { opacity: 1; transform: none; }
+
+  .hint {
+    position: absolute;
+    inset: auto 0 1%;
+    text-align: center;
+    pointer-events: none;
+    font: 400 0.6875rem/1 var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 600ms ease;
+  }
+  .blocks[data-hint="1"] .hint { opacity: 0.65; }
+
+  /* The three packages, named in the order the animation runs them. The one
+     whose work is on screen takes the accent; the rest stay quiet. */
+  .stages {
+    position: absolute;
+    inset: 1% 0 auto;
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    pointer-events: none;
+    font: 500 0.6875rem/1 var(--mono);
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .stages li + li::before { content: '→'; margin-right: 0.4rem; opacity: 0.5; }
+  .stages li { transition: color 260ms ease; }
+  .stages li[data-on="1"] { color: var(--accent); }
+
+  .foot { color: var(--muted); font: 400 0.75rem/1 var(--mono); }
+  .foot a { text-decoration: none; }
+  .foot a:hover { color: var(--ink); }
+  .attrib { display: inline-flex; align-items: center; gap: 0.45rem; text-decoration: none; }
+  /* The Blox mark, drawn as a mask rather than an <img>: the file is a single
+     path with fill="currentColor", which an <img> resolves in its own context
+     and renders black — wrong on the dark theme. A mask takes its colour from
+     the text beside it, so the attribution stays one object in both themes.
+     CSP governs this under img-src, which is 'self'; the file is served here. */
+  .attrib .mark {
+    width: 13px;
+    height: 14px;
+    flex: none;
+    background-color: currentColor;
+    -webkit-mask: url(assets/blox-mark.svg) center / contain no-repeat;
+    mask: url(assets/blox-mark.svg) center / contain no-repeat;
+  }
+  .foot-right { display: flex; align-items: center; gap: 1rem; }
+
+  /* ---- 404 ------------------------------------------------------------
+     One column: there is no second thing to put beside the message, and the
+     landing page's right-hand track would otherwise hold the text to 1fr of
+     a two-track grid for no reason. */
+
+  .stage.solo { grid-template-columns: minmax(0, 1fr); }
+
+  .code {
+    margin: 0 0 0.6rem;
+    color: var(--muted);
+    font: 500 0.8125rem/1 var(--mono);
+    letter-spacing: 0.08em;
+  }
+
+  .ways {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.4rem;
+    margin: clamp(1.25rem, 3vh, 1.75rem) 0 0;
+  }
+  .ways a {
+    color: var(--muted);
+    text-decoration: none;
+    font: 500 0.8125rem/1 var(--mono);
+    letter-spacing: 0.04em;
+    transition: color 130ms ease;
+  }
+  .ways a:hover { color: var(--ink); }
+
+  @media (max-width: 62rem) {
+    .stage { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+    .blocks { max-width: 20rem; margin-inline: auto; order: -1; }
+    h1 { max-width: 18ch; }
+  }

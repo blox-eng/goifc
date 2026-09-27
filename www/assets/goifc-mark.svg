@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#141414" role="img" aria-label="goifc">
+  <!-- One solid in, measured parts out. Isometric 2:1, alpha ramp = one ink.
+       Top face 1.0 / left 0.52 / right 0.28. The parts span the same width as
+       the whole: nothing is lost in the transformation. -->
+  <path d="M 3 7 L 12 3 L 21 7 L 12 11 Z"/>
+  <path d="M 3 7 L 12 11 L 12 15 L 3 11 Z" opacity=".52"/>
+  <path d="M 21 7 L 12 11 L 12 15 L 21 11 Z" opacity=".28"/>
+  <path d="M 3 18 L 7 16 L 11 18 L 7 20 Z"/>
+  <path d="M 3 18 L 7 20 L 7 23 L 3 21 Z" opacity=".52"/>
+  <path d="M 11 18 L 7 20 L 7 23 L 11 21 Z" opacity=".28"/>
+  <path d="M 13 18 L 17 16 L 21 18 L 17 20 Z"/>
+  <path d="M 13 18 L 17 20 L 17 23 L 13 21 Z" opacity=".52"/>
+  <path d="M 21 18 L 17 20 L 17 23 L 21 21 Z" opacity=".28"/>
+</svg>

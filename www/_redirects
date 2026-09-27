@@ -1,0 +1,21 @@
+# Cloudflare Pages redirects for goifc.org.
+#
+# The documentation lives on docs.goifc.org, served by GitHub Pages through
+# mike, which puts every version under its own prefix. This apex never hosted
+# it, so there are no old URLs to carry over. These catch the two guesses a
+# reader makes: /docs, and a docs URL with its host swapped for the apex —
+# /latest/... or /dev/..., the prefixes mike publishes.
+#
+# Scoped to those prefixes deliberately. A blanket `/* ... 301` would swallow
+# the landing page this site exists to serve.
+#
+# Both the bare path and the trailing-slash form are listed, because a splat
+# rule does not match the path without its slash. Fragments are not sent to the
+# server, so the browser reattaches them to the target on its own.
+
+/docs        https://docs.goifc.org/latest/          301
+/docs/*      https://docs.goifc.org/latest/:splat    301
+/latest      https://docs.goifc.org/latest/          301
+/latest/*    https://docs.goifc.org/latest/:splat    301
+/dev         https://docs.goifc.org/dev/             301
+/dev/*       https://docs.goifc.org/dev/:splat       301

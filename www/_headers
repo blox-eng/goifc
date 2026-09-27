@@ -1,0 +1,22 @@
+# Cloudflare Pages response headers for goifc.org.
+
+/*
+  # Everything this page loads comes from this origin: the stylesheet, the one
+  # script, the marks and the fonts. Nothing is fetched from a third party —
+  # not even analytics — so the policy can say exactly that, and any future
+  # addition has to be a deliberate edit here rather than a quiet new request.
+  # There is no connect-src: the page makes no requests after it loads, and
+  # default-src 'none' keeps it that way.
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()
+  # Deliberately without includeSubDomains: that would bind docs.goifc.org to
+  # this apex's policy, and a subdomain whose certificate is still being issued
+  # would then be unreachable rather than merely unencrypted.
+  Strict-Transport-Security: max-age=15552000
+
+# A weight of a typeface does not change once it is published. If one is ever
+# replaced it gets a new filename, so a year is safe here and only here.
+/assets/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
