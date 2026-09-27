@@ -17,6 +17,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 ### Fixed
 
 - The docs' canonical URLs, sitemap and `llms.txt` pointed at `/latest/dev/`, a prefix that does not exist. They now point at `/latest/`.
+- A profile built from a composite curve dropped every segment that was not a polyline, so an arc became its chord and the extruded solid came out smaller than the element. This is why `duplex_a`'s two `IfcStairFlight` elements were 9.9 mm short on Y (#53): each Revit stair nosing is a 10 mm `IfcTrimmedCurve` arc over an `IfcCircle`. Circular arcs are now tessellated on the circumscribed polygon, so they bound from above, with parameter trims read in the file's plane angle unit (new `model.PlaneAngleScale`). Any other segment declines the profile to a box, and that box now reaches the full extent of any circle or ellipse in it rather than only its centre. Gate 1 now contains 331 of 331 elements, up from 329, and the known-violations allowlist is empty.
+- A faceted brep or surface model with a face goifc could not read (an `IfcEdgeLoop` bound, a malformed point, a member that is not a face) was tessellated from the faces it could read and reported as `brep`. That partial mesh can be smaller than the element (#62). Any unreadable face, bound, point or shell now declines the whole item to its box. No shell in the public corpus is partly unreadable, so the fallback rate there is unchanged.
 
 ## v0.13.0 — 2026-09-25
 
