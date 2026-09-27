@@ -29,28 +29,7 @@ type knownViolation struct {
 // all, which means the bug was fixed and the stale entry must be deleted rather
 // than left to quietly rot into a lie.
 //
-// duplex_a: goifc under-reports the world AABB of IfcStairFlight elements by
-// ~0.99 cm on the Y axis. Both known instances are the SAME Revit stair type
-// ("Stair:Residential - 200mm Max Riser 250mm Tread", 16 risers / 15 treads,
-// Revit instances 151086 and 198878) — the near-identical shortfall on both
-// (0.009927508 m and 0.009927222 m) points at a systematic issue with how
-// goifc bounds a stepped solid along its extrusion path, not per-element
-// noise. This is a known goifc geometry gap found by this gate, tracked as
-// https://github.com/blox-eng/goifc/issues/53. Closing it means deleting both
-// entries below in the same commit — the stale-entry check fails otherwise.
-var knownViolations = map[string][]knownViolation{
-	"duplex_a": {
-		{
-			globalID:  "1oKjKg9PD3fP1iIwXLh3lK",
-			axis:      "min-y",
-			shortfall: 0.009927508357675308,
-			note:      `IfcStairFlight, Revit instance 151086 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads)`,
-		},
-		{
-			globalID:  "3KMJUyUe9DfQ2FOCd5ZoiN",
-			axis:      "max-y",
-			shortfall: 0.009927222255395662,
-			note:      `IfcStairFlight, Revit instance 198878 of "Stair:Residential - 200mm Max Riser 250mm Tread" (16 risers / 15 treads)`,
-		},
-	},
-}
+// Empty: the only entries, duplex_a's two IfcStairFlight shortfalls (#53), were
+// a dropped nosing arc and closed with it. An empty allowlist is the goal, not
+// a gap to fill.
+var knownViolations = map[string][]knownViolation{}

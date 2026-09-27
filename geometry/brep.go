@@ -14,7 +14,8 @@ const (
 )
 
 // surfaceModelMesh unions the faces of every shell or face set in a surface
-// model's boundary attribute, raw units.
+// model's boundary attribute, raw units. Any member brepMesh cannot read in
+// full declines the whole model, for the reason brepMesh gives.
 //
 // Shared by IfcShellBasedSurfaceModel (SbsmBoundary, a SET of IfcShell) and
 // IfcFaceBasedSurfaceModel (FbsmFaces, a SET of IfcConnectedFaceSet). Two
@@ -32,11 +33,13 @@ func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint3
 	}
 	for _, sv := range boundaryV.List {
 		if sv.Kind != step.KindRef || sv.Ref == nil {
-			continue
+			return nil, nil, false
 		}
-		if v, t, shellOK := brepMesh(sv.Ref); shellOK {
-			appendMesh(&verts, &tris, v, t)
+		v, t, shellOK := brepMesh(sv.Ref)
+		if !shellOK {
+			return nil, nil, false
 		}
+		appendMesh(&verts, &tris, v, t)
 	}
 	return verts, tris, len(tris) > 0
 }
@@ -44,6 +47,10 @@ func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint3
 // brepMesh tessellates every planar face of an IfcFacetedBrep (or a bare
 // IfcClosedShell/IfcConnectedFaceSet), raw units. Inner bounds (holes) are
 // ignored in v1 (walls solid).
+//
+// A face it cannot read declines the whole shell rather than being skipped: the
+// faces that did parse make a mesh smaller than the solid, and shipping it would
+// under-report the element's bounds where the OBB fallback over-reports them.
 func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
 	shell := brep
 	if brep.IsA("IfcFacetedBrep") {
@@ -59,11 +66,11 @@ func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
 	}
 	for _, fv := range facesV.List {
 		if fv.Kind != step.KindRef || fv.Ref == nil || !fv.Ref.IsA("IfcFace") {
-			continue
+			return nil, nil, false
 		}
 		loop := faceOuterLoop(fv.Ref)
 		if len(loop) < 3 {
-			continue
+			return nil, nil, false
 		}
 		base := uint32(len(verts) / 3)
 		for _, p := range loop {
@@ -78,7 +85,9 @@ func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
 }
 
 // faceOuterLoop returns the polygon of a face's outer bound (first IfcFaceOuterBound,
-// else first bound). Points are IfcPolyLoop.Polygon coordinates, raw units.
+// else first bound). Points are IfcPolyLoop.Polygon coordinates, raw units. nil
+// when any bound is unreadable: skipping an unreadable outer bound would promote
+// a hole to the face's outline.
 func faceOuterLoop(face *step.Instance) []v3 {
 	boundsV, ok := face.Get(attrFaceBounds)
 	if !ok || boundsV.Kind != step.KindList {
@@ -87,13 +96,16 @@ func faceOuterLoop(face *step.Instance) []v3 {
 	var fallback []v3
 	for _, bv := range boundsV.List {
 		if bv.Kind != step.KindRef || bv.Ref == nil {
-			continue
+			return nil
 		}
 		loop, ok := bv.Ref.Ref(attrBoundLoop)
 		if !ok || !loop.IsA("IfcPolyLoop") {
-			continue
+			return nil
 		}
 		pts := loopPoints(loop)
+		if pts == nil {
+			return nil
+		}
 		// IfcFaceBound.Orientation=.F. means the loop vertices run opposite to the
 		// face normal (IFC spec); reverse them so the loop winding — which
 		// triangulateFace derives the facet normal from via Newell's method —
@@ -113,20 +125,22 @@ func faceOuterLoop(face *step.Instance) []v3 {
 	return fallback
 }
 
+// loopPoints returns an IfcPolyLoop's points, or nil if any is not a 3D point.
 func loopPoints(loop *step.Instance) []v3 {
 	v, ok := loop.Get(attrLoopPolygon)
 	if !ok || v.Kind != step.KindList {
 		return nil
 	}
-	var out []v3
+	out := make([]v3, 0, len(v.List))
 	for _, pv := range v.List {
 		if pv.Kind != step.KindRef || pv.Ref == nil {
-			continue
+			return nil
 		}
 		c := floatsOf(pv.Ref, attrCoordinates)
-		if len(c) >= 3 {
-			out = append(out, v3{c[0], c[1], c[2]})
+		if len(c) < 3 {
+			return nil
 		}
+		out = append(out, v3{c[0], c[1], c[2]})
 	}
 	return out
 }

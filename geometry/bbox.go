@@ -85,6 +85,12 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 				pts = append(pts, v3{c[0], c[1], 0})
 			}
 		}
+		// A conic's only point is its centre, so a declined arc's box would stop
+		// short of the arc by up to its radius. The corners of the square (or
+		// rectangle) around the whole conic reach any arc of it.
+		if inst.IsA("IfcCircle") || inst.IsA("IfcEllipse") {
+			pts = append(pts, conicCorners(inst)...)
+		}
 		// Tessellated face sets keep their points in a list, not as
 		// IfcCartesianPoint entities. Without this a declined face set's element
 		// found no points, got no box, and vanished. Every well-formed entry
@@ -114,12 +120,11 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 				}
 			} else {
 				// profilePolygon couldn't build a full ordered polygon (e.g. a
-				// composite-curve profile with an IfcTrimmedCurve/arc segment we
-				// don't tessellate — common on I-beam/channel steel profiles with
-				// filleted corners). Still extrude whatever raw profile points
-				// ARE reachable (straight-segment endpoints) to z=0 and z=depth —
-				// an approximate envelope beats a box that never saw the depth at
-				// all and collapses to a sliver along the extrusion axis.
+				// composite-curve profile with an elliptical or B-spline segment).
+				// Still extrude every raw profile point reachable, conic corners
+				// included, to z=0 and z=depth — an envelope beats a box that
+				// never saw the depth and collapses to a sliver along the
+				// extrusion axis.
 				pts = append(pts, extrudedAreaApproxPoints(inst, ladder)...)
 			}
 		}
@@ -136,6 +141,34 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 }
 
 const attrCoordinates = 0
+
+// conicCorners returns the four corners of the box around an IfcCircle or
+// IfcEllipse in its own placement, raw units, in the frame that placement sits
+// in. nil when the conic has no placement or no positive size.
+func conicCorners(conic *step.Instance) []v3 {
+	pos, ok := conic.Ref(attrConicPos)
+	if !ok {
+		return nil
+	}
+	a := scalarAt(conic, attrCircleR)
+	b := a
+	if conic.IsA("IfcEllipse") {
+		b = scalarAt(conic, attrEllipseSemi2)
+	}
+	if !(a > 0) || !(b > 0) {
+		return nil
+	}
+	var m model.Mat4
+	if pos.IsA("IfcAxis2Placement3D") {
+		m = axisPlacement3D(pos)
+	} else {
+		m = axisPlacement2D(pos)
+	}
+	return []v3{
+		applyMat(m, v3{-a, -b, 0}), applyMat(m, v3{a, -b, 0}),
+		applyMat(m, v3{a, b, 0}), applyMat(m, v3{-a, b, 0}),
+	}
+}
 
 // extrudedAreaApproxPoints extrudes every raw point reachable in the solid's
 // profile subtree to z=0 and z=depth (under the solid's own Position and

@@ -84,7 +84,7 @@ with the committed numbers being world-space, but that is inference from the
 data, not a record from the run.
 
 What this means for a reader: Gate 1 is reproducible against *these bytes* —
-anyone can clone and run it, and the two `knownViolations` shortfalls are
+anyone can clone and run it, and any `knownViolations` shortfall is
 measured to nine decimals against them. It is not yet reproducible from
 IfcOpenShell source. Closing that gap needs a working image pinned by digest
 (Status above), after which a regeneration verified by `make oracle` can be
