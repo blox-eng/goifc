@@ -1,6 +1,6 @@
 # goifc
 
-> Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar.
+> Read IFC in Go. Parse the file, walk the semantics, tessellate the geometry, get the numbers — each one labelled with where it came from.
 
 Pure-Go IFC/STEP reader. Three stages, each usable alone: `step` (schema-agnostic
 SPF parser, no EXPRESS), `model` (semantic elements, units, placements), `geometry`

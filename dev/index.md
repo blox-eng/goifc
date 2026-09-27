@@ -1,6 +1,6 @@
 # goifc
 
-Read an IFC model from Go. No CGO, no IfcOpenShell, no OCCT, no Python sidecar. One `go get`, one static binary.
+Read IFC in Go. Parse the file, walk the semantics, tessellate the geometry, get the numbers — each one labelled with where it came from.
 
 ```
 go get github.com/blox-eng/goifc
@@ -8,24 +8,12 @@ go get github.com/blox-eng/goifc
 
 [Get started](https://docs.goifc.org/latest/getting-started/index.md) [API reference](https://pkg.go.dev/github.com/blox-eng/goifc)
 
-## Why this exists
+## What you get
 
-I needed quantities out of IFC files inside a Go service. Every path led back to IfcOpenShell — which is very good, and which is a C++ toolchain, a Python runtime, and a container three times the size of the service using it.
-
-So the question was never "is IfcOpenShell better." It is. The question was how much of it I actually needed. The answer turned out to be: parse the file, walk the semantics, tessellate enough to get numbers. That fits in a few thousand lines of Go.
-
-## Which one you want
-
-|                      | goifc                           | IfcOpenShell                   |
-| -------------------- | ------------------------------- | ------------------------------ |
-| Deploy               | `go get`, static binary         | C++ toolchain, Python runtime  |
-| Solids               | proxy meshes                    | exact B-rep (OCCT)             |
-| Quantities           | authored, or derived + labelled | authored, or exact from solids |
-| Openings netted out  | no — gross volume               | yes — net volume               |
-| Schema coverage      | IFC2X3 / IFC4 core entities     | full EXPRESS schema            |
-| Runs in a Go process | yes                             | via subprocess or bindings     |
-
-Pick goifc when deployment cost dominates and bounding numbers are good enough. Pick IfcOpenShell when the geometry has to be exact.
+- **Schemas** — IFC2X3 and IFC4 core entities.
+- **Elements** — semantics, placements, units, materials, storeys.
+- **Geometry** — proxy meshes, bounding boxes, plane sections, GLB.
+- **Quantities** — authored (`qto`), or derived from the mesh (`geometry`). Openings are not netted out, so a derived volume is gross.
 
 Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://docs.goifc.org/latest/limitations/index.md).
 

@@ -12,6 +12,7 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 - The documentation moved to <https://docs.goifc.org/latest/>. The old `blox-eng.github.io/goifc/` URLs redirect there once the custom domain is live. Every deploy now checks that the custom domain is still set at the `gh-pages` root and restores it if a deploy dropped it.
 - goifc has a landing page at <https://goifc.org>, in `www/`.
+- The landing page animates the goifc mark: a file read into one solid, and two measured parts out, whose quantities show where each number came from. The landing page, README and docs home now describe what goifc does rather than what it is not.
 
 ### Fixed
 
