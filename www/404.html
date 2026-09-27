@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Not found — goifc</title>
+<meta name="description" content="No page at this address on goifc.org.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/goifc-mark.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/goifc-mark-dark.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+<link rel="preload" href="/assets/fonts/plex-sans-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/plex-sans-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+
+<!-- No script on this page, deliberately. app.js drives the copy button, the
+     theme toggle and the canvas, and it dereferences those elements without
+     guarding — so including it would throw before the theme handler ran. The
+     theme still follows prefers-color-scheme through CSS; only the manual
+     toggle is absent, which persists nothing and so carries nothing across
+     from the landing page anyway. -->
+</head>
+<body>
+
+<div class="screen">
+
+  <header class="chrome">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M 3 7 L 12 3 L 21 7 L 12 11 Z"/>
+        <path d="M 3 7 L 12 11 L 12 15 L 3 11 Z" opacity=".52"/>
+        <path d="M 21 7 L 12 11 L 12 15 L 21 11 Z" opacity=".28"/>
+        <path d="M 3 18 L 7 16 L 11 18 L 7 20 Z"/>
+        <path d="M 3 18 L 7 20 L 7 23 L 3 21 Z" opacity=".52"/>
+        <path d="M 11 18 L 7 20 L 7 23 L 11 21 Z" opacity=".28"/>
+        <path d="M 13 18 L 17 16 L 21 18 L 17 20 Z"/>
+        <path d="M 13 18 L 17 20 L 17 23 L 13 21 Z" opacity=".52"/>
+        <path d="M 21 18 L 17 20 L 17 23 L 21 21 Z" opacity=".28"/>
+      </svg>
+      goifc
+    </a>
+    <nav class="links">
+      <a href="https://docs.goifc.org/latest/">Docs</a>
+      <a href="https://github.com/blox-eng/goifc">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="stage solo">
+    <div>
+      <p class="code" aria-hidden="true">404</p>
+      <h1>No page at this address.</h1>
+      <p class="sub">
+        This site is one page. The documentation lives at
+        <b>docs.goifc.org</b>, and the API reference on pkg.go.dev.
+      </p>
+      <p class="ways">
+        <a href="/">Landing page</a>
+        <a href="https://docs.goifc.org/latest/">Documentation</a>
+        <a href="https://docs.goifc.org/latest/getting-started/">Getting started</a>
+        <a href="https://github.com/blox-eng/goifc/issues">Report a broken link ↗</a>
+      </p>
+    </div>
+  </main>
+
+  <footer class="chrome foot">
+    <a class="attrib" href="https://bloxng.com">
+      <span class="mark" aria-hidden="true"></span>
+      Blox Engineering
+    </a>
+    <span class="foot-right">
+      <a href="https://github.com/blox-eng/goifc/blob/main/LICENSE">MIT</a>
+      <a href="https://github.com/blox-eng/goifc/releases">Releases ↗</a>
+    </span>
+  </footer>
+
+</div>
+
+</body>
+</html>

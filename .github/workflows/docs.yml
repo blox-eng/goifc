@@ -1,5 +1,9 @@
 name: Docs
 
+# Builds the documentation site and deploys it with mike to the gh-pages branch,
+# which GitHub Pages serves at docs.goifc.org. The landing page at the goifc.org
+# apex is a separate site in www/, deployed by Cloudflare Pages.
+
 on:
   push:
     branches: [main]
@@ -102,7 +106,7 @@ jobs:
       #
       #   - the root index.html redirect, without which the bare site URL 404s
       #   - the `latest` alias, which is the prefix site_url and every README
-      #     link point at (mike serves each version under its own prefix and
+      #     link point at (https://docs.goifc.org/latest/...) (mike serves each version under its own prefix and
       #     writes NO per-page redirect at the root, so an unprefixed deep link
       #     is dead, not redirected)
       #
@@ -130,3 +134,31 @@ jobs:
           version="$(printf '%s' "${TAG#v}" | cut -d. -f1,2)"
           mike deploy --push --update-aliases "$version" latest
           mike set-default --push latest
+
+      # GitHub Pages takes the custom domain from a CNAME file at the ROOT of
+      # gh-pages, and mike owns that branch. A docs/CNAME would not do: mkdocs
+      # copies it into the build, so it lands in /dev/CNAME and /1.2/CNAME,
+      # never at the root. And the repository setting is only the file GitHub
+      # commits on your behalf — if a deploy ever drops it, the domain is
+      # unset and the docs go down on that push, not at the change that caused
+      # it. So every deploy ends by checking for it, restoring it if it is
+      # missing, and failing loudly if it still is not there.
+      - name: Keep the custom domain at the gh-pages root
+        env:
+          DOMAIN: docs.goifc.org
+        run: |
+          git fetch --quiet origin gh-pages
+          if [ "$(git show origin/gh-pages:CNAME 2>/dev/null)" = "$DOMAIN" ]; then
+            echo "gh-pages root CNAME is $DOMAIN."
+          else
+            echo "gh-pages root CNAME is missing or wrong; restoring $DOMAIN."
+            pages="$RUNNER_TEMP/gh-pages"
+            git worktree add --detach "$pages" origin/gh-pages
+            printf '%s\n' "$DOMAIN" > "$pages/CNAME"
+            git -C "$pages" add CNAME
+            git -C "$pages" commit --quiet -m "docs: pin the custom domain to $DOMAIN"
+            git -C "$pages" push --quiet origin HEAD:gh-pages
+            git worktree remove "$pages"
+            git fetch --quiet origin gh-pages
+          fi
+          test "$(git show origin/gh-pages:CNAME)" = "$DOMAIN"

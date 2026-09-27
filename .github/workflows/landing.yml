@@ -1,0 +1,49 @@
+name: Landing
+
+# Checks the landing page at goifc.org.
+#
+# The page is hand-written static HTML with no build step, and it is deployed by
+# Cloudflare Pages straight from this repository — Pages builds every pull
+# request as a preview and main as production, so nothing here deploys anything.
+# What is missing without this job is the guarantee `mkdocs build --strict`
+# gives the documentation: that a reference which does not resolve fails loudly
+# rather than becoming a 404 someone finds later. check-links.sh is also the
+# Pages build command, so a broken reference stops the deploy as well as the PR.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'www/**'
+      - '.github/scripts/check-links.sh'
+      - '.github/workflows/landing.yml'
+  pull_request:
+    paths:
+      - 'www/**'
+      - '.github/scripts/check-links.sh'
+      - '.github/workflows/landing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: landing-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  links:
+    name: Links
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check references
+        run: .github/scripts/check-links.sh www

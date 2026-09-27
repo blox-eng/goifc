@@ -19,6 +19,19 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Changed
+
+- The documentation moved to <https://docs.goifc.org/latest/>. The old
+  `blox-eng.github.io/goifc/` URLs redirect there once the custom domain is
+  live. Every deploy now checks that the custom domain is still set at the
+  `gh-pages` root and restores it if a deploy dropped it.
+- goifc has a landing page at <https://goifc.org>, in `www/`.
+
+### Fixed
+
+- The docs' canonical URLs, sitemap and `llms.txt` pointed at `/latest/dev/`,
+  a prefix that does not exist. They now point at `/latest/`.
+
 ## v0.13.0 — 2026-09-25
 
 ### Added
@@ -179,7 +192,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
   The polygons must already be in ONE plane's frame; nothing here can detect a
   mismatch. Detail below the boundary walk's existing 1e-5 m weld is not detail
-  it can see. See [measuring silhouettes](https://blox-eng.github.io/goifc/latest/guides/measuring-silhouettes/).
+  it can see. See [measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/).
 
 ## v0.9.3 — 2026-09-02
 
