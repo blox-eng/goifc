@@ -6,12 +6,12 @@ Design for issue #4. Status: **decided** — see "The outward sign".
 
 Grouping a building's walls by which elevation they face is a routine takeoff task, and
 the library gives no help with it. Issue #4 measured two independent wrong answers on a
-real 29 MB ArchiCAD IFC2X3 export (87 exterior walls, footprint ≈ 20.6 × 26.4 m,
-non-convex with wings) before reaching a right one. Both wrong answers *looked* fine:
+real 29 MB ArchiCAD IFC2X3 export (a non-convex footprint with wings) before reaching
+a right one. Both wrong answers *looked* fine:
 
 1. **Summing signed face normals cancels.** A wall has two large opposite faces — inner
    and outer. Area-weighted signed normals nearly cancel, so the winner is decided by
-   floating-point noise. All 87 walls collapsed into two of the four bins.
+   floating-point noise. Every wall collapsed into two of the four bins.
 2. **Mixing frames silently.** `Element.Verts` are element-local while `BBoxMin`/`BBoxMax`
    are world. Deriving normals from `Verts` and comparing against `BBox` compares two
    different spaces; in the local frame most walls extrude along the same local axis, so

@@ -41,7 +41,7 @@ func benchModel(n int) []Element {
 // Why the bench family needs this: benchModel's elements are 12-triangle boxes,
 // and on those the vertex transform is nearly free, so a benchmark built only
 // from them measures grid rasterization and is blind to anything scaling with
-// mesh size. A real building is not like that — kb645.ifc averages ~1,769
+// mesh size. A real building is not like that — private_a.ifc averages ~1,769
 // triangles per element, ~147x a box. A change worth 7x on that model moved the
 // box-only benchmark by 2.7%. A benchmark that cannot see the regime it is
 // meant to defend is not defending it.

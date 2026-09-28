@@ -68,7 +68,7 @@ how large the subset is.
 | `duplex_a.ifc` | 2.4 MB | 463 KB | Revit 2011 | yes |
 | `fzk_haus.ifc` | 2.6 MB | 488 KB | ArchiCAD | yes |
 | `office_a.ifc` | 4.1 MB | — | Revit + Solibri | no, private |
-| `kb645.ifc` | 29.6 MB | — | ArchiCAD | no, private |
+| `private_a.ifc` | 29.6 MB | — | ArchiCAD | no, private |
 
 The three shipped files are redistributable published samples: IfcOpenShell's
 own IfcOpenHouse, buildingSMART's Duplex Apartment common building model, and
