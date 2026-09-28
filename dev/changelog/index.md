@@ -8,6 +8,10 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- `Facing.BackArea`: the gross area of an element's far side, the faces lying flat against `-Normal`. A layer behind the structure (insulation on a balcony parapet's inner face) is measured from it, where `FaceArea` names only the side the element presents. Leaning faces on the far side are joints (a mitre closing onto the next wall) and are not counted, so a mitred room's inner faces read shorter than its outer ones. A far side that is curved or battered (more than a tenth of it tilted 5–30° off flat) reads 0, unmeasured, rather than the flat part of it. A face covered by an abutting element is not subtracted.
+
 ## v0.13.1 — 2026-09-27
 
 ### Changed
