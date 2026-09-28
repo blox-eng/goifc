@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.14.0 — 2026-09-28
+
 ### Added
 
 - `Facing.BackArea`: the gross area of an element's far side, the faces
