@@ -7,7 +7,7 @@ package geometry
 // mid-height band, and each grid transforms every element the slice crosses or
 // sits beneath. An element therefore has its vertices transformed once per band
 // below it, not once. On a real ~1,900-element building that is 152 bands and
-// 88x redundancy — measured on kb645.ifc: 164,670 worldPoints calls for 1,878
+// 88x redundancy — measured on private_a.ifc: 164,670 worldPoints calls for 1,878
 // elements, transforming 239 million triangles' worth of vertices to cover
 // 3.3 million.
 //

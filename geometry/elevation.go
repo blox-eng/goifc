@@ -271,7 +271,7 @@ const facingEpsilon = 1e-12
 // Flattening is load-bearing, not tidiness. A raw 3-D dot conflates "pointing
 // the wrong way" with "tilted off vertical": a wall leaning 45 degrees but
 // squarely facing east has its dot dragged under any threshold by the Z term
-// and would be dropped from every sheet. On kb645 that silently deleted 45
+// and would be dropped from every sheet. On private_a that silently deleted 45
 // exterior proxies from the drawing entirely — a worse failure than the
 // double-draw, because a wall nobody drew is a wall nobody checks.
 //
@@ -292,7 +292,7 @@ const facingEpsilon = 1e-12
 // the dot is zero in exact arithmetic and a hair positive once a real placement
 // transform has been through it. SilhouetteOn projects the whole solid, so an
 // edge-on wall admitted on a rounding error still draws its full thickness by
-// height. On kb645 that put 913 of 950 drawn hosts — and all 87 of 87 ETICS
+// height. On private_a that put 913 of 950 drawn hosts — and all 87 of 87 ETICS
 // hosts — on two perpendicular sheets.
 func facesSheet(n, pn [3]float64) bool {
 	nx, ny, ok := horizontalUnit(n)

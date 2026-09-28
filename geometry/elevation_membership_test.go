@@ -26,7 +26,7 @@ func nudged(n [3]float64, deg float64) [3]float64 {
 
 // TestElevations_AWallIsNotOnThePerpendicularSheet is goifc#28.
 //
-// A wall cannot face both north and east. On kb645 all 87 of 87 ETICS hosts
+// A wall cannot face both north and east. On private_a all 87 of 87 ETICS hosts
 // landed on two perpendicular sheets, the secondary carrying 10-50% of the
 // dominant sheet's area — because SilhouetteOn projects the whole SOLID, so an
 // edge-on wall still draws its thickness at full height however small the dot

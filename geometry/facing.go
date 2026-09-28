@@ -129,7 +129,7 @@ func BuildFacings(elems []Element) map[string]Facing {
 	// is the large allocation here. The serial version kept exactly one live at a
 	// time and said so; this keeps at most facingBandWorkers live.
 	//
-	// That is NOT the memory regression it looks like. Measured on kb645.ifc
+	// That is NOT the memory regression it looks like. Measured on private_a.ifc
 	// (1,922 elements, 152 bands), peak heap across the call went DOWN, 692MB
 	// serial to 676MB here, while total allocation fell from 9.9GB to 6.7GB. The
 	// cache retains 55MB, and eliminating 88x redundant transform churn more than
@@ -151,7 +151,7 @@ func BuildFacings(elems []Element) map[string]Facing {
 	// Bound the AGGREGATE grid memory, not just the grid COUNT. A count alone is
 	// only a memory ceiling if every grid is small: occupancyMaxCells lets one
 	// band allocate ~40M cells across several []bool, so eight of those in flight
-	// is roughly eight times what the serial version could ever hold. On kb645
+	// is roughly eight times what the serial version could ever hold. On private_a
 	// this never binds — its grids are tiny and the clamp leaves workers alone —
 	// but the models that reach the cap are precisely the georeferenced,
 	// site-scale ones the cap was written for, so the ceiling has to hold there

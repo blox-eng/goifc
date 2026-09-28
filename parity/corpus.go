@@ -31,7 +31,7 @@ var Public = []string{"ifcopenhouse", "duplex_a", "fzk_haus"}
 
 // Private lists models that exist only in $GOIFC_PRIVATE_CORPUS. They sharpen
 // the gap ranking locally and never gate CI.
-var Private = []string{"kb645", "office_a"}
+var Private = []string{"private_a", "office_a"}
 
 // packageDir is resolved at init from this file's compile-time path, so both
 // `go test ./...` (cwd = parity/) and cmd/coverage (cwd = parity/cmd/coverage/)

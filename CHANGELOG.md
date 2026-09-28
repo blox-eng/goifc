@@ -236,13 +236,13 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 ### Fixed
 
 - `BuildFacings` no longer re-transforms the whole model into every 10 cm mid-height
-  band. It built one occupancy grid per distinct band — 152 of them on kb645.ifc —
+  band. It built one occupancy grid per distinct band — 152 of them on private_a.ifc —
   and rasterized the model into each from scratch: 164,670 `worldPoints` calls for
   1,878 elements, 239M triangles transformed to cover 3.3M, **72x redundant**. World
   points are now computed once and shared, and the bands (which are independent) are
   classified on a bounded worker pool.
 
-  **15.233s -> 2.139s (7.1x)** on kb645.ifc, with the classification bit-identical:
+  **15.233s -> 2.139s (7.1x)** on private_a.ifc, with the classification bit-identical:
   digest `c0b435cfc8457ca5`, n=1519, on both sides — every field of every `Facing`,
   ids sorted, full float precision. The import pass as a whole goes 27.6s -> 13.7s.
 
@@ -275,7 +275,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   instead of the element being discarded whole (#37). The boundary walk is exact in
   real arithmetic only; on float32-derived world coordinates it can classify a
   sub-edge inconsistently and leave the ring open, and the all-or-nothing verdict then
-  threw away everything. On kb645 that lost **45 exterior elements**, every one of them
+  threw away everything. On private_a that lost **45 exterior elements**, every one of them
   to a single open chain with a gap between 0.9 mm and 9.1 mm — in one case 56 segments
   of correct outline discarded for one 9.1 mm seam. 914 entities drawn before, 959
   after, 45 of them bridged.
@@ -304,7 +304,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   sheet has a dot of zero in exact arithmetic and a hair above it once a real
   placement transform has been through the normal, so it was admitted; and because
   `SilhouetteOn` projects the whole solid, an edge-on wall admitted on a rounding
-  error still drew its full thickness by height. On kb645 that put 913 of 950 drawn
+  error still drew its full thickness by height. On private_a that put 913 of 950 drawn
   hosts — and all 87 of 87 ETICS hosts — on two perpendicular sheets, with the
   secondary carrying 10-50% of the dominant sheet's area.
 
@@ -314,7 +314,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   membership test disagreeing with the engine's own orientation classifier is what
   #28 is. Against a four-sheet compass set an unambiguous host is now drawn exactly
   once; a host at a true 45° is genuinely diagonal and lands on both, a documented
-  tie rather than an accident. On kb645: 914 of 914 drawn hosts on exactly one sheet,
+  tie rather than an accident. On private_a: 914 of 914 drawn hosts on exactly one sheet,
   87 of 87 ETICS hosts on exactly one sheet.
 
   The threshold carries a documented `1e-12` tolerance, and it is not decoration.
@@ -326,12 +326,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   Flattening to horizontal is load-bearing rather than tidiness. A raw 3-D dot
   conflates "pointing the wrong way" with "tilted off vertical", so a wall leaning
   45° while squarely facing east has its dot dragged under the threshold by the Z
-  term and is dropped from every sheet — which, measured on kb645, silently deleted
+  term and is dropped from every sheet — which, measured on private_a, silently deleted
   45 exterior proxies from the drawing. A wall nobody draws is worse than a wall
   drawn twice, because nobody checks it.
 
   **Behaviour change worth reading before you upgrade.** 36 fewer hosts are drawn on
-  kb645 (950 → 914). Every one of them was previously drawn ONLY as an edge-on sliver
+  private_a (950 → 914). Every one of them was previously drawn ONLY as an edge-on sliver
   on a perpendicular sheet: their own facade admits them, but `SilhouetteOn` returns
   an empty outline there, so they never appeared on the elevation they belong to.
   That empty face-on silhouette is a separate, pre-existing defect and is not
