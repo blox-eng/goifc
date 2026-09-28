@@ -48,6 +48,15 @@ type Facing struct {
 	//
 	// Gross, not net — openings are not subtracted here.
 	FaceArea float64
+	// BackArea is the area of the faces pointing against Normal, in m²: the far
+	// side of the element, the one a layer behind the structure is applied to.
+	// It differs from FaceArea wherever the two sides do — a mitred corner, a
+	// parapet over a slab edge. Gross, and counted from the faces lying flat
+	// against -Normal only: a face leaning toward the far side is a joint, not
+	// a surface (see flatSideArea). A far side that is curved or battered
+	// reads 0, unmeasured, rather than the flat part of it (backSideArea). A
+	// face an abutting element covers is not subtracted.
+	BackArea float64
 	// Exposure is what the Normal side reaches.
 	Exposure Exposure
 	// Confidence is 0..1. Below ~0.5 the sign is a guess; a consumer that would
@@ -334,6 +343,7 @@ func signFacing(e Element, dir v3, share float64, g *occupancy, w []v3) Facing {
 	// point of FaceArea is that it names the side the element actually presents,
 	// so it has to be computed after the sign is known.
 	f.FaceArea = sideAreaDir(w, e.Tris, f.Normal)
+	f.BackArea = backSideArea(w, e.Tris, v3{-f.Normal[0], -f.Normal[1], -f.Normal[2]})
 	return f
 }
 

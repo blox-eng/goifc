@@ -43,6 +43,41 @@ const sideAreaTol = 0.01
 // plain wall and smaller on a stepped one. IfcOpenShell trusts winding here for
 // the same reason: nothing else distinguishes the two faces of a wall.
 func sideAreaDir(w []v3, tris []uint32, dir v3) float64 {
+	return sideAreaWithin(w, tris, dir, sideAreaTol)
+}
+
+// flatSideArea is the area of the faces lying flat against dir, within
+// axisMergeCos. It is the far side's measure: on the side a wall does not
+// present, a face leaning toward it is a joint — a mitre closing onto the next
+// wall — and never a surface a layer is applied to, so counting it the way
+// sideAreaDir does would read a mitred room's inner faces as its outer ones.
+func flatSideArea(w []v3, tris []uint32, dir v3) float64 {
+	return sideAreaWithin(w, tris, dir, axisMergeCos)
+}
+
+// curvedBandCos bounds the faces that make a far side read as curved rather
+// than flat: tilted from dir by more than axisMergeCos (5°) but by less than
+// 30°. A gentle arc or a battered back lands here; a mitre, at ~45°, does not.
+var curvedBandCos = math.Cos(30 * math.Pi / 180)
+
+// curvedShareLimit is how much curved area, relative to the flat area, a far
+// side may carry and still be measured by its flat faces alone.
+const curvedShareLimit = 0.1
+
+// backSideArea is the far side's measure: flatSideArea, unless the far side is
+// curved or battered enough that its flat faces are only part of it. Then it
+// is 0 -- unmeasured -- because a partial figure would be a confident wrong
+// number, and an unmeasured side is one a caller can say so about.
+func backSideArea(w []v3, tris []uint32, dir v3) float64 {
+	flat := flatSideArea(w, tris, dir)
+	curved := sideAreaWithin(w, tris, dir, curvedBandCos) - flat
+	if curved > curvedShareLimit*flat {
+		return 0
+	}
+	return flat
+}
+
+func sideAreaWithin(w []v3, tris []uint32, dir v3, floor float64) float64 {
 	l := math.Sqrt(dotv(dir, dir))
 	if !(l > 0) {
 		return 0
@@ -64,7 +99,7 @@ func sideAreaDir(w []v3, tris []uint32, dir v3) float64 {
 		if ln < 1e-15 {
 			continue // degenerate triangle
 		}
-		if dotv(n, u)/ln <= sideAreaTol {
+		if dotv(n, u)/ln <= floor {
 			continue // the far side, or edge-on
 		}
 		total += ln / 2

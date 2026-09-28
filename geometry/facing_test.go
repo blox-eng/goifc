@@ -312,3 +312,111 @@ func TestAzimuthRangeAndDegenerate(t *testing.T) {
 		t.Fatalf("Azimuth = %v, want 0 for a vertical normal", got)
 	}
 }
+
+// prismElem extrudes a counter-clockwise plan polygon to height h, wound
+// outward, so each side's area lands on the side its normal names.
+func prismElem(id string, plan [][2]float64, h float64) Element {
+	n := len(plan)
+	var w []v3
+	for _, p := range plan {
+		w = append(w, v3{p[0], p[1], 0})
+	}
+	for _, p := range plan {
+		w = append(w, v3{p[0], p[1], h})
+	}
+	var tris []uint32
+	for i := 0; i < n; i++ {
+		j := (i + 1) % n
+		bi, bj, ti, tj := uint32(i), uint32(j), uint32(i+n), uint32(j+n)
+		tris = append(tris, bi, bj, tj, bi, tj, ti)
+	}
+	for i := 1; i+1 < n; i++ {
+		tris = append(tris, 0, uint32(i+1), uint32(i))
+		tris = append(tris, uint32(n), uint32(n+i), uint32(n+i+1))
+	}
+	var verts []float32
+	min, max := w[0], w[0]
+	for _, p := range w {
+		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
+		for k := 0; k < 3; k++ {
+			min[k], max[k] = math.Min(min[k], p[k]), math.Max(max[k], p[k])
+		}
+	}
+	return Element{GlobalID: id, Verts: verts, Tris: tris,
+		Placement: model.Mat4{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1},
+		BBoxMin:   [3]float64(min), BBoxMax: [3]float64(max)}
+}
+
+func TestBackAreaIsTheFarSideOfAMitredRoom(t *testing.T) {
+	// A 6x4 room, 0.3m walls, 3m tall, mitred at the corners: every wall's
+	// outer face runs the full side and its inner face is 0.6m shorter. The
+	// far side is where a layer behind the structure goes, so it must read
+	// the inner length, not a copy of the outer one.
+	const tk, h = 0.3, 3.0
+	walls := []Element{
+		prismElem("s", [][2]float64{{0, 0}, {6, 0}, {6 - tk, tk}, {tk, tk}}, h),
+		prismElem("n", [][2]float64{{tk, 4 - tk}, {6 - tk, 4 - tk}, {6, 4}, {0, 4}}, h),
+		prismElem("w", [][2]float64{{0, 0}, {tk, tk}, {tk, 4 - tk}, {0, 4}}, h),
+		prismElem("e", [][2]float64{{6, 0}, {6, 4}, {6 - tk, 4 - tk}, {6 - tk, tk}}, h),
+	}
+	facings := BuildFacings(walls)
+	want := map[string][2]float64{"s": {18, 16.2}, "n": {18, 16.2}, "w": {12, 10.2}, "e": {12, 10.2}}
+	for id, w := range want {
+		f, ok := facings[id]
+		if !ok {
+			t.Fatalf("wall %q has no facing", id)
+		}
+		if f.Exposure != ExposureExterior {
+			t.Fatalf("wall %q exposure = %q, want exterior", id, f.Exposure)
+		}
+		if math.Abs(f.FaceArea-w[0]) > 1e-6 || math.Abs(f.BackArea-w[1]) > 1e-6 {
+			t.Fatalf("wall %q FaceArea/BackArea = %v/%v, want %v/%v", id, f.FaceArea, f.BackArea, w[0], w[1])
+		}
+	}
+}
+
+// arcWallElem is a wall bent round an arc: its outer face is convex and its
+// inner face concave, each made of short straight facets.
+func arcWallElem(id string, radius, thick, sweepDeg float64, segments int, h float64) Element {
+	var outer, inner [][2]float64
+	for i := 0; i <= segments; i++ {
+		a := (-sweepDeg/2 + sweepDeg*float64(i)/float64(segments)) * math.Pi / 180
+		outer = append(outer, [2]float64{radius * math.Sin(a), -radius * math.Cos(a)})
+		inner = append(inner, [2]float64{(radius - thick) * math.Sin(a), -(radius - thick) * math.Cos(a)})
+	}
+	plan := append([][2]float64{}, outer...)
+	for i := len(inner) - 1; i >= 0; i-- {
+		plan = append(plan, inner[i])
+	}
+	return prismElem(id, plan, h)
+}
+
+func TestBackAreaOfACurvedWallIsUnmeasured(t *testing.T) {
+	// A 6° arc of 8 facets, the widest bend goifc still faces: the axis
+	// settles off the middle, so part of the back leans past 5°. Its flat
+	// faces are only part of it, so it reads unmeasured -- never the flat part
+	// alone, which would be a confident wrong number.
+	f, ok := BuildFacings([]Element{arcWallElem("arc", 30, 0.3, 6, 8, 3)})["arc"]
+	if !ok {
+		t.Fatal("the arc wall has no facing")
+	}
+	if f.FaceArea <= 0 {
+		t.Fatalf("FaceArea = %v, want the presented side measured", f.FaceArea)
+	}
+	if f.BackArea != 0 {
+		t.Fatalf("BackArea = %v, want 0: a curved far side is unmeasured, not partly measured", f.BackArea)
+	}
+}
+
+func TestBackAreaOfANearlyFlatArcIsMeasured(t *testing.T) {
+	// Two facets 1.5° off the wall's facing are flat for the far side too:
+	// the guard stays quiet and the back reads its inner arc, 29.7 m × 0.105
+	// rad × 3 m.
+	f, ok := BuildFacings([]Element{arcWallElem("arc", 30, 0.3, 6, 2, 3)})["arc"]
+	if !ok {
+		t.Fatal("the arc wall has no facing")
+	}
+	if want := 29.7 * 6 * math.Pi / 180 * 3; math.Abs(f.BackArea-want) > 0.1 {
+		t.Fatalf("BackArea = %v, want about %v", f.BackArea, want)
+	}
+}
