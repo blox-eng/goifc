@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.13.1 — 2026-09-27
+
 ### Changed
 
 - The documentation moved to <https://docs.goifc.org/latest/>. The old `blox-eng.github.io/goifc/` URLs redirect there once the custom domain is live. Every deploy now checks that the custom domain is still set at the `gh-pages` root and restores it if a deploy dropped it.
