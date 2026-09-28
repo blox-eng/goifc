@@ -584,7 +584,7 @@ ParseBytes(src)
 
 | Metric         | Value                            |
 | -------------- | -------------------------------- |
-| File size      | 29,558,941 B (~28 MB)            |
+| File size      | ~28 MB                           |
 | Instances      | 528,228                          |
 | Entity types   | 93                               |
 | Inverse edges  | 857,962                          |
@@ -782,9 +782,9 @@ The polygons must already be in ONE plane's frame; nothing here can detect a mis
 
 ### Fixed
 
-- `BuildFacings` no longer re-transforms the whole model into every 10 cm mid-height band. It built one occupancy grid per distinct band — 152 of them on kb645.ifc — and rasterized the model into each from scratch: 164,670 `worldPoints` calls for 1,878 elements, 239M triangles transformed to cover 3.3M, **72x redundant**. World points are now computed once and shared, and the bands (which are independent) are classified on a bounded worker pool.
+- `BuildFacings` no longer re-transforms the whole model into every 10 cm mid-height band. It built one occupancy grid per distinct band — 152 of them on private_a.ifc — and rasterized the model into each from scratch: 164,670 `worldPoints` calls for 1,878 elements, 239M triangles transformed to cover 3.3M, **72x redundant**. World points are now computed once and shared, and the bands (which are independent) are classified on a bounded worker pool.
 
-**15.233s -> 2.139s (7.1x)** on kb645.ifc, with the classification bit-identical: digest `c0b435cfc8457ca5`, n=1519, on both sides — every field of every `Facing`, ids sorted, full float precision. The import pass as a whole goes 27.6s -> 13.7s.
+**15.233s -> 2.139s (7.1x)** on private_a.ifc, with the classification bit-identical: digest `c0b435cfc8457ca5`, n=1519, on both sides — every field of every `Facing`, ids sorted, full float precision. The import pass as a whole goes 27.6s -> 13.7s.
 
 Concurrency is bounded rather than one goroutine per band, because a grid is the large allocation and the serial loop deliberately kept one live at a time. Measured rather than assumed: **peak heap went down**, 692.4 MB serial to 675.6 MB parallel, and total allocation fell 32%. The retained cache is 54.8 MB.
 
@@ -796,7 +796,7 @@ Two ordering properties are load-bearing and now have tests: the cache is filled
 
 ### Fixed
 
-- An elevation outline left open by ONE short seam is now closed across it and drawn, instead of the element being discarded whole (#37). The boundary walk is exact in real arithmetic only; on float32-derived world coordinates it can classify a sub-edge inconsistently and leave the ring open, and the all-or-nothing verdict then threw away everything. On kb645 that lost **45 exterior elements**, every one of them to a single open chain with a gap between 0.9 mm and 9.1 mm — in one case 56 segments of correct outline discarded for one 9.1 mm seam. 914 entities drawn before, 959 after, 45 of them bridged.
+- An elevation outline left open by ONE short seam is now closed across it and drawn, instead of the element being discarded whole (#37). The boundary walk is exact in real arithmetic only; on float32-derived world coordinates it can classify a sub-edge inconsistently and leave the ring open, and the all-or-nothing verdict then threw away everything. On private_a that lost **45 exterior elements**, every one of them to a single open chain with a gap between 0.9 mm and 9.1 mm — in one case 56 segments of correct outline discarded for one 9.1 mm seam. 914 entities drawn before, 959 after, 45 of them bridged.
 
 The repair is deliberately the narrowest thing that recovers that case: EXACTLY one vertex short by one and one long by one — two loose ends, so one open chain — and a gap of at most 10 mm. Several chains, a vertex unbalanced by more than one, or a longer gap is a torn outline rather than a seam that failed to weld, and is refused exactly as before.
 
@@ -806,15 +806,15 @@ New `ElevationEntity.OutlineBridged` and `Element.SilhouetteBridgedOn` report it
 
 ### Fixed
 
-- `Scene.Elevations` / `Scene.ElevationsWith` / `Scene.ElevationOn` no longer admit a host to the two sheets perpendicular to it (#28). The membership test was `dot(normal, plane.N) > 0` — anything not pointing away. A wall perpendicular to a sheet has a dot of zero in exact arithmetic and a hair above it once a real placement transform has been through the normal, so it was admitted; and because `SilhouetteOn` projects the whole solid, an edge-on wall admitted on a rounding error still drew its full thickness by height. On kb645 that put 913 of 950 drawn hosts — and all 87 of 87 ETICS hosts — on two perpendicular sheets, with the secondary carrying 10-50% of the dominant sheet's area.
+- `Scene.Elevations` / `Scene.ElevationsWith` / `Scene.ElevationOn` no longer admit a host to the two sheets perpendicular to it (#28). The membership test was `dot(normal, plane.N) > 0` — anything not pointing away. A wall perpendicular to a sheet has a dot of zero in exact arithmetic and a hair above it once a real placement transform has been through the normal, so it was admitted; and because `SilhouetteOn` projects the whole solid, an edge-on wall admitted on a rounding error still drew its full thickness by height. On private_a that put 913 of 950 drawn hosts — and all 87 of 87 ETICS hosts — on two perpendicular sheets, with the secondary carrying 10-50% of the dominant sheet's area.
 
-Membership is now a bearing test against a documented threshold: both vectors are flattened to horizontal, renormalized, and compared against cos(45°) — the same quantity `Facing.Azimuth` bins by, which is the point, since the elevation membership test disagreeing with the engine's own orientation classifier is what #28 is. Against a four-sheet compass set an unambiguous host is now drawn exactly once; a host at a true 45° is genuinely diagonal and lands on both, a documented tie rather than an accident. On kb645: 914 of 914 drawn hosts on exactly one sheet, 87 of 87 ETICS hosts on exactly one sheet.
+Membership is now a bearing test against a documented threshold: both vectors are flattened to horizontal, renormalized, and compared against cos(45°) — the same quantity `Facing.Azimuth` bins by, which is the point, since the elevation membership test disagreeing with the engine's own orientation classifier is what #28 is. Against a four-sheet compass set an unambiguous host is now drawn exactly once; a host at a true 45° is genuinely diagonal and lands on both, a documented tie rather than an accident. On private_a: 914 of 914 drawn hosts on exactly one sheet, 87 of 87 ETICS hosts on exactly one sheet.
 
 The threshold carries a documented `1e-12` tolerance, and it is not decoration. Normalizing the everyday diagonal `[1, 1, 0]` lands one ULP BELOW `cos(45°)`, so a bare `>=` rejects it on both sheets and deletes the wall from the drawing — exactly the failure the `>=` exists to prevent, reintroduced by rounding. 1e-12 clears one ULP by four orders of magnitude while costing ~8e-11 of a degree of angular slack.
 
-Flattening to horizontal is load-bearing rather than tidiness. A raw 3-D dot conflates "pointing the wrong way" with "tilted off vertical", so a wall leaning 45° while squarely facing east has its dot dragged under the threshold by the Z term and is dropped from every sheet — which, measured on kb645, silently deleted 45 exterior proxies from the drawing. A wall nobody draws is worse than a wall drawn twice, because nobody checks it.
+Flattening to horizontal is load-bearing rather than tidiness. A raw 3-D dot conflates "pointing the wrong way" with "tilted off vertical", so a wall leaning 45° while squarely facing east has its dot dragged under the threshold by the Z term and is dropped from every sheet — which, measured on private_a, silently deleted 45 exterior proxies from the drawing. A wall nobody draws is worse than a wall drawn twice, because nobody checks it.
 
-**Behaviour change worth reading before you upgrade.** 36 fewer hosts are drawn on kb645 (950 → 914). Every one of them was previously drawn ONLY as an edge-on sliver on a perpendicular sheet: their own facade admits them, but `SilhouetteOn` returns an empty outline there, so they never appeared on the elevation they belong to. That empty face-on silhouette is a separate, pre-existing defect and is not addressed here. This release stops drawing the sliver; it does not yet draw the wall.
+**Behaviour change worth reading before you upgrade.** 36 fewer hosts are drawn on private_a (950 → 914). Every one of them was previously drawn ONLY as an edge-on sliver on a perpendicular sheet: their own facade admits them, but `SilhouetteOn` returns an empty outline there, so they never appeared on the elevation they belong to. That empty face-on silhouette is a separate, pre-existing defect and is not addressed here. This release stops drawing the sliver; it does not yet draw the wall.
 
 ## v0.9.0 — 2026-08-19
 

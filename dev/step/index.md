@@ -56,7 +56,7 @@ ParseBytes(src)
 
 | Metric         | Value                            |
 | -------------- | -------------------------------- |
-| File size      | 29,558,941 B (~28 MB)            |
+| File size      | ~28 MB                           |
 | Instances      | 528,228                          |
 | Entity types   | 93                               |
 | Inverse edges  | 857,962                          |
