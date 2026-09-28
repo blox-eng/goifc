@@ -55,6 +55,28 @@ func flatSideArea(w []v3, tris []uint32, dir v3) float64 {
 	return sideAreaWithin(w, tris, dir, axisMergeCos)
 }
 
+// curvedBandCos bounds the faces that make a far side read as curved rather
+// than flat: tilted from dir by more than axisMergeCos (5°) but by less than
+// 30°. A gentle arc or a battered back lands here; a mitre, at ~45°, does not.
+var curvedBandCos = math.Cos(30 * math.Pi / 180)
+
+// curvedShareLimit is how much curved area, relative to the flat area, a far
+// side may carry and still be measured by its flat faces alone.
+const curvedShareLimit = 0.1
+
+// backSideArea is the far side's measure: flatSideArea, unless the far side is
+// curved or battered enough that its flat faces are only part of it. Then it
+// is 0 -- unmeasured -- because a partial figure would be a confident wrong
+// number, and an unmeasured side is one a caller can say so about.
+func backSideArea(w []v3, tris []uint32, dir v3) float64 {
+	flat := flatSideArea(w, tris, dir)
+	curved := sideAreaWithin(w, tris, dir, curvedBandCos) - flat
+	if curved > curvedShareLimit*flat {
+		return 0
+	}
+	return flat
+}
+
 func sideAreaWithin(w []v3, tris []uint32, dir v3, floor float64) float64 {
 	l := math.Sqrt(dotv(dir, dir))
 	if !(l > 0) {

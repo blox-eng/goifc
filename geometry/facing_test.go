@@ -374,3 +374,49 @@ func TestBackAreaIsTheFarSideOfAMitredRoom(t *testing.T) {
 		}
 	}
 }
+
+// arcWallElem is a wall bent round an arc: its outer face is convex and its
+// inner face concave, each made of short straight facets.
+func arcWallElem(id string, radius, thick, sweepDeg float64, segments int, h float64) Element {
+	var outer, inner [][2]float64
+	for i := 0; i <= segments; i++ {
+		a := (-sweepDeg/2 + sweepDeg*float64(i)/float64(segments)) * math.Pi / 180
+		outer = append(outer, [2]float64{radius * math.Sin(a), -radius * math.Cos(a)})
+		inner = append(inner, [2]float64{(radius - thick) * math.Sin(a), -(radius - thick) * math.Cos(a)})
+	}
+	plan := append([][2]float64{}, outer...)
+	for i := len(inner) - 1; i >= 0; i-- {
+		plan = append(plan, inner[i])
+	}
+	return prismElem(id, plan, h)
+}
+
+func TestBackAreaOfACurvedWallIsUnmeasured(t *testing.T) {
+	// A 6° arc of 8 facets, the widest bend goifc still faces: the axis
+	// settles off the middle, so part of the back leans past 5°. Its flat
+	// faces are only part of it, so it reads unmeasured -- never the flat part
+	// alone, which would be a confident wrong number.
+	f, ok := BuildFacings([]Element{arcWallElem("arc", 30, 0.3, 6, 8, 3)})["arc"]
+	if !ok {
+		t.Fatal("the arc wall has no facing")
+	}
+	if f.FaceArea <= 0 {
+		t.Fatalf("FaceArea = %v, want the presented side measured", f.FaceArea)
+	}
+	if f.BackArea != 0 {
+		t.Fatalf("BackArea = %v, want 0: a curved far side is unmeasured, not partly measured", f.BackArea)
+	}
+}
+
+func TestBackAreaOfANearlyFlatArcIsMeasured(t *testing.T) {
+	// Two facets 1.5° off the wall's facing are flat for the far side too:
+	// the guard stays quiet and the back reads its inner arc, 29.7 m × 0.105
+	// rad × 3 m.
+	f, ok := BuildFacings([]Element{arcWallElem("arc", 30, 0.3, 6, 2, 3)})["arc"]
+	if !ok {
+		t.Fatal("the arc wall has no facing")
+	}
+	if want := 29.7 * 6 * math.Pi / 180 * 3; math.Abs(f.BackArea-want) > 0.1 {
+		t.Fatalf("BackArea = %v, want about %v", f.BackArea, want)
+	}
+}
