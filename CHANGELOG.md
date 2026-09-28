@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.13.1 — 2026-09-27
+
 ### Changed
 
 - The documentation moved to <https://docs.goifc.org/latest/>. The old
