@@ -56,3 +56,6 @@ always matches the release you are importing:
 
 This site covers the things godoc cannot: how the pieces fit together, what the
 numbers mean, and where the edges are.
+
+A question that is not an issue belongs on
+[Discord](https://discord.gg/mcDPQECCy).

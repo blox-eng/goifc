@@ -19,6 +19,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- The project now has a [Discord](https://discord.gg/mcDPQECCy), linked from
+  goifc.org, the docs footer and the README, for questions that are not issues.
+
 ## v0.14.0 — 2026-09-28
 
 ### Added
