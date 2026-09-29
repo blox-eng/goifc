@@ -1,0 +1,521 @@
+{
+ "env": {
+  "cores": 26,
+  "cpu": "Intel(R) Core(TM) i7-14700K",
+  "date": "2026-09-29",
+  "go": "go1.25.12",
+  "goifc": "v0.14.0-4-g2bf894d",
+  "ifcopenshell": "0.9.0",
+  "memory_gib": 63,
+  "node": "v24.17.0",
+  "os": "Linux 6.17.0-29-generic",
+  "python": "3.12.3",
+  "web-ifc": "0.0.78"
+ },
+ "footprint": {
+  "goifc": {
+   "mib": 3.2329235076904297,
+   "what": "static binary, cgo off"
+  },
+  "ifcopenshell": {
+   "mib": 230.39442920684814,
+   "what": "installed Python package"
+  },
+  "web-ifc": {
+   "mib": 23.632594108581543,
+   "what": "installed npm package"
+  }
+ },
+ "models": {
+  "clinic_arch": {
+   "exporter": "Revit 2011",
+   "licence": "CC-BY-4.0, buildingSMART community sample files",
+   "mb": 13.003205,
+   "schema": "IFC2X3",
+   "shape": "Medical-Dental Clinic, architectural",
+   "source": "url",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 2580,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 42.873,
+     "meshes": 2586,
+     "parse_ms": 210.102,
+     "peak_rss_mib": 270.44921875,
+     "runs": 3,
+     "total_ms": 340.433,
+     "walk_ms": 87.458,
+     "wall_ms": 366.1888181231916
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 14784.51162786223,
+     "meshes": 3257,
+     "parse_ms": 183.9188109152019,
+     "peak_rss_mib": 252.234375,
+     "runs": 3,
+     "total_ms": 15818.69533075951,
+     "walk_ms": 850.2648919820786,
+     "wall_ms": 16085.804502945393
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 2406.8552919197828,
+     "meshes": 3258,
+     "parse_ms": 163.779224967584,
+     "peak_rss_mib": 858.1796875,
+     "runs": 3,
+     "total_ms": 3225.000803824514,
+     "walk_ms": 654.3662869371474,
+     "wall_ms": 3637.7406378742307
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 197.009723,
+     "meshes": 2586,
+     "parse_ms": 88.91639899999998,
+     "peak_rss_mib": 358.13671875,
+     "runs": 3,
+     "total_ms": 933.2481839999999,
+     "walk_ms": 647.322062,
+     "wall_ms": 1115.2092651464045
+    }
+   }
+  },
+  "clinic_plumbing": {
+   "exporter": "Revit 2013",
+   "licence": "CC-BY-4.0, buildingSMART community sample files",
+   "mb": 55.83452,
+   "schema": "IFC2X3",
+   "shape": "Medical-Dental Clinic, plumbing (MEP)",
+   "source": "url",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 1093.056,
+     "meshes": 6587,
+     "parse_ms": 1033.209,
+     "peak_rss_mib": 1648.29296875,
+     "runs": 3,
+     "total_ms": 2452.196,
+     "walk_ms": 325.931,
+     "wall_ms": 2531.6513320431113
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 342514.2453899607,
+     "meshes": 6587,
+     "parse_ms": 829.8404100351036,
+     "peak_rss_mib": 972.00390625,
+     "runs": 3,
+     "total_ms": 346957.00032496825,
+     "walk_ms": 3612.914524972439,
+     "wall_ms": 347994.1053048242
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 59372.10550508462,
+     "meshes": 6587,
+     "parse_ms": 906.0343829914927,
+     "peak_rss_mib": 6673.09375,
+     "runs": 3,
+     "total_ms": 62971.87824291177,
+     "walk_ms": 2693.7383548356593,
+     "wall_ms": 64870.5567298457
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 705.7884010000002,
+     "meshes": 6587,
+     "parse_ms": 493.55936599999995,
+     "peak_rss_mib": 831.80859375,
+     "runs": 3,
+     "total_ms": 4064.4972140000004,
+     "walk_ms": 2865.1494470000002,
+     "wall_ms": 4511.4482450298965
+    }
+   }
+  },
+  "duplex_a": {
+   "exporter": "Revit 2011",
+   "licence": "redistributable published sample, committed under parity/testdata",
+   "mb": 2.380763,
+   "schema": "IFC2X3",
+   "shape": "buildingSMART Duplex Apartment, architectural",
+   "source": "committed",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 213,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 7.461,
+     "meshes": 215,
+     "parse_ms": 37.893,
+     "peak_rss_mib": 44.76953125,
+     "runs": 5,
+     "total_ms": 54.05,
+     "walk_ms": 8.696,
+     "wall_ms": 56.19025300256908
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 2798.1145491357893,
+     "meshes": 286,
+     "parse_ms": 53.74458897858858,
+     "peak_rss_mib": 110.984375,
+     "runs": 5,
+     "total_ms": 2979.059958131984,
+     "walk_ms": 127.20082001760602,
+     "wall_ms": 3230.274308938533
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 394.759088056162,
+     "meshes": 286,
+     "parse_ms": 47.461217967793345,
+     "peak_rss_mib": 199.6328125,
+     "runs": 5,
+     "total_ms": 510.7529161032289,
+     "walk_ms": 68.53261007927358,
+     "wall_ms": 760.1903639733791
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 81.86679699999996,
+     "meshes": 215,
+     "parse_ms": 29.75215,
+     "peak_rss_mib": 220.7578125,
+     "runs": 5,
+     "total_ms": 232.856833,
+     "walk_ms": 121.23788600000003,
+     "wall_ms": 492.62254289351404
+    }
+   }
+  },
+  "fzk_haus": {
+   "exporter": "ArchiCAD 20",
+   "licence": "redistributable published sample, committed under parity/testdata",
+   "mb": 2.570803,
+   "schema": "IFC4",
+   "shape": "KIT FZK-Haus, detached house",
+   "source": "committed",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 80,
+      "covered": 82,
+      "reference": 83
+     },
+     "geom_ms": 8.725,
+     "meshes": 82,
+     "parse_ms": 48.971,
+     "peak_rss_mib": 44.67578125,
+     "runs": 5,
+     "total_ms": 61.498,
+     "walk_ms": 3.802,
+     "wall_ms": 98.11673406511545
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 2691.610499052331,
+     "meshes": 107,
+     "parse_ms": 61.620197957381606,
+     "peak_rss_mib": 136.5390625,
+     "runs": 5,
+     "total_ms": 2786.21074417606,
+     "walk_ms": 32.980047166347504,
+     "wall_ms": 2940.9702389966697
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 1006.8790658842772,
+     "meshes": 107,
+     "parse_ms": 60.745541006326675,
+     "peak_rss_mib": 230.80859375,
+     "runs": 5,
+     "total_ms": 1097.9963077697903,
+     "walk_ms": 30.371700879186392,
+     "wall_ms": 1278.755852021277
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 137.01739499999996,
+     "meshes": 83,
+     "parse_ms": 25.166545000000013,
+     "peak_rss_mib": 189.52734375,
+     "runs": 5,
+     "total_ms": 233.63061299999998,
+     "walk_ms": 71.446673,
+     "wall_ms": 453.24247190728784
+    }
+   }
+  },
+  "ifcopenhouse": {
+   "exporter": "IfcOpenShell 0.5",
+   "licence": "redistributable published sample, committed under parity/testdata",
+   "mb": 0.112756,
+   "schema": "IFC2X3",
+   "shape": "IfcOpenShell's sample house",
+   "source": "committed",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 34,
+      "covered": 34,
+      "reference": 35
+     },
+     "geom_ms": 0.185,
+     "meshes": 34,
+     "parse_ms": 2.645,
+     "peak_rss_mib": 5.64453125,
+     "runs": 5,
+     "total_ms": 3.04,
+     "walk_ms": 0.21,
+     "wall_ms": 4.9026531632989645
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 134.35580302029848,
+     "meshes": 39,
+     "parse_ms": 4.419411066919565,
+     "peak_rss_mib": 94.84765625,
+     "runs": 5,
+     "total_ms": 149.45586398243904,
+     "walk_ms": 10.680649895220995,
+     "wall_ms": 314.2312620766461
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 83.99615995585918,
+     "meshes": 39,
+     "parse_ms": 5.062028067186475,
+     "peak_rss_mib": 100.8515625,
+     "runs": 5,
+     "total_ms": 100.02123285084963,
+     "walk_ms": 10.96304482780397,
+     "wall_ms": 316.560807172209
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 25.718880000000013,
+     "meshes": 35,
+     "parse_ms": 7.042108999999982,
+     "peak_rss_mib": 158.546875,
+     "runs": 5,
+     "total_ms": 38.52254099999999,
+     "walk_ms": 5.761551999999995,
+     "wall_ms": 293.9460820052773
+    }
+   }
+  },
+  "private_a": {
+   "exporter": "ArchiCAD 25",
+   "licence": "private, not redistributable; published as aggregates only",
+   "mb": 29.558941,
+   "schema": "IFC2X3",
+   "shape": "private seven-storey building, one block",
+   "source": "private",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 1876,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 395.995,
+     "meshes": 1878,
+     "parse_ms": 533.538,
+     "peak_rss_mib": 665.8828125,
+     "runs": 3,
+     "total_ms": 960.423,
+     "walk_ms": 30.89,
+     "wall_ms": 1054.5972099062055
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 87462.51823799685,
+     "meshes": 2078,
+     "parse_ms": 498.9448410924524,
+     "peak_rss_mib": 495.96484375,
+     "runs": 3,
+     "total_ms": 88221.24375402927,
+     "walk_ms": 259.78067493997514,
+     "wall_ms": 88854.15015579201
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 17362.584769027308,
+     "meshes": 2078,
+     "parse_ms": 523.8850610330701,
+     "peak_rss_mib": 1921.3125,
+     "runs": 3,
+     "total_ms": 18134.05828899704,
+     "walk_ms": 247.58845893666148,
+     "wall_ms": 19093.519443878904
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 410.27266499999996,
+     "meshes": 1878,
+     "parse_ms": 254.841468,
+     "peak_rss_mib": 497.95703125,
+     "runs": 3,
+     "total_ms": 1785.315982,
+     "walk_ms": 1120.201849,
+     "wall_ms": 2163.0599841009825
+    }
+   }
+  },
+  "schependomlaan": {
+   "exporter": "ArchiCAD",
+   "licence": "CC-BY-4.0, buildingSMART community sample files",
+   "mb": 49.286967,
+   "schema": "IFC2X3",
+   "shape": "Schependomlaan design model, housing block",
+   "source": "url",
+   "tools": {
+    "goifc": {
+     "agreement": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "geom_ms": 90.032,
+     "meshes": 3573,
+     "parse_ms": 775.943,
+     "peak_rss_mib": 724.78125,
+     "runs": 3,
+     "total_ms": 971.5500000000001,
+     "walk_ms": 105.575,
+     "wall_ms": 1022.7809471543878
+    },
+    "ifcopenshell": {
+     "agreement": {
+      "agree": 3504,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "geom_ms": 15330.34480898641,
+     "meshes": 3589,
+     "parse_ms": 697.7880820631981,
+     "peak_rss_mib": 462.08203125,
+     "runs": 3,
+     "total_ms": 16778.387806145474,
+     "walk_ms": 750.2549150958657,
+     "wall_ms": 17241.087950998917
+    },
+    "ifcopenshell-26t": {
+     "agreement": {
+      "agree": 3504,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "geom_ms": 3039.3125789705664,
+     "meshes": 3589,
+     "parse_ms": 696.0248569957912,
+     "peak_rss_mib": 793.9609375,
+     "runs": 3,
+     "total_ms": 4505.961664021015,
+     "walk_ms": 770.6242280546576,
+     "wall_ms": 5208.188804797828
+    },
+    "web-ifc": {
+     "agreement": {
+      "agree": 3504,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "geom_ms": 245.42879099999982,
+     "meshes": 3504,
+     "parse_ms": 352.707032,
+     "peak_rss_mib": 582.91796875,
+     "runs": 3,
+     "total_ms": 2508.9422519999994,
+     "walk_ms": 1910.8064289999998,
+     "wall_ms": 2759.5929668750614
+    }
+   }
+  }
+ }
+}

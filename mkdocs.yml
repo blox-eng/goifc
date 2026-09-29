@@ -142,6 +142,7 @@ nav:
       - The step package: step.md
       - Limitations: limitations.md
       - Coverage: coverage.md
+      - Benchmarks: benchmarks.md
       - Compatibility: compatibility.md
       - Changelog: changelog.md
   - Design docs:
