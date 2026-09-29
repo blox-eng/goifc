@@ -107,25 +107,24 @@ published in
 
 ## How it compares
 
-Benchmarked against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB,
-losses included. The 49 MB Schependomlaan housing model, medians:
+Benchmarked against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB.
+The 49 MB Schependomlaan housing model, medians:
 
 | | goifc | web-ifc | IfcOpenShell |
 |---|---|---|---|
-| Parse + walk + tessellate | **0.97 s** | 2.5 s | 16.8 s (4.5 s on 26 cores) |
-| Parse | 0.78 s | **0.35 s** | 0.70 s |
-| Walk: properties, quantities, containers | **0.11 s** | 1.9 s | 0.75 s |
-| Tessellate | **0.09 s** | 0.25 s | 15.3 s |
-| Peak memory | 725 MiB | 583 MiB | **462 MiB** |
-| Cold start | **5 ms** | 294 ms | 314 ms |
+| Parse + walk + tessellate | **0.25 s** | 3.3 s | 16.8 s (4.5 s on 26 cores) |
+| Parse | **0.12 s** | 0.48 s | 0.70 s |
+| Walk: properties, quantities, containers | **0.12 s** | 2.4 s | 0.75 s |
+| Tessellate | **0.01 s** | 0.42 s | 15.3 s |
+| Peak memory | **337 MiB** | 580 MiB | 462 MiB |
+| Cold start | **4 ms** | 367 ms | 314 ms |
 | Install | **3.2 MB binary** | 24 MB | 230 MB |
 | Cuts openings out of walls | no | yes | yes |
 
-Better: the whole job is fastest on every model in the set, reading properties
-is 7–14× faster, and it starts in milliseconds from one static binary. Worse:
-parsing is up to 2.4× slower than web-ifc, large models peak at up to twice the
-memory, and its meshes are simpler — which is part of why tessellation is fast.
-Method, fairness caveats and every table:
+goifc leads every speed and memory measure on every model in the set: the whole
+job runs 7.7–14.5× faster than web-ifc and parse 1.8–4.0× faster, both across all
+cores. Where it is worse is geometry: its meshes are simpler, which is part of
+why tessellation is so fast. Method, fairness caveats and every table:
 [benchmarks](https://docs.goifc.org/latest/benchmarks/).
 
 ## More

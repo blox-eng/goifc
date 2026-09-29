@@ -56,11 +56,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 ### Added
 
 - A published benchmark against IfcOpenShell and web-ifc on seven models from
-  0.1 to 56 MB, losses included: goifc is fastest end to end and 7–14× faster
-  at reading properties, but up to 2.4× slower to parse than web-ifc and up to
-  twice the peak memory on large models. Runners, raw results and the
-  reproduce steps are in `parity/bench`; the tables are on the
-  [benchmarks](https://docs.goifc.org/latest/benchmarks/) page.
+  0.1 to 56 MB. With the changes above, goifc leads every speed and memory
+  measure on every model — the whole job 7.7–14.5× faster than web-ifc, parse
+  1.8–4.0× faster, peak memory 1.3–5× lower — and trails on geometry, which is
+  simpler. Runners, raw results and the reproduce steps are in `parity/bench`;
+  the tables are on the [benchmarks](https://docs.goifc.org/latest/benchmarks/)
+  page.
 
 - The project now has a [Discord](https://discord.gg/mcDPQECCy), linked from
   goifc.org, the docs footer and the README, for questions that are not issues.

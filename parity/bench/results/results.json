@@ -4,7 +4,7 @@
   "cpu": "Intel(R) Core(TM) i7-14700K",
   "date": "2026-09-29",
   "go": "go1.25.12",
-  "goifc": "v0.14.0-4-g2bf894d",
+  "goifc": "v0.14.0-9-gb872dfe",
   "ifcopenshell": "0.9.0",
   "memory_gib": 63,
   "node": "v24.17.0",
@@ -14,7 +14,7 @@
  },
  "footprint": {
   "goifc": {
-   "mib": 3.2329235076904297,
+   "mib": 3.2793378829956055,
    "what": "static binary, cgo off"
   },
   "ifcopenshell": {
@@ -41,14 +41,14 @@
       "covered": 2585,
       "reference": 2585
      },
-     "geom_ms": 42.873,
+     "geom_ms": 7.313,
      "meshes": 2586,
-     "parse_ms": 210.102,
-     "peak_rss_mib": 270.44921875,
+     "parse_ms": 32.603,
+     "peak_rss_mib": 128.21875,
      "runs": 3,
-     "total_ms": 340.433,
-     "walk_ms": 87.458,
-     "wall_ms": 366.1888181231916
+     "total_ms": 129.92,
+     "walk_ms": 90.004,
+     "wall_ms": 144.94649600237608
     },
     "ifcopenshell": {
      "agreement": {
@@ -86,14 +86,14 @@
       "covered": 2585,
       "reference": 2585
      },
-     "geom_ms": 197.009723,
+     "geom_ms": 226.63763600000016,
      "meshes": 2586,
-     "parse_ms": 88.91639899999998,
-     "peak_rss_mib": 358.13671875,
+     "parse_ms": 88.57937199999998,
+     "peak_rss_mib": 351.78515625,
      "runs": 3,
-     "total_ms": 933.2481839999999,
-     "walk_ms": 647.322062,
-     "wall_ms": 1115.2092651464045
+     "total_ms": 1082.9013370000002,
+     "walk_ms": 767.684329,
+     "wall_ms": 1337.7058079931885
     }
    }
   },
@@ -111,14 +111,14 @@
       "covered": 6587,
       "reference": 6587
      },
-     "geom_ms": 1093.056,
+     "geom_ms": 59.864,
      "meshes": 6587,
-     "parse_ms": 1033.209,
-     "peak_rss_mib": 1648.29296875,
+     "parse_ms": 136.523,
+     "peak_rss_mib": 635.5078125,
      "runs": 3,
-     "total_ms": 2452.196,
-     "walk_ms": 325.931,
-     "wall_ms": 2531.6513320431113
+     "total_ms": 498.66399999999993,
+     "walk_ms": 302.277,
+     "wall_ms": 629.401037003845
     },
     "ifcopenshell": {
      "agreement": {
@@ -156,14 +156,14 @@
       "covered": 6587,
       "reference": 6587
      },
-     "geom_ms": 705.7884010000002,
+     "geom_ms": 763.6010699999997,
      "meshes": 6587,
-     "parse_ms": 493.55936599999995,
-     "peak_rss_mib": 831.80859375,
+     "parse_ms": 466.45432299999993,
+     "peak_rss_mib": 832.57421875,
      "runs": 3,
-     "total_ms": 4064.4972140000004,
-     "walk_ms": 2865.1494470000002,
-     "wall_ms": 4511.4482450298965
+     "total_ms": 4165.978278,
+     "walk_ms": 2935.922885,
+     "wall_ms": 4504.540955880657
     }
    }
   },
@@ -181,14 +181,14 @@
       "covered": 215,
       "reference": 215
      },
-     "geom_ms": 7.461,
+     "geom_ms": 2.304,
      "meshes": 215,
-     "parse_ms": 37.893,
-     "peak_rss_mib": 44.76953125,
+     "parse_ms": 12.113,
+     "peak_rss_mib": 28.15234375,
      "runs": 5,
-     "total_ms": 54.05,
-     "walk_ms": 8.696,
-     "wall_ms": 56.19025300256908
+     "total_ms": 23.005,
+     "walk_ms": 8.588,
+     "wall_ms": 26.604889892041683
     },
     "ifcopenshell": {
      "agreement": {
@@ -226,14 +226,14 @@
       "covered": 215,
       "reference": 215
      },
-     "geom_ms": 81.86679699999996,
+     "geom_ms": 57.51836000000003,
      "meshes": 215,
-     "parse_ms": 29.75215,
-     "peak_rss_mib": 220.7578125,
+     "parse_ms": 22.973382999999984,
+     "peak_rss_mib": 212.87890625,
      "runs": 5,
-     "total_ms": 232.856833,
-     "walk_ms": 121.23788600000003,
-     "wall_ms": 492.62254289351404
+     "total_ms": 176.662633,
+     "walk_ms": 96.17088999999999,
+     "wall_ms": 407.38915000110865
     }
    }
   },
@@ -251,14 +251,14 @@
       "covered": 82,
       "reference": 83
      },
-     "geom_ms": 8.725,
+     "geom_ms": 3.053,
      "meshes": 82,
-     "parse_ms": 48.971,
-     "peak_rss_mib": 44.67578125,
+     "parse_ms": 13.546,
+     "peak_rss_mib": 27.55078125,
      "runs": 5,
-     "total_ms": 61.498,
-     "walk_ms": 3.802,
-     "wall_ms": 98.11673406511545
+     "total_ms": 20.152,
+     "walk_ms": 3.553,
+     "wall_ms": 23.12328200787306
     },
     "ifcopenshell": {
      "agreement": {
@@ -296,14 +296,14 @@
       "covered": 83,
       "reference": 83
      },
-     "geom_ms": 137.01739499999996,
+     "geom_ms": 176.95846999999998,
      "meshes": 83,
-     "parse_ms": 25.166545000000013,
-     "peak_rss_mib": 189.52734375,
+     "parse_ms": 24.629098000000027,
+     "peak_rss_mib": 186.953125,
      "runs": 5,
-     "total_ms": 233.63061299999998,
-     "walk_ms": 71.446673,
-     "wall_ms": 453.24247190728784
+     "total_ms": 292.585783,
+     "walk_ms": 90.99821500000002,
+     "wall_ms": 493.1071850005537
     }
    }
   },
@@ -321,14 +321,14 @@
       "covered": 34,
       "reference": 35
      },
-     "geom_ms": 0.185,
+     "geom_ms": 0.187,
      "meshes": 34,
-     "parse_ms": 2.645,
-     "peak_rss_mib": 5.64453125,
+     "parse_ms": 1.403,
+     "peak_rss_mib": 4.76171875,
      "runs": 5,
-     "total_ms": 3.04,
-     "walk_ms": 0.21,
-     "wall_ms": 4.9026531632989645
+     "total_ms": 1.77,
+     "walk_ms": 0.18,
+     "wall_ms": 4.2002450209110975
     },
     "ifcopenshell": {
      "agreement": {
@@ -366,14 +366,14 @@
       "covered": 35,
       "reference": 35
      },
-     "geom_ms": 25.718880000000013,
+     "geom_ms": 21.996594999999985,
      "meshes": 35,
-     "parse_ms": 7.042108999999982,
-     "peak_rss_mib": 158.546875,
+     "parse_ms": 6.169947000000008,
+     "peak_rss_mib": 147.859375,
      "runs": 5,
-     "total_ms": 38.52254099999999,
-     "walk_ms": 5.761551999999995,
-     "wall_ms": 293.9460820052773
+     "total_ms": 35.046176,
+     "walk_ms": 6.87963400000001,
+     "wall_ms": 366.5625969879329
     }
    }
   },
@@ -391,14 +391,14 @@
       "covered": 1878,
       "reference": 1878
      },
-     "geom_ms": 395.995,
+     "geom_ms": 23.655,
      "meshes": 1878,
-     "parse_ms": 533.538,
-     "peak_rss_mib": 665.8828125,
+     "parse_ms": 83.651,
+     "peak_rss_mib": 282.046875,
      "runs": 3,
-     "total_ms": 960.423,
-     "walk_ms": 30.89,
-     "wall_ms": 1054.5972099062055
+     "total_ms": 150.433,
+     "walk_ms": 43.127,
+     "wall_ms": 186.41632003709674
     },
     "ifcopenshell": {
      "agreement": {
@@ -436,14 +436,14 @@
       "covered": 1878,
       "reference": 1878
      },
-     "geom_ms": 410.27266499999996,
+     "geom_ms": 436.0815120000002,
      "meshes": 1878,
-     "parse_ms": 254.841468,
-     "peak_rss_mib": 497.95703125,
+     "parse_ms": 282.92761699999994,
+     "peak_rss_mib": 500.83203125,
      "runs": 3,
-     "total_ms": 1785.315982,
-     "walk_ms": 1120.201849,
-     "wall_ms": 2163.0599841009825
+     "total_ms": 2017.264521,
+     "walk_ms": 1298.255392,
+     "wall_ms": 2325.678522931412
     }
    }
   },
@@ -461,14 +461,14 @@
       "covered": 3504,
       "reference": 3504
      },
-     "geom_ms": 90.032,
+     "geom_ms": 12.069,
      "meshes": 3573,
-     "parse_ms": 775.943,
-     "peak_rss_mib": 724.78125,
+     "parse_ms": 120.522,
+     "peak_rss_mib": 336.71875,
      "runs": 3,
-     "total_ms": 971.5500000000001,
-     "walk_ms": 105.575,
-     "wall_ms": 1022.7809471543878
+     "total_ms": 251.051,
+     "walk_ms": 118.46,
+     "wall_ms": 299.11470506340265
     },
     "ifcopenshell": {
      "agreement": {
@@ -506,14 +506,14 @@
       "covered": 3504,
       "reference": 3504
      },
-     "geom_ms": 245.42879099999982,
+     "geom_ms": 416.11235799999986,
      "meshes": 3504,
-     "parse_ms": 352.707032,
-     "peak_rss_mib": 582.91796875,
+     "parse_ms": 479.73966399999995,
+     "peak_rss_mib": 579.86328125,
      "runs": 3,
-     "total_ms": 2508.9422519999994,
-     "walk_ms": 1910.8064289999998,
-     "wall_ms": 2759.5929668750614
+     "total_ms": 3289.4772449999996,
+     "walk_ms": 2393.625223,
+     "wall_ms": 3506.51408592239
     }
    }
   }

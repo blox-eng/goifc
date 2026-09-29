@@ -7,36 +7,31 @@ same machine, losses included.
 
 ## In short
 
-**Where goifc is better**
+On the real models (everything but the 0.1 MB toy), against the best of the
+other two in each column:
 
-- **The whole job is fastest on every model.** Parse, walk and tessellate
-  together run 1.7–4.3× faster than web-ifc on the real models, 5–26× faster
-  than IfcOpenShell on all 26 cores, and 17–140× faster than IfcOpenShell on one.
-- **Reading properties is 7–14× faster than either.** That is the walk —
-  every product's property sets, quantity sets and container — and goifc's
-  does more work there than the others' (it also resolves materials and
-  derives quantities).
-- **It starts in 5 ms and ships as a 3 MB static binary**, against about 300 ms
-  and a 24 MB (web-ifc) or 230 MB (IfcOpenShell) install. Called once per file,
-  from a CLI or a request handler, that startup is most of the bill on small
-  models.
-- **Less memory on small models:** 2.5–3× less on the 2–3 MB houses.
+- **The whole job is 7.7–14.5× faster** than web-ifc, 18–126× faster than
+  IfcOpenShell on all 26 cores, and 67–700× faster than IfcOpenShell on one.
+- **Parse is 1.8–4.0× faster**: the DATA section is parsed across all cores
+  into flat slabs, where it used to be one thread building a tree of small
+  objects.
+- **Reading properties is 6–11× faster**, although goifc's walk does more work
+  than the others' (it also resolves materials and derives quantities).
+- **Tessellation is 13–58× faster than web-ifc.** It runs in parallel and
+  meshes a shape mapped into many places once. Its geometry is also simpler:
+  see the last point.
+- **Peak memory is 1.3–5× lower** than the leaner of the other two, on every
+  model.
+- **It starts in 4 ms and ships as a 3 MB static binary**, against about 300 ms
+  and a 24 MB (web-ifc) or 230 MB (IfcOpenShell) install.
 
-**Where goifc is worse**
-
-- **Parsing is 1.3–2.4× slower than web-ifc on every real model**, and 7–25%
-  slower than IfcOpenShell from 13 MB up. web-ifc defers part of its parse to
-  first access, so part of that gap moves into its walk, but not all of it.
-- **More memory on large models:** 1.1–2× the lowest peak from 13 MB up —
-  1.6 GiB against about 0.8–1.0 GiB on the 56 MB plumbing model.
-- **Tessellating the MEP model is 1.5× slower than web-ifc**, and level with it
-  on the private model. goifc's lead in tessellation shrinks as models grow.
-- **Its geometry is simpler.** It does not cut openings out of walls, which both
-  others do; the agreement check below cannot see that. Where its boxes do
-  differ from IfcOpenShell's by more than 1 cm — 2 to 5 elements per model,
-  almost all walls, and one site with no mesh on two models — goifc's box is always the larger one,
-  never the smaller: a loose bound, as [coverage](coverage.md) describes, not
-  an under-report.
+**Where goifc is still worse: its geometry is simpler.** It does not cut
+openings out of walls, which both others do, and the agreement check below
+cannot see that. Where its boxes do differ from IfcOpenShell's by more than
+1 cm — 2 to 5 elements per model, almost all walls, and one site with no mesh
+on two models — goifc's box is always the larger one, never the smaller: a
+loose bound, as [coverage](coverage.md) describes, not an under-report. Part
+of the tessellation lead is this simplicity, not speed.
 
 ## Method
 
@@ -96,8 +91,12 @@ the Python overhead there is small; the walk is Python through and through,
 which is how most IfcOpenShell users write it.
 
 **One machine, not a lab.** The host was not otherwise idle, so small models
-(single-digit milliseconds) move by tens of percent between runs. The larger
-models are where the ratios are stable.
+(single-digit milliseconds) move by tens of percent between runs, and web-ifc's
+timings moved by up to a third between two runs on the larger ones. The ratios
+above are ranges for that reason. goifc and web-ifc were last measured together;
+the IfcOpenShell columns come from an earlier run the same day on the same
+host, since nothing about IfcOpenShell changed and a full run of it takes an
+hour.
 
 ### Models
 
@@ -113,7 +112,7 @@ only its aggregate numbers are published.
 <!-- bench:begin -->
 
 Measured 2026-09-29 on Intel(R) Core(TM) i7-14700K (26 cores, 63 GiB),
-Linux 6.17.0-29-generic. goifc v0.14.0-4-g2bf894d (go1.25.12), IfcOpenShell 0.9.0
+Linux 6.17.0-29-generic. goifc v0.14.0-9-gb872dfe (go1.25.12), IfcOpenShell 0.9.0
 (Python 3.12.3), web-ifc 0.0.78 (Node v24.17.0). Medians of
 five runs below 10 MB and three above, each in a fresh process.
 
@@ -135,25 +134,25 @@ The whole job: file bytes in, every element's properties and a mesh out.
 
 | Model | goifc | IfcOpenShell | IfcOpenShell, 26 threads | web-ifc | goifc vs best other |
 |---|---|---|---|---|---|
-| `ifcopenhouse` | 3.0 ms | 149 ms | 100 ms | 39 ms | **12.7× faster** |
-| `duplex_a` | 54 ms | 2,979 ms | 511 ms | 233 ms | **4.3× faster** |
-| `fzk_haus` | 61 ms | 2,786 ms | 1,098 ms | 234 ms | **3.8× faster** |
-| `clinic_arch` | 340 ms | 15.8 s | 3,225 ms | 933 ms | **2.7× faster** |
-| `schependomlaan` | 972 ms | 16.8 s | 4,506 ms | 2,509 ms | **2.6× faster** |
-| `clinic_plumbing` | 2,452 ms | 347.0 s | 63.0 s | 4,064 ms | **1.7× faster** |
-| private model (30 MB) | 960 ms | 88.2 s | 18.1 s | 1,785 ms | **1.9× faster** |
+| `ifcopenhouse` | 1.8 ms | 149 ms | 100 ms | 35 ms | **19.8× faster** |
+| `duplex_a` | 23 ms | 2,979 ms | 511 ms | 177 ms | **7.7× faster** |
+| `fzk_haus` | 20 ms | 2,786 ms | 1,098 ms | 293 ms | **14.5× faster** |
+| `clinic_arch` | 130 ms | 15.8 s | 3,225 ms | 1,083 ms | **8.3× faster** |
+| `schependomlaan` | 251 ms | 16.8 s | 4,506 ms | 3,289 ms | **13.1× faster** |
+| `clinic_plumbing` | 499 ms | 347.0 s | 63.0 s | 4,166 ms | **8.4× faster** |
+| private model (30 MB) | 150 ms | 88.2 s | 18.1 s | 2,017 ms | **13.4× faster** |
 
 ### Parse
 
 | Model | goifc | IfcOpenShell | web-ifc | goifc vs best other |
 |---|---|---|---|---|
-| `ifcopenhouse` | 2.6 ms | 4.4 ms | 7.0 ms | **1.7× faster** |
-| `duplex_a` | 38 ms | 54 ms | 30 ms | 1.3× slower |
-| `fzk_haus` | 49 ms | 62 ms | 25 ms | 1.9× slower |
-| `clinic_arch` | 210 ms | 184 ms | 89 ms | 2.4× slower |
-| `schependomlaan` | 776 ms | 698 ms | 353 ms | 2.2× slower |
-| `clinic_plumbing` | 1,033 ms | 830 ms | 494 ms | 2.1× slower |
-| private model (30 MB) | 534 ms | 499 ms | 255 ms | 2.1× slower |
+| `ifcopenhouse` | 1.4 ms | 4.4 ms | 6.2 ms | **3.1× faster** |
+| `duplex_a` | 12 ms | 54 ms | 23 ms | **1.9× faster** |
+| `fzk_haus` | 14 ms | 62 ms | 25 ms | **1.8× faster** |
+| `clinic_arch` | 33 ms | 184 ms | 89 ms | **2.7× faster** |
+| `schependomlaan` | 121 ms | 698 ms | 480 ms | **4.0× faster** |
+| `clinic_plumbing` | 137 ms | 830 ms | 466 ms | **3.4× faster** |
+| private model (30 MB) | 84 ms | 499 ms | 283 ms | **3.4× faster** |
 
 ### Walk
 
@@ -161,25 +160,25 @@ Every product's identity, property and quantity sets and spatial container.
 
 | Model | goifc | IfcOpenShell | web-ifc | goifc vs best other |
 |---|---|---|---|---|
-| `ifcopenhouse` | 0.2 ms | 11 ms | 5.8 ms | **27.4× faster** |
-| `duplex_a` | 8.7 ms | 127 ms | 121 ms | **13.9× faster** |
-| `fzk_haus` | 3.8 ms | 33 ms | 71 ms | **8.7× faster** |
-| `clinic_arch` | 87 ms | 850 ms | 647 ms | **7.4× faster** |
-| `schependomlaan` | 106 ms | 750 ms | 1,911 ms | **7.1× faster** |
-| `clinic_plumbing` | 326 ms | 3,613 ms | 2,865 ms | **8.8× faster** |
-| private model (30 MB) | 31 ms | 260 ms | 1,120 ms | **8.4× faster** |
+| `ifcopenhouse` | 0.2 ms | 11 ms | 6.9 ms | **38.2× faster** |
+| `duplex_a` | 8.6 ms | 127 ms | 96 ms | **11.2× faster** |
+| `fzk_haus` | 3.6 ms | 33 ms | 91 ms | **9.3× faster** |
+| `clinic_arch` | 90 ms | 850 ms | 768 ms | **8.5× faster** |
+| `schependomlaan` | 118 ms | 750 ms | 2,394 ms | **6.3× faster** |
+| `clinic_plumbing` | 302 ms | 3,613 ms | 2,936 ms | **9.7× faster** |
+| private model (30 MB) | 43 ms | 260 ms | 1,298 ms | **6.0× faster** |
 
 ### Tessellate
 
 | Model | goifc | IfcOpenShell | IfcOpenShell, 26 threads | web-ifc | goifc vs best other |
 |---|---|---|---|---|---|
-| `ifcopenhouse` | 0.2 ms | 134 ms | 84 ms | 26 ms | **139.0× faster** |
-| `duplex_a` | 7.5 ms | 2,798 ms | 395 ms | 82 ms | **11.0× faster** |
-| `fzk_haus` | 8.7 ms | 2,692 ms | 1,007 ms | 137 ms | **15.7× faster** |
-| `clinic_arch` | 43 ms | 14.8 s | 2,407 ms | 197 ms | **4.6× faster** |
-| `schependomlaan` | 90 ms | 15.3 s | 3,039 ms | 245 ms | **2.7× faster** |
-| `clinic_plumbing` | 1,093 ms | 342.5 s | 59.4 s | 706 ms | 1.5× slower |
-| private model (30 MB) | 396 ms | 87.5 s | 17.4 s | 410 ms | even |
+| `ifcopenhouse` | 0.2 ms | 134 ms | 84 ms | 22 ms | **117.6× faster** |
+| `duplex_a` | 2.3 ms | 2,798 ms | 395 ms | 58 ms | **25.0× faster** |
+| `fzk_haus` | 3.1 ms | 2,692 ms | 1,007 ms | 177 ms | **58.0× faster** |
+| `clinic_arch` | 7.3 ms | 14.8 s | 2,407 ms | 227 ms | **31.0× faster** |
+| `schependomlaan` | 12 ms | 15.3 s | 3,039 ms | 416 ms | **34.5× faster** |
+| `clinic_plumbing` | 60 ms | 342.5 s | 59.4 s | 764 ms | **12.8× faster** |
+| private model (30 MB) | 24 ms | 87.5 s | 17.4 s | 436 ms | **18.4× faster** |
 
 ### Peak memory
 
@@ -187,13 +186,13 @@ Peak resident set (`VmHWM`) of the whole process, runtime included.
 
 | Model | goifc | IfcOpenShell | web-ifc | goifc vs best other |
 |---|---|---|---|---|
-| `ifcopenhouse` | 6 MiB | 95 MiB | 159 MiB | **16.8× less** |
-| `duplex_a` | 45 MiB | 111 MiB | 221 MiB | **2.5× less** |
-| `fzk_haus` | 45 MiB | 137 MiB | 190 MiB | **3.1× less** |
-| `clinic_arch` | 270 MiB | 252 MiB | 358 MiB | even |
-| `schependomlaan` | 725 MiB | 462 MiB | 583 MiB | 1.6× more |
-| `clinic_plumbing` | 1,648 MiB | 972 MiB | 832 MiB | 2.0× more |
-| private model (30 MB) | 666 MiB | 496 MiB | 498 MiB | 1.3× more |
+| `ifcopenhouse` | 5 MiB | 95 MiB | 148 MiB | **19.9× less** |
+| `duplex_a` | 28 MiB | 111 MiB | 213 MiB | **3.9× less** |
+| `fzk_haus` | 28 MiB | 137 MiB | 187 MiB | **5.0× less** |
+| `clinic_arch` | 128 MiB | 252 MiB | 352 MiB | **2.0× less** |
+| `schependomlaan` | 337 MiB | 462 MiB | 580 MiB | **1.4× less** |
+| `clinic_plumbing` | 636 MiB | 972 MiB | 833 MiB | **1.3× less** |
+| private model (30 MB) | 282 MiB | 496 MiB | 501 MiB | **1.8× less** |
 
 ### Geometry agreement with IfcOpenShell
 
@@ -216,15 +215,15 @@ complete by construction.
 
 | Tool | Process start to exit, smallest model |
 |---|---|
-| goifc | 4.9 ms |
+| goifc | 4.2 ms |
 | IfcOpenShell | 314 ms |
-| web-ifc | 294 ms |
+| web-ifc | 367 ms |
 
 ### Footprint
 
 | Tool | What you install | Size |
 |---|---|---|
-| goifc | static binary, cgo off | 3.2 MB |
+| goifc | static binary, cgo off | 3.3 MB |
 | IfcOpenShell | installed Python package | 230.4 MB |
 | web-ifc | installed npm package | 23.6 MB |
 
