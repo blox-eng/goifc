@@ -177,7 +177,13 @@ func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) (
 		if len(v) == 0 {
 			continue
 		}
-		appendMesh(&verts, &tris, v, t)
+		if verts == nil {
+			// tessellateItemDepth's slices are the caller's own, so the first
+			// item's mesh becomes the element's without a copy.
+			verts, tris = v, t
+		} else {
+			appendMesh(&verts, &tris, v, t)
+		}
 		src = promoteSource(src, s)
 	}
 	if len(verts) == 0 {

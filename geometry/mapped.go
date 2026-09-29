@@ -1,6 +1,8 @@
 package geometry
 
 import (
+	"slices"
+
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
 )
@@ -52,7 +54,9 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 	// local is already in meters; apply the (unitless-rotation + raw-translation)
 	// mapping transform, whose translation is raw units → scale it too.
 	x := scaleTransformTranslation(xform, unitScale)
-	return transformVerts(local.verts, x), local.tris, local.src, true
+	// The cached triangles are shared by every placement; hand back a copy so
+	// what tessellateItemDepth returns is always the caller's to keep.
+	return transformVerts(local.verts, x), slices.Clone(local.tris), local.src, true
 }
 
 // mappedRepMesh tessellates a mapped representation's items into one mesh in
