@@ -1,6 +1,10 @@
 package geometry
 
 import (
+	"runtime"
+	"sync"
+	"sync/atomic"
+
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
 )
@@ -55,32 +59,51 @@ type Scene struct {
 type Stats struct{ Total, Extrude, Brep, OBB, Empty int }
 
 // Build assembles proxy geometry for every element in r, rendering ALL elements
-// regardless of Emit.
+// regardless of Emit. Elements are meshed in parallel; the result is identical
+// to a serial build, in the same order.
 func Build(f *step.File, r *model.Result) (*Scene, error) {
-	s := &Scene{Elements: make([]Element, 0, len(r.Elements))}
-	for i := range r.Elements {
-		el := &r.Elements[i]
-		verts, tris, src := elementMesh(f, el.ExpressID, r.UnitScale)
-		ge := Element{
-			GlobalID:  el.GlobalID,
-			Verts:     verts,
-			Tris:      tris,
-			Placement: el.Placement,
-			Source:    src,
+	s := &Scene{Elements: make([]Element, len(r.Elements))}
+	c := &meshCache{}
+	workers := min(runtime.GOMAXPROCS(0), len(r.Elements))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(r.Elements) {
+					return
+				}
+				el := &r.Elements[i]
+				verts, tris, src := elementMesh(f, el.ExpressID, r.UnitScale, c)
+				ge := Element{
+					GlobalID:  el.GlobalID,
+					Verts:     verts,
+					Tris:      tris,
+					Placement: el.Placement,
+					Source:    src,
+				}
+				if len(verts) > 0 {
+					ge.BBoxMin, ge.BBoxMax = worldAABB(verts, el.Placement)
+				}
+				s.Elements[i] = ge
+			}
+		}()
+	}
+	wg.Wait()
+	for _, e := range s.Elements {
+		if len(e.Verts) == 0 {
+			s.Warnings = append(s.Warnings, "no geometry for "+e.GlobalID)
 		}
-		if len(verts) == 0 {
-			s.Warnings = append(s.Warnings, "no geometry for "+el.GlobalID)
-		} else {
-			ge.BBoxMin, ge.BBoxMax = worldAABB(verts, el.Placement)
-		}
-		s.Elements = append(s.Elements, ge)
 	}
 	return s, nil
 }
 
 // tessellateItem tessellates ONE representation item into element-local meters.
 func tessellateItem(item *step.Instance, unitScale float64) ([]float32, []uint32, GeomSource) {
-	return tessellateItemDepth(item, unitScale, 0)
+	return tessellateItemDepth(item, unitScale, 0, nil)
 }
 
 // maxMapDepth bounds IfcMappedItem recursion. Real IFC mapped items nest 0-2
@@ -88,10 +111,10 @@ func tessellateItem(item *step.Instance, unitScale float64) ([]float32, []uint32
 // would otherwise recurse unbounded and stack-overflow the import.
 const maxMapDepth = 8
 
-func tessellateItemDepth(item *step.Instance, unitScale float64, depth int) ([]float32, []uint32, GeomSource) {
+func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *meshCache) ([]float32, []uint32, GeomSource) {
 	switch {
 	case item.IsA("IfcMappedItem"):
-		v, t, s, ok := mappedItemMesh(item, unitScale, depth)
+		v, t, s, ok := mappedItemMesh(item, unitScale, depth, c)
 		if ok {
 			return v, t, s
 		}
@@ -139,7 +162,7 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int) ([]f
 			return scaleVerts(v, unitScale), t, SourceBrep
 		}
 	case item.IsA("IfcBooleanClippingResult"), item.IsA("IfcBooleanResult"):
-		if v, t, s, ok := clipMeshByDifference(item, unitScale, depth); ok {
+		if v, t, s, ok := clipMeshByDifference(item, unitScale, depth, c); ok {
 			return v, t, s
 		}
 	}
@@ -149,13 +172,13 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int) ([]f
 
 // elementMesh returns the element-local mesh (meters) for expressID. Dispatches
 // each representation item via tessellateItem (extrude/brep/mapped/OBB fallback).
-func elementMesh(f *step.File, expressID int, unitScale float64) ([]float32, []uint32, GeomSource) {
+func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) ([]float32, []uint32, GeomSource) {
 	items := representationItems(f, expressID)
 	var verts []float32
 	var tris []uint32
 	src := SourceOBB
 	for _, item := range items {
-		v, t, s := tessellateItem(item, unitScale)
+		v, t, s := tessellateItemDepth(item, unitScale, 0, c)
 		if len(v) == 0 {
 			continue
 		}

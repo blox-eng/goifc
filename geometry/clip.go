@@ -42,7 +42,7 @@ func isHalfSpaceSolid(inst *step.Instance) bool {
 // (IfcPolygonalBoundedHalfSpace, Revit's usual wall/slab/beam miter-join cut).
 // Returns ok=false for a non-DIFFERENCE operator or a non-planar base surface,
 // letting the caller fall back to the (safe, conservative-superset) OBB path.
-func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]float32, []uint32, GeomSource, bool) {
+func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *meshCache) ([]float32, []uint32, GeomSource, bool) {
 	if depth >= maxMapDepth {
 		return nil, nil, SourceOBB, false
 	}
@@ -68,7 +68,7 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int) ([]
 	// Recurse in RAW file units (scale=1) so the plane (built from raw
 	// IfcCartesianPoint/IfcDirection values) and the mesh stay in the same
 	// unscaled frame for clipping; scale to meters once, at the end.
-	verts, tris, src := tessellateItemDepth(first, 1.0, depth+1)
+	verts, tris, src := tessellateItemDepth(first, 1.0, depth+1, c)
 	if len(verts) == 0 || len(tris) == 0 {
 		return nil, nil, SourceOBB, false
 	}

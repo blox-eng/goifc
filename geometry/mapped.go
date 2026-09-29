@@ -24,7 +24,7 @@ const (
 // depth bounds recursion into nested IfcMappedItem chains (see maxMapDepth) —
 // a cyclic or pathologically-nested mapped structure in an untrusted IFC
 // upload returns gracefully (ok=false) instead of overflowing the stack.
-func mappedItemMesh(item *step.Instance, unitScale float64, depth int) (verts []float32, tris []uint32, src GeomSource, ok bool) {
+func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache) (verts []float32, tris []uint32, src GeomSource, ok bool) {
 	if depth >= maxMapDepth {
 		return nil, nil, SourceOBB, false
 	}
@@ -43,28 +43,40 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int) (verts []
 	if target, has := item.Ref(attrMapTarget); has {
 		xform = transformOperator3D(target).Mul(xform) // target ∘ origin
 	}
-	src = SourceOBB
-	itemsV, has := mappedRep.Get(attrRepresentationItems)
-	if !has || itemsV.Kind != step.KindList {
+	local := c.mapped(mappedRep, unitScale, depth, func() mesh {
+		return mappedRepMesh(mappedRep, unitScale, depth, c)
+	})
+	if !local.ok {
 		return nil, nil, SourceOBB, false
 	}
-	// mv is already in meters; apply the (unitless-rotation + raw-translation)
-	// mapping transform, whose translation is raw units → scale it too. Loop-invariant
-	// (same xform for every item), so compute once rather than per iteration.
+	// local is already in meters; apply the (unitless-rotation + raw-translation)
+	// mapping transform, whose translation is raw units → scale it too.
 	x := scaleTransformTranslation(xform, unitScale)
+	return transformVerts(local.verts, x), local.tris, local.src, true
+}
+
+// mappedRepMesh tessellates a mapped representation's items into one mesh in
+// the representation's own frame. It is the per-occurrence-invariant half of
+// mappedItemMesh: a representation mapped a thousand times is meshed once.
+func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *meshCache) mesh {
+	itemsV, has := mappedRep.Get(attrRepresentationItems)
+	if !has || itemsV.Kind != step.KindList {
+		return mesh{src: SourceOBB}
+	}
+	m := mesh{src: SourceOBB}
 	for _, iv := range itemsV.List {
 		if iv.Kind != step.KindRef || iv.Ref == nil {
 			continue
 		}
-		mv, mt, ms := tessellateItemDepth(iv.Ref, unitScale, depth+1) // recurse into A/B/C in scaled meters
+		mv, mt, ms := tessellateItemDepth(iv.Ref, unitScale, depth+1, c) // recurse into A/B/C in scaled meters
 		if len(mv) == 0 {
 			continue
 		}
-		tv := transformVerts(mv, x)
-		appendMesh(&verts, &tris, tv, mt)
-		src = promoteSource(src, ms)
+		appendMesh(&m.verts, &m.tris, mv, mt)
+		m.src = promoteSource(m.src, ms)
 	}
-	return verts, tris, src, len(tris) > 0
+	m.ok = len(m.tris) > 0
+	return m
 }
 
 // transformOperator3D builds a 4x4 from IfcCartesianTransformationOperator3D.
