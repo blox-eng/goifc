@@ -38,9 +38,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
   The reason is memory. A `Value` is now a 24-byte handle into slabs its `File`
   owns, where it was a 72-byte struct with three pointers, and the parse builds
-  a few large allocations instead of one or more per value. On a 28 MB ArchiCAD
-  export, parse time falls from ~0.55 s to ~0.18 s and the heap it leaves from
-  ~255 MiB to ~72 MiB. Every instance, value, inverse reference, warning,
+  a few large allocations instead of one or more per value. Files of 2 MB and
+  up are also parsed across all cores, with the serial parser as the fallback
+  and the reference. On a 28 MB ArchiCAD export, parse time falls from ~0.55 s
+  to ~0.05 s (~0.18 s on one core) and the heap it leaves from ~255 MiB to
+  ~74 MiB. Every instance, value, inverse reference, warning,
   extracted element and mesh is byte-identical to before on the seven
   benchmark models.
 

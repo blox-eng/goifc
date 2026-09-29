@@ -46,8 +46,7 @@ type File struct {
 	dense  []int32
 	sparse map[uint32]int32
 	byType map[string][]*Instance
-	vals   []Value // every argument and list member, instances' args included
-	strs   string  // every decoded string, enum and binary value
+	slabs  []slab
 	// The inverse index, flattened: the referrers of insts[i] are
 	// inv[invStart[i]:invStart[i+1]].
 	inv      []InverseRef
@@ -57,6 +56,13 @@ type File struct {
 	// simple instance; Instance.Type reports the first part, IsA matches any part.
 	complexTypes map[uint32][]string
 	warnings     []string
+}
+
+// slab holds the values and strings one parser produced: the whole file for a
+// serial parse, one chunk of it for a parallel one.
+type slab struct {
+	vals []Value // every argument and list member, instances' args included
+	strs string  // every decoded string, enum and binary value
 }
 
 // index returns id's position in insts, or -1.

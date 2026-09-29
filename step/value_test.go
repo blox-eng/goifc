@@ -10,12 +10,14 @@ func argsOf(t *testing.T, src string) []Value {
 	if tok.Kind != TokLParen {
 		t.Fatalf("want '(' got %v", tok.Kind)
 	}
-	p := &parser{s: s, f: &File{}}
+	f := &File{}
+	p := newParser(nil, f, 0, 0)
+	p.s = s
 	if err := p.parseArgs(); err != nil {
 		t.Fatal(err)
 	}
 	args := p.closeList(0, KindList)
-	p.finish()
+	finish(f, []*parser{p})
 	return args.List()
 }
 

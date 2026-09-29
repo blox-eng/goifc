@@ -32,18 +32,18 @@ func (p *parser) parseArgs() error {
 // closeList moves p.stack[mark:] into the value slab and returns a handle to it.
 // A list is closed before its parent, so the parent's handle can point at it.
 func (p *parser) closeList(mark int, kind Kind) Value {
-	start := len(p.f.vals)
-	p.f.vals = append(p.f.vals, p.stack[mark:]...)
-	n := len(p.f.vals) - start
+	start := len(p.vals)
+	p.vals = append(p.vals, p.stack[mark:]...)
+	n := len(p.vals) - start
 	p.stack = p.stack[:mark]
-	return Value{Kind: kind, x: uint64(start), n: uint32(n), f: p.f}
+	return Value{Kind: kind, x: slabRef(p.slab, start), n: uint32(n), f: p.f}
 }
 
 // str appends text to the string arena and returns its handle.
 func (p *parser) str(kind Kind, text []byte) Value {
 	off := len(p.strs)
 	p.strs = append(p.strs, text...)
-	return Value{Kind: kind, x: uint64(off), n: uint32(len(text)), f: p.f}
+	return Value{Kind: kind, x: slabRef(p.slab, off), n: uint32(len(text)), f: p.f}
 }
 
 // pushValue builds a Value from a leading token onto p.stack, recursing for

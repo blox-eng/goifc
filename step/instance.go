@@ -10,8 +10,9 @@ type Instance struct {
 	typ   string // interned, upper-cased type keyword (e.g. "IFCWALL")
 	file  *File
 	id    uint32
-	start uint32 // args are file.vals[start : start+n]
+	start uint32 // args are file.slabs[slab].vals[start : start+n]
 	n     uint32
+	slab  uint16
 }
 
 // ID returns the STEP instance name (#id). The zero-value Instance reports 0.
@@ -30,7 +31,7 @@ func (i *Instance) Get(idx int) (Value, bool) {
 	if idx < 0 || idx >= int(i.n) {
 		return Value{}, false
 	}
-	return i.file.vals[int(i.start)+idx], true
+	return i.file.slabs[i.slab].vals[int(i.start)+idx], true
 }
 
 // Args returns the underlying attribute slice. Callers must not mutate it.
@@ -38,7 +39,7 @@ func (i *Instance) Args() []Value {
 	if i.file == nil {
 		return nil
 	}
-	return i.file.vals[i.start : i.start+i.n]
+	return i.file.slabs[i.slab].vals[i.start : i.start+i.n]
 }
 
 // File returns the owning file.

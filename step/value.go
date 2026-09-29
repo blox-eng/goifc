@@ -61,26 +61,40 @@ func (k Kind) String() string {
 // Only the accessor named for a Kind is meaningful; the others return zero.
 //
 // A Value is a 24-byte handle into its File, not a self-contained tree: strings
-// live in one arena per file, list members in one value slab, and a reference
-// is the target's id, looked up on access. A large model therefore holds a
+// live in a string arena, list members in a value slab, and a reference is the
+// target's id, looked up on access. A file parsed in parallel has one arena and
+// slab per chunk, named by the top bits of the handle's offset. A large model therefore holds a
 // handful of big allocations instead of millions of small ones, and nothing in
 // them but the file handle is a pointer, so the garbage collector has almost
 // nothing to scan.
 type Value struct {
-	x    uint64 // int64 / float64 bits / bool / ref id / string offset / list start
+	x    uint64 // int64 / float64 bits / bool / ref id / slab<<slabShift | string or list offset
 	n    uint32 // string or list length
 	Kind Kind   // variant tag
 	f    *File
 }
+
+// slabShift splits a string or list handle into a slab number and an offset
+// within it: 16 bits of slab, 48 of offset.
+const (
+	slabShift = 48
+	offMask   = 1<<slabShift - 1
+)
+
+func slabRef(slab uint16, off int) uint64 { return uint64(slab)<<slabShift | uint64(off) }
+
+func (v Value) slab() (*slab, uint64) { return &v.f.slabs[v.x>>slabShift], v.x & offMask }
 
 // Str returns the text of a KindString (decoded), KindEnum (label without the
 // dots), KindBinary (raw digits) or the keyword of a KindTyped value.
 func (v Value) Str() string {
 	switch v.Kind {
 	case KindString, KindEnum, KindBinary:
-		return v.f.strs[v.x : v.x+uint64(v.n)]
+		s, off := v.slab()
+		return s.strs[off : off+uint64(v.n)]
 	case KindTyped:
-		return v.f.vals[v.x].Str()
+		s, off := v.slab()
+		return s.vals[off].Str()
 	}
 	return ""
 }
@@ -90,9 +104,11 @@ func (v Value) Str() string {
 func (v Value) List() []Value {
 	switch v.Kind {
 	case KindList:
-		return v.f.vals[v.x : v.x+uint64(v.n)]
+		s, off := v.slab()
+		return s.vals[off : off+uint64(v.n)]
 	case KindTyped:
-		return v.f.vals[v.x+1 : v.x+uint64(v.n)]
+		s, off := v.slab()
+		return s.vals[off+1 : off+uint64(v.n)]
 	}
 	return nil
 }

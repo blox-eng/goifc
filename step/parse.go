@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -32,33 +31,59 @@ func Parse(r io.Reader) (*File, error) {
 // type indexes; pass 2 resolves references to instance pointers and builds the
 // inverse index. Dangling references are non-fatal warnings.
 func ParseBytes(src []byte) (*File, error) {
-	f := &File{}
-	// Sized from the file: an IFC instance averages 60-80 bytes of text and
-	// about four stored values, so the slabs rarely grow more than once.
-	f.insts = make([]Instance, 0, len(src)/64+16)
-	f.vals = make([]Value, 0, len(src)/16+64)
-	p := &parser{
-		s:      NewScanner(src),
-		f:      f,
-		intern: make(map[string]string),
-		strs:   make([]byte, 0, len(src)/8),
+	if f, ok := parseParallel(src); ok {
+		return f, nil
 	}
+	return parseSerial(src)
+}
+
+// parseSerial parses src with one parser: the reference parseParallel must
+// reproduce, and the path that reports every parse error.
+func parseSerial(src []byte) (*File, error) {
+	f := &File{}
+	p := newParser(src, f, 0, len(src))
 	if err := p.parseDocument(); err != nil {
 		// Errors propagate up without further scanning, so Pos() is at or just past
 		// the offending token — a good-enough error location. Attach it once here.
 		return nil, &ParseError{Offset: p.s.Pos(), Err: err}
 	}
-	p.finish()
+	finish(f, []*parser{p})
 	return f, nil
 }
 
+// parser reads one stretch of a file into its own slab: the whole file, or one
+// chunk of the DATA section when parsing in parallel.
 type parser struct {
-	s      *Scanner
-	f      *File
-	intern map[string]string // type-keyword interning: one string per distinct type
-	stack  []Value           // values of the lists being parsed, innermost last
-	strs   []byte            // the string arena, frozen into f.strs by finish
-	header []headerRecord    // read before the arena is frozen, decoded after
+	s       *Scanner
+	f       *File
+	slab    uint16
+	intern  map[string]string // type-keyword interning: one string per distinct type
+	stack   []Value           // values of the lists being parsed, innermost last
+	vals    []Value
+	strs    []byte // frozen into the slab by finish
+	insts   []Instance
+	complex map[uint32][]string
+	header  []headerRecord // read before the arena is frozen, decoded after
+
+	// stopAtData makes parseDocument return right after "DATA;", with atData
+	// set, so the records that follow can be split across parsers.
+	stopAtData bool
+	atData     bool
+}
+
+// newParser returns a parser for src with slabs sized for n bytes of it. An IFC
+// instance averages 55-70 bytes of text and a value 13-14, so the slabs rarely
+// grow; over-sizing costs address space, not resident memory.
+func newParser(src []byte, f *File, slab uint16, n int) *parser {
+	return &parser{
+		s:      NewScanner(src),
+		f:      f,
+		slab:   slab,
+		intern: make(map[string]string),
+		vals:   make([]Value, 0, n/12+64),
+		strs:   make([]byte, 0, n/4+64),
+		insts:  make([]Instance, 0, n/48+16),
+	}
 }
 
 // headerRecord is a HEADER entry kept until finish, when its strings exist.
@@ -102,6 +127,13 @@ func (p *parser) parseDocument() error {
 			case "END-ISO-10303-21":
 				return nil
 			case "DATA":
+				if p.stopAtData {
+					if semi := p.s.Next(); semi.Kind != TokSemi {
+						return fmt.Errorf("step: expected ';' after DATA, got %v", semi.Kind)
+					}
+					p.atData = true
+					return nil
+				}
 				if err := p.parseData(); err != nil {
 					return err
 				}
@@ -167,6 +199,11 @@ func (p *parser) parseData() error {
 	if semi.Kind != TokSemi {
 		return fmt.Errorf("step: expected ';' after DATA, got %v", semi.Kind)
 	}
+	return p.parseRecords()
+}
+
+// parseRecords consumes DATA-section instance records until ENDSEC.
+func (p *parser) parseRecords() error {
 	for {
 		tok := p.s.Next()
 		switch tok.Kind {
@@ -193,7 +230,7 @@ func (p *parser) parseData() error {
 // the token after '=': a keyword begins a simple instance "#id=KEYWORD(args);"; a
 // '(' begins an ISO-10303-21 complex instance "#id=(TYPEA(args)TYPEB(args)...);".
 func (p *parser) parseInstance(ref Token) error {
-	id, err := strconv.ParseUint(string(ref.Text), 10, 32)
+	id, err := parseUint32(ref.Text)
 	if err != nil {
 		return fmt.Errorf("step: bad instance id #%s: %w", ref.Text, err)
 	}
@@ -270,12 +307,12 @@ func (p *parser) finishComplexInstance(id uint32) error {
 // and type waits for finish, when the instance slab stops moving.
 func (p *parser) register(id uint32, typ string, mark int, parts []string) {
 	args := p.closeList(mark, KindList)
-	p.f.insts = append(p.f.insts, Instance{typ: typ, file: p.f, id: id, start: uint32(args.x), n: args.n})
+	p.insts = append(p.insts, Instance{typ: typ, file: p.f, id: id, start: uint32(args.x & offMask), n: args.n, slab: p.slab})
 	if len(parts) > 1 {
-		if p.f.complexTypes == nil {
-			p.f.complexTypes = make(map[uint32][]string)
+		if p.complex == nil {
+			p.complex = make(map[uint32][]string)
 		}
-		p.f.complexTypes[id] = parts
+		p.complex[id] = parts
 	}
 }
 

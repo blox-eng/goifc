@@ -53,7 +53,7 @@ small objects:
 
 ```
 ParseBytes(src)
-  pass 1  scan HEADER + every #id=KEYWORD(args);
+  pass 1  scan HEADER + every #id=KEYWORD(args); split across cores (below)
           -> Instance{id, type, args range}   appended to one []Instance
           -> every value, list member and arg  appended to one []Value
           -> every string, enum and binary     appended to one string arena
@@ -62,6 +62,15 @@ ParseBytes(src)
           -> inverse index as one flat []InverseRef plus per-instance offsets
           -> dangling ref = non-fatal warning (ifcopenshell SYN 28 parity)
 ```
+
+Pass 1 runs in parallel on files of 2 MB and up. The header is read serially to
+`DATA;`, the records are cut into GOMAXPROCS chunks at a `;` followed by `#`,
+and each chunk parses into its own slab. A cut can land inside a string or
+comment that happens to hold `;#`, so each chunk must end exactly where the next
+one begins; if any does not, or any chunk fails, the whole file is parsed again
+serially. The result, and every error with its offset, is the serial parser's.
+Pass 2 builds the type and inverse indexes over instance ranges in parallel,
+keeping source order.
 
 A `Value` is a 24-byte handle into its `File`: a kind, a payload (an int, a
 float's bits, a reference id, or an offset into the string arena or value slab)
@@ -76,14 +85,14 @@ being patched in place. Read values through `Str`, `List`, `Ref`, `RefID`,
 | File size | ~28 MB |
 | Instances | 528,228 |
 | Inverse edges | 858,642 |
-| **Parse time** | **~0.18 s** (i7-14700K, best of five) |
-| **Live heap after parse** | **~72 MiB**, excluding the source bytes |
-| Allocations | ~166 MiB in ~2,300 allocations per parse |
+| **Parse time** | **~0.05 s** on 26 cores, ~0.18 s on one (i7-14700K, best of five) |
+| **Live heap after parse** | **~74 MiB**, excluding the source bytes |
+| Allocations | ~166 MiB in ~5,600 allocations per parse |
 
 Before the slab layout the same file took ~0.55 s and held ~255 MiB in 3.7 M
 allocations, most of it 72-byte `Value` structs carrying three pointers each
 that the garbage collector had to trace. The allocations that remain are the
-slabs growing and the string arena being frozen.
+per-chunk slabs, the frozen string arenas and the index-building scratch.
 
 ## Not in this package
 
