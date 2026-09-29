@@ -42,3 +42,5 @@ Package documentation lives on pkg.go.dev, which is generated from the source an
 [`ifc`](https://pkg.go.dev/github.com/blox-eng/goifc) · [`step`](https://pkg.go.dev/github.com/blox-eng/goifc/step) · [`model`](https://pkg.go.dev/github.com/blox-eng/goifc/model) · [`geometry`](https://pkg.go.dev/github.com/blox-eng/goifc/geometry)
 
 This site covers the things godoc cannot: how the pieces fit together, what the numbers mean, and where the edges are.
+
+A question that is not an issue belongs on [Discord](https://discord.gg/mcDPQECCy).

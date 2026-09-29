@@ -8,6 +8,10 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- The project now has a [Discord](https://discord.gg/mcDPQECCy), linked from goifc.org, the docs footer and the README, for questions that are not issues.
+
 ## v0.14.0 — 2026-09-28
 
 ### Added
