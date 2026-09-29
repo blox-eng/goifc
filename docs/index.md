@@ -57,8 +57,8 @@ always matches the release you are importing:
 This site covers the things godoc cannot: how the pieces fit together, what the
 numbers mean, and where the edges are.
 
-How it measures up against IfcOpenShell and web-ifc — faster and leaner on every
-model measured, with simpler geometry — is in [benchmarks](benchmarks.md).
+How it measures up against IfcOpenShell and web-ifc on the same job and the same
+cores — faster and leaner, with less exact geometry — is in [benchmarks](benchmarks.md).
 
 A question that is not an issue belongs on
 [Discord](https://discord.gg/mcDPQECCy).

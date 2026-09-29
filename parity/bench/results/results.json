@@ -4,7 +4,7 @@
   "cpu": "Intel(R) Core(TM) i7-14700K",
   "date": "2026-09-29",
   "go": "go1.25.12",
-  "goifc": "v0.14.0-9-gb872dfe",
+  "goifc": "v0.14.0-10-gfbb7abe",
   "ifcopenshell": "0.9.0",
   "memory_gib": 63,
   "node": "v24.17.0",
@@ -14,7 +14,7 @@
  },
  "footprint": {
   "goifc": {
-   "mib": 3.2793378829956055,
+   "mib": 3.2801895141601562,
    "what": "static binary, cgo off"
   },
   "ifcopenshell": {
@@ -41,18 +41,50 @@
       "covered": 2585,
       "reference": 2585
      },
-     "geom_ms": 7.313,
+     "agreement_noopen": {
+      "agree": 2581,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 5.823,
      "meshes": 2586,
-     "parse_ms": 32.603,
-     "peak_rss_mib": 128.21875,
+     "parse_ms": 33.978,
+     "peak_rss_mib": 128.61328125,
      "runs": 3,
-     "total_ms": 129.92,
-     "walk_ms": 90.004,
-     "wall_ms": 144.94649600237608
+     "total_ms": 115.61700000000002,
+     "tris": 157093,
+     "walk_ms": 75.816,
+     "wall_ms": 136.53953396715224
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 2580,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "agreement_noopen": {
+      "agree": 2581,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 41.499,
+     "meshes": 2586,
+     "parse_ms": 67.743,
+     "peak_rss_mib": 138.37109375,
+     "runs": 3,
+     "total_ms": 207.81799999999998,
+     "tris": 157093,
+     "walk_ms": 98.576,
+     "wall_ms": 242.52573680132627
     },
     "ifcopenshell": {
      "agreement": {
       "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "agreement_noopen": {
+      "agree": 2584,
       "covered": 2585,
       "reference": 2585
      },
@@ -71,14 +103,62 @@
       "covered": 2585,
       "reference": 2585
      },
-     "geom_ms": 2406.8552919197828,
+     "agreement_noopen": {
+      "agree": 2584,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 2409.249229123816,
      "meshes": 3258,
-     "parse_ms": 163.779224967584,
-     "peak_rss_mib": 858.1796875,
+     "parse_ms": 181.69823591597378,
+     "peak_rss_mib": 856.3359375,
      "runs": 3,
-     "total_ms": 3225.000803824514,
-     "walk_ms": 654.3662869371474,
-     "wall_ms": 3637.7406378742307
+     "total_ms": 3204.5974200591445,
+     "tris": 191265,
+     "walk_ms": 613.6499550193548,
+     "wall_ms": 3621.644902974367
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 2584,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "agreement_noopen": {
+      "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 10858.682898106053,
+     "meshes": 3257,
+     "parse_ms": 178.53083508089185,
+     "peak_rss_mib": 248.83203125,
+     "runs": 3,
+     "total_ms": 11644.933810224757,
+     "tris": 184977,
+     "walk_ms": 607.7200770378113,
+     "wall_ms": 11929.36180299148
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 2584,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "agreement_noopen": {
+      "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 2220.2807071153075,
+     "meshes": 3257,
+     "parse_ms": 179.1909639723599,
+     "peak_rss_mib": 850.76953125,
+     "runs": 3,
+     "total_ms": 3014.7063001058996,
+     "tris": 185009,
+     "walk_ms": 615.2346290182322,
+     "wall_ms": 3362.8327450715005
     },
     "web-ifc": {
      "agreement": {
@@ -86,14 +166,41 @@
       "covered": 2585,
       "reference": 2585
      },
-     "geom_ms": 226.63763600000016,
+     "agreement_noopen": {
+      "agree": 2584,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 204.704021,
      "meshes": 2586,
-     "parse_ms": 88.57937199999998,
-     "peak_rss_mib": 351.78515625,
+     "parse_ms": 82.76704899999999,
+     "peak_rss_mib": 358.53515625,
      "runs": 3,
-     "total_ms": 1082.9013370000002,
-     "walk_ms": 767.684329,
-     "wall_ms": 1337.7058079931885
+     "total_ms": 955.866201,
+     "tris": 174325,
+     "walk_ms": 668.395131,
+     "wall_ms": 1156.7692148964852
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 2584,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "agreement_noopen": {
+      "agree": 2585,
+      "covered": 2585,
+      "reference": 2585
+     },
+     "geom_ms": 117.41429900000003,
+     "meshes": 2586,
+     "parse_ms": 90.495947,
+     "peak_rss_mib": 391.765625,
+     "runs": 3,
+     "total_ms": 852.5777810000001,
+     "tris": 167949,
+     "walk_ms": 644.667535,
+     "wall_ms": 1085.6131098698825
     }
    }
   },
@@ -111,17 +218,49 @@
       "covered": 6587,
       "reference": 6587
      },
-     "geom_ms": 59.864,
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 55.497,
      "meshes": 6587,
-     "parse_ms": 136.523,
-     "peak_rss_mib": 635.5078125,
+     "parse_ms": 110.966,
+     "peak_rss_mib": 631.08984375,
      "runs": 3,
-     "total_ms": 498.66399999999993,
-     "walk_ms": 302.277,
-     "wall_ms": 629.401037003845
+     "total_ms": 457.15500000000003,
+     "tris": 3329982,
+     "walk_ms": 290.692,
+     "wall_ms": 520.1310499105603
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 485.928,
+     "meshes": 6587,
+     "parse_ms": 411.433,
+     "peak_rss_mib": 693.9296875,
+     "runs": 3,
+     "total_ms": 1307.217,
+     "tris": 3329982,
+     "walk_ms": 409.856,
+     "wall_ms": 1455.5569370277226
     },
     "ifcopenshell": {
      "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "agreement_noopen": {
       "agree": 6587,
       "covered": 6587,
       "reference": 6587
@@ -141,14 +280,62 @@
       "covered": 6587,
       "reference": 6587
      },
-     "geom_ms": 59372.10550508462,
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 61562.613755930215,
      "meshes": 6587,
-     "parse_ms": 906.0343829914927,
-     "peak_rss_mib": 6673.09375,
+     "parse_ms": 914.6811999380589,
+     "peak_rss_mib": 6514.97265625,
      "runs": 3,
-     "total_ms": 62971.87824291177,
-     "walk_ms": 2693.7383548356593,
-     "wall_ms": 64870.5567298457
+     "total_ms": 65920.51836405881,
+     "tris": 3354132,
+     "walk_ms": 3443.2234081905335,
+     "wall_ms": 69025.63431998715
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 354812.84194090404,
+     "meshes": 6587,
+     "parse_ms": 844.6012609638274,
+     "peak_rss_mib": 947.546875,
+     "runs": 3,
+     "total_ms": 358120.6771186553,
+     "tris": 3354132,
+     "walk_ms": 2463.2339167874306,
+     "wall_ms": 359064.62244992144
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 59702.460814034566,
+     "meshes": 6587,
+     "parse_ms": 1012.4397720210254,
+     "peak_rss_mib": 6539.8125,
+     "runs": 3,
+     "total_ms": 63206.70560700819,
+     "tris": 3354132,
+     "walk_ms": 2491.8050209525973,
+     "wall_ms": 67534.29563110694
     },
     "web-ifc": {
      "agreement": {
@@ -156,14 +343,41 @@
       "covered": 6587,
       "reference": 6587
      },
-     "geom_ms": 763.6010699999997,
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 768.3325340000001,
      "meshes": 6587,
-     "parse_ms": 466.45432299999993,
-     "peak_rss_mib": 832.57421875,
+     "parse_ms": 386.19300599999997,
+     "peak_rss_mib": 833.49609375,
      "runs": 3,
-     "total_ms": 4165.978278,
-     "walk_ms": 2935.922885,
-     "wall_ms": 4504.540955880657
+     "total_ms": 3759.8735460000003,
+     "tris": 3178306,
+     "walk_ms": 2605.348006,
+     "wall_ms": 4074.3316549342126
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "agreement_noopen": {
+      "agree": 6587,
+      "covered": 6587,
+      "reference": 6587
+     },
+     "geom_ms": 741.6691839999999,
+     "meshes": 6587,
+     "parse_ms": 366.792508,
+     "peak_rss_mib": 837.42578125,
+     "runs": 3,
+     "total_ms": 3690.610036,
+     "tris": 3178306,
+     "walk_ms": 2582.148344,
+     "wall_ms": 4166.336103109643
     }
    }
   },
@@ -181,17 +395,49 @@
       "covered": 215,
       "reference": 215
      },
-     "geom_ms": 2.304,
+     "agreement_noopen": {
+      "agree": 213,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 2.485,
      "meshes": 215,
-     "parse_ms": 12.113,
-     "peak_rss_mib": 28.15234375,
+     "parse_ms": 11.227,
+     "peak_rss_mib": 29.0234375,
      "runs": 5,
-     "total_ms": 23.005,
-     "walk_ms": 8.588,
-     "wall_ms": 26.604889892041683
+     "total_ms": 22.061,
+     "tris": 24827,
+     "walk_ms": 8.349,
+     "wall_ms": 24.861454032361507
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 213,
+      "covered": 215,
+      "reference": 215
+     },
+     "agreement_noopen": {
+      "agree": 213,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 5.031,
+     "meshes": 215,
+     "parse_ms": 18.489,
+     "peak_rss_mib": 23.35546875,
+     "runs": 5,
+     "total_ms": 35.168,
+     "tris": 24827,
+     "walk_ms": 11.648,
+     "wall_ms": 42.5934970844537
     },
     "ifcopenshell": {
      "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "agreement_noopen": {
       "agree": 215,
       "covered": 215,
       "reference": 215
@@ -211,14 +457,62 @@
       "covered": 215,
       "reference": 215
      },
-     "geom_ms": 394.759088056162,
+     "agreement_noopen": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 341.89591207541525,
      "meshes": 286,
-     "parse_ms": 47.461217967793345,
-     "peak_rss_mib": 199.6328125,
+     "parse_ms": 33.89782505109906,
+     "peak_rss_mib": 192.58984375,
      "runs": 5,
-     "total_ms": 510.7529161032289,
-     "walk_ms": 68.53261007927358,
-     "wall_ms": 760.1903639733791
+     "total_ms": 436.88863911665976,
+     "tris": 27740,
+     "walk_ms": 61.094901990145445,
+     "wall_ms": 611.1390341538936
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "agreement_noopen": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 1478.2232898287475,
+     "meshes": 286,
+     "parse_ms": 33.527183812111616,
+     "peak_rss_mib": 106.484375,
+     "runs": 5,
+     "total_ms": 1568.5552584473044,
+     "tris": 26928,
+     "walk_ms": 56.80478480644524,
+     "wall_ms": 1740.5713030602783
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "agreement_noopen": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 286.1267051193863,
+     "meshes": 286,
+     "parse_ms": 41.10201192088425,
+     "peak_rss_mib": 188.6484375,
+     "runs": 5,
+     "total_ms": 383.80290218628943,
+     "tris": 26928,
+     "walk_ms": 56.57418514601886,
+     "wall_ms": 561.8761188816279
     },
     "web-ifc": {
      "agreement": {
@@ -226,14 +520,41 @@
       "covered": 215,
       "reference": 215
      },
-     "geom_ms": 57.51836000000003,
+     "agreement_noopen": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 55.66696200000001,
      "meshes": 215,
-     "parse_ms": 22.973382999999984,
-     "peak_rss_mib": 212.87890625,
+     "parse_ms": 19.727420999999993,
+     "peak_rss_mib": 210.84765625,
      "runs": 5,
-     "total_ms": 176.662633,
-     "walk_ms": 96.17088999999999,
-     "wall_ms": 407.38915000110865
+     "total_ms": 167.988266,
+     "tris": 26774,
+     "walk_ms": 92.593883,
+     "wall_ms": 374.9301440548152
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "agreement_noopen": {
+      "agree": 215,
+      "covered": 215,
+      "reference": 215
+     },
+     "geom_ms": 33.46895699999999,
+     "meshes": 215,
+     "parse_ms": 19.99198800000002,
+     "peak_rss_mib": 218.14453125,
+     "runs": 5,
+     "total_ms": 140.807783,
+     "tris": 25868,
+     "walk_ms": 87.34683799999999,
+     "wall_ms": 345.0425798073411
     }
    }
   },
@@ -251,17 +572,49 @@
       "covered": 82,
       "reference": 83
      },
-     "geom_ms": 3.053,
+     "agreement_noopen": {
+      "agree": 80,
+      "covered": 82,
+      "reference": 83
+     },
+     "geom_ms": 2.545,
      "meshes": 82,
-     "parse_ms": 13.546,
-     "peak_rss_mib": 27.55078125,
+     "parse_ms": 13.164,
+     "peak_rss_mib": 27.75,
      "runs": 5,
-     "total_ms": 20.152,
-     "walk_ms": 3.553,
-     "wall_ms": 23.12328200787306
+     "total_ms": 19.442,
+     "tris": 18020,
+     "walk_ms": 3.733,
+     "wall_ms": 21.95172687061131
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 80,
+      "covered": 82,
+      "reference": 83
+     },
+     "agreement_noopen": {
+      "agree": 80,
+      "covered": 82,
+      "reference": 83
+     },
+     "geom_ms": 8.892,
+     "meshes": 82,
+     "parse_ms": 18.903,
+     "peak_rss_mib": 25.63671875,
+     "runs": 5,
+     "total_ms": 30.538999999999998,
+     "tris": 18020,
+     "walk_ms": 2.744,
+     "wall_ms": 33.587419893592596
     },
     "ifcopenshell": {
      "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "agreement_noopen": {
       "agree": 83,
       "covered": 83,
       "reference": 83
@@ -281,14 +634,62 @@
       "covered": 83,
       "reference": 83
      },
-     "geom_ms": 1006.8790658842772,
+     "agreement_noopen": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 766.7479428928345,
      "meshes": 107,
-     "parse_ms": 60.745541006326675,
-     "peak_rss_mib": 230.80859375,
+     "parse_ms": 38.87975891120732,
+     "peak_rss_mib": 221.6875,
      "runs": 5,
-     "total_ms": 1097.9963077697903,
-     "walk_ms": 30.371700879186392,
-     "wall_ms": 1278.755852021277
+     "total_ms": 832.8249249607325,
+     "tris": 24168,
+     "walk_ms": 27.197223156690598,
+     "wall_ms": 1016.8354648631066
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "agreement_noopen": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 1380.2971988916397,
+     "meshes": 107,
+     "parse_ms": 56.52827792800963,
+     "peak_rss_mib": 134.046875,
+     "runs": 5,
+     "total_ms": 1465.8905249089003,
+     "tris": 22272,
+     "walk_ms": 29.065048089250922,
+     "wall_ms": 1646.067055175081
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "agreement_noopen": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 405.75936692766845,
+     "meshes": 107,
+     "parse_ms": 52.72907600738108,
+     "peak_rss_mib": 194.07421875,
+     "runs": 5,
+     "total_ms": 494.01437072083354,
+     "tris": 22272,
+     "walk_ms": 35.525927785784006,
+     "wall_ms": 660.5541380122304
     },
     "web-ifc": {
      "agreement": {
@@ -296,14 +697,41 @@
       "covered": 83,
       "reference": 83
      },
-     "geom_ms": 176.95846999999998,
+     "agreement_noopen": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 107.15080900000001,
      "meshes": 83,
-     "parse_ms": 24.629098000000027,
-     "peak_rss_mib": 186.953125,
+     "parse_ms": 22.267854999999997,
+     "peak_rss_mib": 187.69140625,
      "runs": 5,
-     "total_ms": 292.585783,
-     "walk_ms": 90.99821500000002,
-     "wall_ms": 493.1071850005537
+     "total_ms": 188.326821,
+     "tris": 21722,
+     "walk_ms": 58.90815699999999,
+     "wall_ms": 388.19210580550134
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "agreement_noopen": {
+      "agree": 83,
+      "covered": 83,
+      "reference": 83
+     },
+     "geom_ms": 28.648777999999993,
+     "meshes": 83,
+     "parse_ms": 20.944691999999975,
+     "peak_rss_mib": 210.5625,
+     "runs": 5,
+     "total_ms": 108.10852799999998,
+     "tris": 19754,
+     "walk_ms": 58.51505800000001,
+     "wall_ms": 299.53974089585245
     }
    }
   },
@@ -321,17 +749,49 @@
       "covered": 34,
       "reference": 35
      },
-     "geom_ms": 0.187,
+     "agreement_noopen": {
+      "agree": 34,
+      "covered": 34,
+      "reference": 35
+     },
+     "geom_ms": 0.167,
      "meshes": 34,
-     "parse_ms": 1.403,
-     "peak_rss_mib": 4.76171875,
+     "parse_ms": 1.338,
+     "peak_rss_mib": 4.78125,
      "runs": 5,
-     "total_ms": 1.77,
-     "walk_ms": 0.18,
-     "wall_ms": 4.2002450209110975
+     "total_ms": 1.6700000000000002,
+     "tris": 468,
+     "walk_ms": 0.165,
+     "wall_ms": 3.3000661060214043
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 34,
+      "covered": 34,
+      "reference": 35
+     },
+     "agreement_noopen": {
+      "agree": 34,
+      "covered": 34,
+      "reference": 35
+     },
+     "geom_ms": 0.167,
+     "meshes": 34,
+     "parse_ms": 1.612,
+     "peak_rss_mib": 4.37890625,
+     "runs": 5,
+     "total_ms": 1.991,
+     "tris": 468,
+     "walk_ms": 0.212,
+     "wall_ms": 4.636388970538974
     },
     "ifcopenshell": {
      "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "agreement_noopen": {
       "agree": 35,
       "covered": 35,
       "reference": 35
@@ -351,14 +811,62 @@
       "covered": 35,
       "reference": 35
      },
-     "geom_ms": 83.99615995585918,
+     "agreement_noopen": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 82.13604800403118,
      "meshes": 39,
-     "parse_ms": 5.062028067186475,
-     "peak_rss_mib": 100.8515625,
+     "parse_ms": 4.585537128150463,
+     "peak_rss_mib": 97.6875,
      "runs": 5,
-     "total_ms": 100.02123285084963,
-     "walk_ms": 10.96304482780397,
-     "wall_ms": 316.560807172209
+     "total_ms": 93.98910100571811,
+     "tris": 1146,
+     "walk_ms": 7.2675158735364676,
+     "wall_ms": 259.40259103663266
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "agreement_noopen": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 100.81979888491333,
+     "meshes": 39,
+     "parse_ms": 4.10079606808722,
+     "peak_rss_mib": 91.98046875,
+     "runs": 5,
+     "total_ms": 115.33500184305012,
+     "tris": 1078,
+     "walk_ms": 10.414406890049577,
+     "wall_ms": 291.41466598957777
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "agreement_noopen": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 82.6238130684942,
+     "meshes": 39,
+     "parse_ms": 4.39826212823391,
+     "peak_rss_mib": 96.3125,
+     "runs": 5,
+     "total_ms": 97.49432513490319,
+     "tris": 1078,
+     "walk_ms": 10.472249938175082,
+     "wall_ms": 278.32644898444414
     },
     "web-ifc": {
      "agreement": {
@@ -366,14 +874,41 @@
       "covered": 35,
       "reference": 35
      },
-     "geom_ms": 21.996594999999985,
+     "agreement_noopen": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 18.384715,
      "meshes": 35,
-     "parse_ms": 6.169947000000008,
-     "peak_rss_mib": 147.859375,
+     "parse_ms": 5.419356000000022,
+     "peak_rss_mib": 149.7421875,
      "runs": 5,
-     "total_ms": 35.046176,
-     "walk_ms": 6.87963400000001,
-     "wall_ms": 366.5625969879329
+     "total_ms": 29.463377000000037,
+     "tris": 1098,
+     "walk_ms": 5.659306000000015,
+     "wall_ms": 266.4920180104673
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "agreement_noopen": {
+      "agree": 35,
+      "covered": 35,
+      "reference": 35
+     },
+     "geom_ms": 14.808296999999982,
+     "meshes": 35,
+     "parse_ms": 3.146533000000005,
+     "peak_rss_mib": 148.4296875,
+     "runs": 5,
+     "total_ms": 23.206601999999975,
+     "tris": 1030,
+     "walk_ms": 5.251771999999988,
+     "wall_ms": 263.1029421463609
     }
    }
   },
@@ -391,17 +926,49 @@
       "covered": 1878,
       "reference": 1878
      },
-     "geom_ms": 23.655,
+     "agreement_noopen": {
+      "agree": 1876,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 25.871,
      "meshes": 1878,
-     "parse_ms": 83.651,
-     "peak_rss_mib": 282.046875,
+     "parse_ms": 82.639,
+     "peak_rss_mib": 283.921875,
      "runs": 3,
-     "total_ms": 150.433,
-     "walk_ms": 43.127,
-     "wall_ms": 186.41632003709674
+     "total_ms": 147.683,
+     "tris": 1107556,
+     "walk_ms": 39.173,
+     "wall_ms": 179.52645802870393
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 1876,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "agreement_noopen": {
+      "agree": 1876,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 246.738,
+     "meshes": 1878,
+     "parse_ms": 265.358,
+     "peak_rss_mib": 245.6328125,
+     "runs": 3,
+     "total_ms": 573.9159999999999,
+     "tris": 1107556,
+     "walk_ms": 61.82,
+     "wall_ms": 591.1934829782695
     },
     "ifcopenshell": {
      "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "agreement_noopen": {
       "agree": 1878,
       "covered": 1878,
       "reference": 1878
@@ -421,14 +988,62 @@
       "covered": 1878,
       "reference": 1878
      },
-     "geom_ms": 17362.584769027308,
+     "agreement_noopen": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 16655.889699002728,
      "meshes": 2078,
-     "parse_ms": 523.8850610330701,
-     "peak_rss_mib": 1921.3125,
+     "parse_ms": 472.0973770599812,
+     "peak_rss_mib": 1924.921875,
      "runs": 3,
-     "total_ms": 18134.05828899704,
-     "walk_ms": 247.58845893666148,
-     "wall_ms": 19093.519443878904
+     "total_ms": 17364.632334094495,
+     "tris": 1137319,
+     "walk_ms": 236.6452580317855,
+     "wall_ms": 18333.346587140113
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "agreement_noopen": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 85291.75898595713,
+     "meshes": 2078,
+     "parse_ms": 488.5113760828972,
+     "peak_rss_mib": 491.5546875,
+     "runs": 3,
+     "total_ms": 86023.49455095828,
+     "tris": 1133261,
+     "walk_ms": 243.22418891824782,
+     "wall_ms": 86493.94494085573
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "agreement_noopen": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 17453.555819112808,
+     "meshes": 2078,
+     "parse_ms": 655.8742239139974,
+     "peak_rss_mib": 1918.60546875,
+     "runs": 3,
+     "total_ms": 18496.154992142692,
+     "tris": 1133261,
+     "walk_ms": 386.7249491158873,
+     "wall_ms": 19668.67549181916
     },
     "web-ifc": {
      "agreement": {
@@ -436,14 +1051,41 @@
       "covered": 1878,
       "reference": 1878
      },
-     "geom_ms": 436.0815120000002,
+     "agreement_noopen": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 423.52289499999983,
      "meshes": 1878,
-     "parse_ms": 282.92761699999994,
-     "peak_rss_mib": 500.83203125,
+     "parse_ms": 220.29682900000003,
+     "peak_rss_mib": 519.41015625,
      "runs": 3,
-     "total_ms": 2017.264521,
-     "walk_ms": 1298.255392,
-     "wall_ms": 2325.678522931412
+     "total_ms": 1669.410715,
+     "tris": 1132259,
+     "walk_ms": 1025.590991,
+     "wall_ms": 1986.3809500820935
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "agreement_noopen": {
+      "agree": 1878,
+      "covered": 1878,
+      "reference": 1878
+     },
+     "geom_ms": 358.525764,
+     "meshes": 1878,
+     "parse_ms": 215.251919,
+     "peak_rss_mib": 571.71875,
+     "runs": 3,
+     "total_ms": 1540.265735,
+     "tris": 1127634,
+     "walk_ms": 966.488052,
+     "wall_ms": 1936.4256849512458
     }
    }
   },
@@ -461,20 +1103,52 @@
       "covered": 3504,
       "reference": 3504
      },
-     "geom_ms": 12.069,
+     "agreement_noopen": {
+      "agree": 3569,
+      "covered": 3569,
+      "reference": 3569
+     },
+     "geom_ms": 9.295,
      "meshes": 3573,
-     "parse_ms": 120.522,
-     "peak_rss_mib": 336.71875,
+     "parse_ms": 97.152,
+     "peak_rss_mib": 394.6640625,
      "runs": 3,
-     "total_ms": 251.051,
-     "walk_ms": 118.46,
-     "wall_ms": 299.11470506340265
+     "total_ms": 216.26899999999998,
+     "tris": 256177,
+     "walk_ms": 109.822,
+     "wall_ms": 256.15429785102606
+    },
+    "goifc-1t": {
+     "agreement": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "agreement_noopen": {
+      "agree": 3569,
+      "covered": 3569,
+      "reference": 3569
+     },
+     "geom_ms": 139.361,
+     "meshes": 3573,
+     "parse_ms": 300.724,
+     "peak_rss_mib": 398.48046875,
+     "runs": 3,
+     "total_ms": 681.512,
+     "tris": 256177,
+     "walk_ms": 241.427,
+     "wall_ms": 730.0779598299414
     },
     "ifcopenshell": {
      "agreement": {
       "agree": 3504,
       "covered": 3504,
       "reference": 3504
+     },
+     "agreement_noopen": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3569
      },
      "geom_ms": 15330.34480898641,
      "meshes": 3589,
@@ -491,14 +1165,62 @@
       "covered": 3504,
       "reference": 3504
      },
-     "geom_ms": 3039.3125789705664,
+     "agreement_noopen": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3569
+     },
+     "geom_ms": 3148.094163974747,
      "meshes": 3589,
-     "parse_ms": 696.0248569957912,
-     "peak_rss_mib": 793.9609375,
+     "parse_ms": 683.7959559634328,
+     "peak_rss_mib": 790.3671875,
      "runs": 3,
-     "total_ms": 4505.961664021015,
-     "walk_ms": 770.6242280546576,
-     "wall_ms": 5208.188804797828
+     "total_ms": 4575.650752987713,
+     "tris": 261238,
+     "walk_ms": 743.7606330495328,
+     "wall_ms": 4954.3240228667855
+    },
+    "ifcopenshell-noopen": {
+     "agreement": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "agreement_noopen": {
+      "agree": 3569,
+      "covered": 3569,
+      "reference": 3569
+     },
+     "geom_ms": 15566.10252498649,
+     "meshes": 3654,
+     "parse_ms": 739.0668601728976,
+     "peak_rss_mib": 457.97265625,
+     "runs": 3,
+     "total_ms": 17065.54022221826,
+     "tris": 261882,
+     "walk_ms": 760.370837058872,
+     "wall_ms": 17425.171960145235
+    },
+    "ifcopenshell-noopen-26t": {
+     "agreement": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "agreement_noopen": {
+      "agree": 3569,
+      "covered": 3569,
+      "reference": 3569
+     },
+     "geom_ms": 2895.5359219107777,
+     "meshes": 3654,
+     "parse_ms": 665.088027017191,
+     "peak_rss_mib": 789.8046875,
+     "runs": 3,
+     "total_ms": 4288.388880901039,
+     "tris": 261882,
+     "walk_ms": 727.7649319730699,
+     "wall_ms": 4701.95139804855
     },
     "web-ifc": {
      "agreement": {
@@ -506,14 +1228,41 @@
       "covered": 3504,
       "reference": 3504
      },
-     "geom_ms": 416.11235799999986,
+     "agreement_noopen": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3569
+     },
+     "geom_ms": 259.1494810000004,
      "meshes": 3504,
-     "parse_ms": 479.73966399999995,
-     "peak_rss_mib": 579.86328125,
+     "parse_ms": 351.54518700000006,
+     "peak_rss_mib": 577.07421875,
      "runs": 3,
-     "total_ms": 3289.4772449999996,
-     "walk_ms": 2393.625223,
-     "wall_ms": 3506.51408592239
+     "total_ms": 2462.7176400000008,
+     "tris": 261315,
+     "walk_ms": 1852.0229720000002,
+     "wall_ms": 2674.5576770044863
+    },
+    "web-ifc-noopen": {
+     "agreement": {
+      "agree": 3501,
+      "covered": 3504,
+      "reference": 3504
+     },
+     "agreement_noopen": {
+      "agree": 3569,
+      "covered": 3569,
+      "reference": 3569
+     },
+     "geom_ms": 232.33822799999962,
+     "meshes": 3569,
+     "parse_ms": 377.00441600000005,
+     "peak_rss_mib": 626.59765625,
+     "runs": 3,
+     "total_ms": 2525.791451,
+     "tris": 261959,
+     "walk_ms": 1916.4488070000002,
+     "wall_ms": 2840.701788896695
     }
    }
   }

@@ -107,24 +107,27 @@ published in
 
 ## How it compares
 
-Benchmarked against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB.
-The 49 MB Schependomlaan housing model, medians:
+Benchmarked against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB,
+doing the same job (no tool cuts openings) on the same cores. The 49 MB
+Schependomlaan housing model, one core, medians:
 
 | | goifc | web-ifc | IfcOpenShell |
 |---|---|---|---|
-| Parse + walk + tessellate | **0.25 s** | 3.3 s | 16.8 s (4.5 s on 26 cores) |
-| Parse | **0.12 s** | 0.48 s | 0.70 s |
-| Walk: properties, quantities, containers | **0.12 s** | 2.4 s | 0.75 s |
-| Tessellate | **0.01 s** | 0.42 s | 15.3 s |
-| Peak memory | **337 MiB** | 580 MiB | 462 MiB |
+| Parse + walk + tessellate | **0.68 s** | 2.5 s | 17.1 s |
+| Parse | **0.30 s** | 0.38 s | 0.74 s |
+| Walk: properties, quantities, containers | **0.24 s** | 1.9 s | 0.76 s |
+| Tessellate | **0.14 s** | 0.23 s | 15.6 s |
+| Triangles | 256k | 262k | 262k |
+| Peak memory | **398 MiB** | 627 MiB | 458 MiB |
+| On all 26 cores, whole job | **0.22 s** | — | 4.3 s |
 | Cold start | **4 ms** | 367 ms | 314 ms |
 | Install | **3.2 MB binary** | 24 MB | 230 MB |
-| Cuts openings out of walls | no | yes | yes |
 
-goifc leads every speed and memory measure on every model in the set: the whole
-job runs 7.7–14.5× faster than web-ifc and parse 1.8–4.0× faster, both across all
-cores. Where it is worse is geometry: its meshes are simpler, which is part of
-why tessellation is so fast. Method, fairness caveats and every table:
+Across the real models, on one core, the whole job is 2.7–4.1× faster than
+web-ifc, reading properties 3–11× faster, and parse about level. Where goifc is
+worse is geometry: it does not cut openings out of walls, and even on the same
+job a few walls per model come out with loose bounding boxes where web-ifc
+matches IfcOpenShell exactly. Method, fairness caveats and every table:
 [benchmarks](https://docs.goifc.org/latest/benchmarks/).
 
 ## More
