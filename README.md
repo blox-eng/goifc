@@ -21,7 +21,8 @@ the numbers — each one labelled with where it came from.
 
 **[goifc.org](https://goifc.org)** ·
 **[Documentation](https://docs.goifc.org/latest/)** — guides, concepts and the
-compatibility policy.
+compatibility policy ·
+**[Discord](https://discord.gg/mcDPQECCy)**
 
 **API reference:** [`ifc`](https://pkg.go.dev/github.com/blox-eng/goifc) ·
 [`step`](https://pkg.go.dev/github.com/blox-eng/goifc/step) ·
@@ -134,6 +135,8 @@ hold steady even when the Go API does not, in the
 Issues and PRs welcome — the [open issues](https://github.com/blox-eng/goifc/issues)
 are the roadmap. See [CONTRIBUTING.md](CONTRIBUTING.md). Commits follow
 [Conventional Commits](https://www.conventionalcommits.org/); CI enforces it.
+For a question that is not an issue, there is a
+[Discord](https://discord.gg/mcDPQECCy).
 
 ## License
 

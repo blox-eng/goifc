@@ -123,6 +123,9 @@ extra:
       link: https://github.com/blox-eng/goifc
     - icon: fontawesome/brands/golang
       link: https://pkg.go.dev/github.com/blox-eng/goifc
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/mcDPQECCy
+      name: Ask a question on Discord
 
 nav:
   - Home: index.md
