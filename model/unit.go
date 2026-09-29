@@ -64,12 +64,12 @@ func topLevelUnit(f *step.File, unitType string) (*step.Instance, bool) {
 	if !ok || units.Kind != step.KindList {
 		return nil, false
 	}
-	for _, u := range units.List {
-		if u.Kind != step.KindRef || u.Ref == nil {
+	for _, u := range units.List() {
+		if u.Kind != step.KindRef || u.Ref() == nil {
 			continue
 		}
-		if enumEq(u.Ref, attrUnitType, unitType) {
-			return u.Ref, true
+		if enumEq(u.Ref(), attrUnitType, unitType) {
+			return u.Ref(), true
 		}
 	}
 	return nil, false
@@ -80,7 +80,7 @@ func topLevelUnit(f *step.File, unitType string) (*step.Instance, bool) {
 func siScale(u *step.Instance) float64 {
 	scale := 1.0
 	if p, ok := u.Get(attrPrefix); ok && p.Kind == step.KindEnum {
-		if m, hit := siPrefix[p.Str]; hit {
+		if m, hit := siPrefix[p.Str()]; hit {
 			scale = m
 		}
 	}
@@ -143,14 +143,14 @@ func conversionScaleDepth(u *step.Instance, depth int) (float64, bool) {
 func measureFloat(v step.Value) (float64, bool) {
 	switch v.Kind {
 	case step.KindFloat:
-		return v.F, true
+		return v.Float(), true
 	case step.KindInt:
-		return float64(v.I), true
+		return float64(v.Int()), true
 	case step.KindTyped:
-		if len(v.List) != 1 {
+		if len(v.List()) != 1 {
 			return 0, false
 		}
-		return measureFloat(v.List[0])
+		return measureFloat(v.List()[0])
 	default:
 		return 0, false
 	}
@@ -218,5 +218,5 @@ func UnitIsUnhandled(f *step.File) bool {
 
 func enumEq(inst *step.Instance, idx int, label string) bool {
 	v, ok := inst.Get(idx)
-	return ok && v.Kind == step.KindEnum && v.Str == label
+	return ok && v.Kind == step.KindEnum && v.Str() == label
 }

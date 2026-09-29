@@ -60,8 +60,8 @@ func GetType(f *step.File, inst *step.Instance) *step.Instance {
 			continue
 		}
 		member := false
-		for _, item := range v.List {
-			if item.Kind == step.KindRef && item.Ref != nil && item.Ref.ID() == inst.ID() {
+		for _, item := range v.List() {
+			if item.Kind == step.KindRef && item.Ref() != nil && item.Ref().ID() == inst.ID() {
 				member = true
 				break
 			}
@@ -105,11 +105,11 @@ func typePropertySets(typ *step.Instance, qtosOnly bool) map[string]map[string]a
 	if !ok || v.Kind != step.KindList {
 		return out
 	}
-	for _, item := range v.List {
-		if item.Kind != step.KindRef || item.Ref == nil {
+	for _, item := range v.List() {
+		if item.Kind != step.KindRef || item.Ref() == nil {
 			continue
 		}
-		def := item.Ref
+		def := item.Ref()
 		switch {
 		case qtosOnly && def.IsA("IfcElementQuantity"):
 			out[strVal(def, attrName)] = readQuantitySet(def)
@@ -134,12 +134,12 @@ func readPropertySet(def *step.Instance) map[string]any {
 	if !ok || v.Kind != step.KindList {
 		return props
 	}
-	for _, p := range v.List {
-		if p.Kind != step.KindRef || p.Ref == nil || !p.Ref.IsA("IfcPropertySingleValue") {
+	for _, p := range v.List() {
+		if p.Kind != step.KindRef || p.Ref() == nil || !p.Ref().IsA("IfcPropertySingleValue") {
 			continue
 		}
-		name := strVal(p.Ref, attrPropName)
-		if nv, ok := p.Ref.Get(attrNominalValue); ok {
+		name := strVal(p.Ref(), attrPropName)
+		if nv, ok := p.Ref().Get(attrNominalValue); ok {
 			props[name] = nominalGoValue(nv)
 		}
 	}
@@ -152,12 +152,12 @@ func readQuantitySet(def *step.Instance) map[string]any {
 	if !ok || v.Kind != step.KindList {
 		return props
 	}
-	for _, q := range v.List {
-		if q.Kind != step.KindRef || q.Ref == nil {
+	for _, q := range v.List() {
+		if q.Kind != step.KindRef || q.Ref() == nil {
 			continue
 		}
-		if val, has := floatAt(q.Ref, attrQuantityValue); has {
-			props[strVal(q.Ref, attrPropName)] = val
+		if val, has := floatAt(q.Ref(), attrQuantityValue); has {
+			props[strVal(q.Ref(), attrPropName)] = val
 		}
 	}
 	return props
@@ -317,8 +317,8 @@ func instInList(rel *step.Instance, attrIdx int, inst *step.Instance) bool {
 	if !ok || v.Kind != step.KindList {
 		return false
 	}
-	for _, item := range v.List {
-		if item.Kind == step.KindRef && item.Ref != nil && item.Ref.ID() == inst.ID() {
+	for _, item := range v.List() {
+		if item.Kind == step.KindRef && item.Ref() != nil && item.Ref().ID() == inst.ID() {
 			return true
 		}
 	}
@@ -451,11 +451,11 @@ func materialLeaves(f *step.File, m *step.Instance) []*step.Instance {
 			return nil
 		}
 		var out []*step.Instance
-		for _, item := range v.List {
-			if item.Kind != step.KindRef || item.Ref == nil {
+		for _, item := range v.List() {
+			if item.Kind != step.KindRef || item.Ref() == nil {
 				continue
 			}
-			out = append(out, materialLeaves(f, item.Ref)...)
+			out = append(out, materialLeaves(f, item.Ref())...)
 		}
 		return out
 
@@ -472,11 +472,11 @@ func materialLeaves(f *step.File, m *step.Instance) []*step.Instance {
 			return nil
 		}
 		var out []*step.Instance
-		for _, item := range v.List {
-			if item.Kind != step.KindRef || item.Ref == nil {
+		for _, item := range v.List() {
+			if item.Kind != step.KindRef || item.Ref() == nil {
 				continue
 			}
-			out = append(out, materialLeaves(f, item.Ref)...)
+			out = append(out, materialLeaves(f, item.Ref())...)
 		}
 		return out
 
@@ -492,11 +492,11 @@ func materialLeaves(f *step.File, m *step.Instance) []*step.Instance {
 			return nil
 		}
 		var out []*step.Instance
-		for _, item := range v.List {
-			if item.Kind != step.KindRef || item.Ref == nil {
+		for _, item := range v.List() {
+			if item.Kind != step.KindRef || item.Ref() == nil {
 				continue
 			}
-			out = append(out, materialLeaves(f, item.Ref)...)
+			out = append(out, materialLeaves(f, item.Ref())...)
 		}
 		return out
 
@@ -513,11 +513,11 @@ func materialLeaves(f *step.File, m *step.Instance) []*step.Instance {
 			return nil
 		}
 		var out []*step.Instance
-		for _, item := range v.List {
-			if item.Kind != step.KindRef || item.Ref == nil {
+		for _, item := range v.List() {
+			if item.Kind != step.KindRef || item.Ref() == nil {
 				continue
 			}
-			out = append(out, materialLeaves(f, item.Ref)...)
+			out = append(out, materialLeaves(f, item.Ref())...)
 		}
 		return out
 
@@ -551,18 +551,18 @@ func IsExternal(f *step.File, inst *step.Instance) *bool {
 // IFCBOOLEAN(.T.), IFCLABEL('x'), IFCREAL(1.2)) into a Go scalar.
 func nominalGoValue(v step.Value) any {
 	inner := v
-	if v.Kind == step.KindTyped && len(v.List) == 1 {
-		inner = v.List[0]
+	if v.Kind == step.KindTyped && len(v.List()) == 1 {
+		inner = v.List()[0]
 	}
 	switch inner.Kind {
 	case step.KindBool:
-		return inner.B
+		return inner.Bool()
 	case step.KindFloat:
-		return inner.F
+		return inner.Float()
 	case step.KindInt:
-		return inner.I
+		return inner.Int()
 	case step.KindString, step.KindEnum:
-		return inner.Str
+		return inner.Str()
 	case step.KindLogical:
 		return nil // .U. unknown
 	}

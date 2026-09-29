@@ -47,7 +47,7 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *
 		return nil, nil, SourceOBB, false
 	}
 	opV, ok := item.Get(attrBoolOperator)
-	if !ok || opV.Kind != step.KindEnum || opV.Str != "DIFFERENCE" {
+	if !ok || opV.Kind != step.KindEnum || opV.Str() != "DIFFERENCE" {
 		return nil, nil, SourceOBB, false
 	}
 	first, ok := item.Ref(attrBoolFirstOperand)
@@ -225,7 +225,7 @@ func halfSpacePlane(hs *step.Instance) (origin, normal v3, agreeInside bool, ok 
 	if !has || av.Kind != step.KindBool {
 		return v3{}, v3{}, false, false
 	}
-	agreeInside = av.B
+	agreeInside = av.Bool()
 	return origin, normal, agreeInside, true
 }
 

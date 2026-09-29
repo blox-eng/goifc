@@ -318,14 +318,14 @@ func forwardParentMap(f *step.File) map[int]int {
 		}
 		switch v.Kind {
 		case step.KindList:
-			for _, c := range v.List {
-				if c.Kind == step.KindRef && c.Ref != nil {
-					parent[c.Ref.ID()] = p.ID()
+			for _, c := range v.List() {
+				if c.Kind == step.KindRef && c.Ref() != nil {
+					parent[c.Ref().ID()] = p.ID()
 				}
 			}
 		case step.KindRef:
-			if v.Ref != nil {
-				parent[v.Ref.ID()] = p.ID()
+			if v.Ref() != nil {
+				parent[v.Ref().ID()] = p.ID()
 			}
 		}
 	}

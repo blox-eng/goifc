@@ -106,11 +106,11 @@ func MaterialLayers(f *step.File, inst *step.Instance, scale float64) LayerSet {
 		if !ok || v.Kind != step.KindList {
 			continue
 		}
-		for _, item := range v.List {
-			if item.Kind != step.KindRef || item.Ref == nil || !item.Ref.IsA("IfcMaterialLayer") {
+		for _, item := range v.List() {
+			if item.Kind != step.KindRef || item.Ref() == nil || !item.Ref().IsA("IfcMaterialLayer") {
 				continue
 			}
-			out.Layers = append(out.Layers, readMaterialLayer(item.Ref, scale))
+			out.Layers = append(out.Layers, readMaterialLayer(item.Ref(), scale))
 		}
 		if len(out.Layers) > 0 {
 			return out
@@ -131,7 +131,7 @@ func readMaterialLayer(l *step.Instance, scale float64) MaterialLayer {
 	// KindBool is .T./.F. only. .U. parses as KindLogical and $ as KindNull, and
 	// both leave IsVentilated nil — the UNKNOWN third state.
 	if v, ok := l.Get(attrLayerIsVentilated); ok && v.Kind == step.KindBool {
-		b := v.B
+		b := v.Bool()
 		out.IsVentilated = &b
 	}
 	return out
@@ -142,5 +142,5 @@ func enumAt(inst *step.Instance, idx int) string {
 	if !ok || v.Kind != step.KindEnum {
 		return ""
 	}
-	return v.Str
+	return v.Str()
 }

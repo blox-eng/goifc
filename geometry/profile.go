@@ -90,11 +90,11 @@ func curvePoints(curve *step.Instance) [][2]float64 {
 		return nil
 	}
 	var out [][2]float64
-	for _, sv := range segsV.List {
-		if sv.Kind != step.KindRef || sv.Ref == nil || !sv.Ref.IsA("IfcCompositeCurveSegment") {
+	for _, sv := range segsV.List() {
+		if sv.Kind != step.KindRef || sv.Ref() == nil || !sv.Ref().IsA("IfcCompositeCurveSegment") {
 			return nil
 		}
-		parent, ok := sv.Ref.Ref(attrSegmentParentCurve)
+		parent, ok := sv.Ref().Ref(attrSegmentParentCurve)
 		if !ok {
 			return nil
 		}
@@ -108,8 +108,8 @@ func curvePoints(curve *step.Instance) [][2]float64 {
 			return nil
 		}
 		sameSense := true
-		if ssV, ok := sv.Ref.Get(attrSegmentSameSense); ok && ssV.Kind == step.KindBool {
-			sameSense = ssV.B
+		if ssV, ok := sv.Ref().Get(attrSegmentSameSense); ok && ssV.Kind == step.KindBool {
+			sameSense = ssV.Bool()
 		}
 		if !sameSense {
 			for i, j := 0, len(pts)-1; i < j; i, j = i+1, j-1 {
@@ -138,12 +138,12 @@ func polylinePoints(curve *step.Instance) [][2]float64 {
 	if !ok || v.Kind != step.KindList {
 		return nil
 	}
-	out := make([][2]float64, 0, len(v.List))
-	for _, pv := range v.List {
-		if pv.Kind != step.KindRef || pv.Ref == nil {
+	out := make([][2]float64, 0, len(v.List()))
+	for _, pv := range v.List() {
+		if pv.Kind != step.KindRef || pv.Ref() == nil {
 			return nil
 		}
-		c := floatsOf(pv.Ref, attrCoordinates)
+		c := floatsOf(pv.Ref(), attrCoordinates)
 		if len(c) < 2 {
 			return nil
 		}
@@ -195,7 +195,7 @@ func arcPoints(trimmed *step.Instance) [][2]float64 {
 		return nil
 	}
 	sweep := math.Mod(a2-a1, 2*math.Pi)
-	if sv, ok := trimmed.Get(attrTrimSense); ok && sv.Kind == step.KindBool && !sv.B {
+	if sv, ok := trimmed.Get(attrTrimSense); ok && sv.Kind == step.KindBool && !sv.Bool() {
 		if sweep > 0 {
 			sweep -= 2 * math.Pi
 		}
@@ -232,12 +232,12 @@ func trimAngle(trimmed *step.Instance, attr int, m model.Mat4) (float64, bool) {
 	}
 	var point *step.Instance
 	param, hasParam := 0.0, false
-	for _, sel := range v.List {
+	for _, sel := range v.List() {
 		switch {
-		case sel.Kind == step.KindRef && sel.Ref != nil && sel.Ref.IsA("IfcCartesianPoint"):
-			point = sel.Ref
-		case sel.Kind == step.KindTyped && sel.Str == "IFCPARAMETERVALUE" && len(sel.List) == 1:
-			param, hasParam = numberOf(sel.List[0])
+		case sel.Kind == step.KindRef && sel.Ref() != nil && sel.Ref().IsA("IfcCartesianPoint"):
+			point = sel.Ref()
+		case sel.Kind == step.KindTyped && sel.Str() == "IFCPARAMETERVALUE" && len(sel.List()) == 1:
+			param, hasParam = numberOf(sel.List()[0])
 		}
 	}
 	usePoint := point != nil && (!hasParam || enumAt(trimmed, attrTrimMaster) != "PARAMETER")
@@ -263,16 +263,16 @@ func trimAngle(trimmed *step.Instance, attr int, m model.Mat4) (float64, bool) {
 func numberOf(v step.Value) (float64, bool) {
 	switch v.Kind {
 	case step.KindFloat:
-		return v.F, true
+		return v.Float(), true
 	case step.KindInt:
-		return float64(v.I), true
+		return float64(v.Int()), true
 	}
 	return 0, false
 }
 
 func enumAt(inst *step.Instance, attr int) string {
 	if v, ok := inst.Get(attr); ok && v.Kind == step.KindEnum {
-		return v.Str
+		return v.Str()
 	}
 	return ""
 }
@@ -284,9 +284,9 @@ func scalarAt(inst *step.Instance, attr int) float64 {
 	}
 	switch v.Kind {
 	case step.KindFloat:
-		return v.F
+		return v.Float()
 	case step.KindInt:
-		return float64(v.I)
+		return float64(v.Int())
 	}
 	return 0
 }

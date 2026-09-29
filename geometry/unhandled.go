@@ -154,11 +154,11 @@ func countUnhandledItem(item *step.Instance, depth int, out map[string]int) {
 		if !ok || itemsV.Kind != step.KindList {
 			return
 		}
-		for _, iv := range itemsV.List {
-			if iv.Kind != step.KindRef || iv.Ref == nil {
+		for _, iv := range itemsV.List() {
+			if iv.Kind != step.KindRef || iv.Ref() == nil {
 				continue
 			}
-			countUnhandledItem(iv.Ref, depth+1, out)
+			countUnhandledItem(iv.Ref(), depth+1, out)
 		}
 		return
 	}
@@ -186,7 +186,7 @@ func countUnhandledBoolean(item *step.Instance, depth int, out map[string]int) {
 	// Only DIFFERENCE is supported. UNION and INTERSECTION are unsupported
 	// operations, not unsupported operands, so the boolean itself is the gap.
 	opV, ok := item.Get(attrBoolOperator)
-	if !ok || opV.Kind != step.KindEnum || opV.Str != "DIFFERENCE" {
+	if !ok || opV.Kind != step.KindEnum || opV.Str() != "DIFFERENCE" {
 		out[item.Type()]++
 		return
 	}

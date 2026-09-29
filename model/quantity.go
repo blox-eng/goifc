@@ -45,12 +45,12 @@ func QtoQuantities(f *step.File, inst *step.Instance, scale float64) (Quantities
 		if !ok || qv.Kind != step.KindList {
 			continue
 		}
-		for _, q := range qv.List {
-			if q.Kind != step.KindRef || q.Ref == nil {
+		for _, q := range qv.List() {
+			if q.Kind != step.KindRef || q.Ref() == nil {
 				continue
 			}
-			name := strVal(q.Ref, attrPropName)
-			val, has := floatAt(q.Ref, attrQuantityValue)
+			name := strVal(q.Ref(), attrPropName)
+			val, has := floatAt(q.Ref(), attrQuantityValue)
 			if name == "" || !has {
 				continue
 			}
@@ -90,7 +90,7 @@ func strVal(inst *step.Instance, idx int) string {
 	if !ok || v.Kind != step.KindString {
 		return ""
 	}
-	return v.Str
+	return v.Str()
 }
 
 func floatAt(inst *step.Instance, idx int) (float64, bool) {
@@ -100,9 +100,9 @@ func floatAt(inst *step.Instance, idx int) (float64, bool) {
 	}
 	switch v.Kind {
 	case step.KindFloat:
-		return v.F, true
+		return v.Float(), true
 	case step.KindInt:
-		return float64(v.I), true
+		return float64(v.Int()), true
 	}
 	return 0, false
 }

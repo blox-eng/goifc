@@ -101,11 +101,6 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 	return s, nil
 }
 
-// tessellateItem tessellates ONE representation item into element-local meters.
-func tessellateItem(item *step.Instance, unitScale float64) ([]float32, []uint32, GeomSource) {
-	return tessellateItemDepth(item, unitScale, 0, nil)
-}
-
 // maxMapDepth bounds IfcMappedItem recursion. Real IFC mapped items nest 0-2
 // levels deep; a cyclic or deeply-nested chain in a malformed/adversarial file
 // would otherwise recurse unbounded and stack-overflow the import.
@@ -171,7 +166,7 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 }
 
 // elementMesh returns the element-local mesh (meters) for expressID. Dispatches
-// each representation item via tessellateItem (extrude/brep/mapped/OBB fallback).
+// each representation item via tessellateItemDepth (extrude/brep/mapped/OBB fallback).
 func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) ([]float32, []uint32, GeomSource) {
 	items := representationItems(f, expressID)
 	var verts []float32

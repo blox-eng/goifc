@@ -64,11 +64,11 @@ func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *me
 		return mesh{src: SourceOBB}
 	}
 	m := mesh{src: SourceOBB}
-	for _, iv := range itemsV.List {
-		if iv.Kind != step.KindRef || iv.Ref == nil {
+	for _, iv := range itemsV.List() {
+		if iv.Kind != step.KindRef || iv.Ref() == nil {
 			continue
 		}
-		mv, mt, ms := tessellateItemDepth(iv.Ref, unitScale, depth+1, c) // recurse into A/B/C in scaled meters
+		mv, mt, ms := tessellateItemDepth(iv.Ref(), unitScale, depth+1, c) // recurse into A/B/C in scaled meters
 		if len(mv) == 0 {
 			continue
 		}
@@ -98,7 +98,7 @@ func transformOperator3D(op *step.Instance) model.Mat4 {
 	// not consulted — matching ifcopenshell's kernel.
 	scale := 1.0
 	if sv, ok := op.Get(attrCTOScale); ok && sv.Kind == step.KindFloat {
-		scale = sv.F
+		scale = sv.Float()
 	}
 	// IfcCartesianTransformationOperator3DNonUniform adds Scale2 (Y, attr 5) and
 	// Scale3 (Z, attr 6), each defaulting to Scale when unset — a plain uniform
@@ -110,10 +110,10 @@ func transformOperator3D(op *step.Instance) model.Mat4 {
 	scaleY, scaleZ := scale, scale
 	if op.IsA("IfcCartesianTransformationOperator3DNonUniform") {
 		if sv, ok := op.Get(attrCTOScale2); ok && sv.Kind == step.KindFloat {
-			scaleY = sv.F
+			scaleY = sv.Float()
 		}
 		if sv, ok := op.Get(attrCTOScale3); ok && sv.Kind == step.KindFloat {
-			scaleZ = sv.F
+			scaleZ = sv.Float()
 		}
 	}
 	// Orthonormalize per IFC IfcCartesianTransformationOperator derive: z primary,

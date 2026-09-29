@@ -15,7 +15,7 @@ func TestParse_MultilineRecord(t *testing.T) {
 	}
 	p, _ := f.ByID(1)
 	a0, _ := p.Get(0)
-	if a0.Kind != KindList || len(a0.List) != 3 || a0.List[2].F != 0. {
+	if a0.Kind != KindList || len(a0.List()) != 3 || a0.List()[2].Float() != 0. {
 		t.Fatalf("multiline nested list mis-parsed: %+v", a0)
 	}
 }
@@ -30,7 +30,7 @@ func TestParse_CommentBetweenAttrs(t *testing.T) {
 		t.Fatalf("wall args %d want 8", w.Len())
 	}
 	a7, _ := w.Get(7)
-	if a7.Kind != KindString || a7.Str != "tag" {
+	if a7.Kind != KindString || a7.Str() != "tag" {
 		t.Fatalf("comment between attrs broke parse: %+v", a7)
 	}
 }

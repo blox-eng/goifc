@@ -74,9 +74,9 @@ func StoreyElevations(f *step.File) map[string]float64 {
 		var raw float64
 		switch v.Kind {
 		case step.KindFloat:
-			raw = v.F
+			raw = v.Float()
 		case step.KindInt:
-			raw = float64(v.I)
+			raw = float64(v.Int())
 		default:
 			continue // unset ($) / non-numeric → omit
 		}

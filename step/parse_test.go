@@ -21,11 +21,11 @@ func TestParseBytes_Minimal(t *testing.T) {
 		t.Fatalf("wall args %d want 8", w.Len())
 	}
 	a0, _ := w.Get(0)
-	if a0.Kind != KindString || a0.Str != "0abc" {
+	if a0.Kind != KindString || a0.Str() != "0abc" {
 		t.Fatalf("wall arg0 %+v", a0)
 	}
 	a5, _ := w.Get(5)
-	if a5.Kind != KindRef || a5.RefID != 3 {
+	if a5.Kind != KindRef || a5.RefID() != 3 {
 		t.Fatalf("wall arg5 (placement ref) %+v", a5)
 	}
 	unit, _ := f.ByID(1)

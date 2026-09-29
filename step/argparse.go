@@ -1,97 +1,148 @@
 package step
 
 import (
+	"bytes"
 	"fmt"
+	"math"
 	"strconv"
 )
 
 // parseArgs consumes a parenthesized STEP argument list, assuming the opening '('
-// has already been read from s. It returns the ordered argument values and stops
-// after consuming the matching ')'. Nested lists and typed values (KEYWORD(...))
-// recurse. Refs are captured as KindRef with RefID set and Ref left nil for the
-// resolution pass. An unexpected EOF or token is a hard error.
-func parseArgs(s *Scanner) ([]Value, error) {
-	var out []Value
+// has already been read, and pushes its values onto p.stack. Nested lists and
+// typed values recurse and collapse to one handle each (see closeList), so on
+// return the stack holds exactly this list's top-level values.
+func (p *parser) parseArgs() error {
 	for {
-		tok := s.Next()
+		tok := p.s.Next()
 		switch tok.Kind {
 		case TokRParen:
-			return out, nil
+			return nil
 		case TokComma:
 			continue
 		case TokEOF:
-			return nil, fmt.Errorf("step: unexpected EOF in argument list")
+			return fmt.Errorf("step: unexpected EOF in argument list")
 		default:
-			v, err := valueFromToken(s, tok)
-			if err != nil {
-				return nil, err
+			if err := p.pushValue(tok); err != nil {
+				return err
 			}
-			out = append(out, v)
 		}
 	}
 }
 
-// valueFromToken builds a Value from a leading token, recursing for lists and
-// typed values. s is used only when recursion is needed.
-func valueFromToken(s *Scanner, tok Token) (Value, error) {
+// closeList moves p.stack[mark:] into the value slab and returns a handle to it.
+// A list is closed before its parent, so the parent's handle can point at it.
+func (p *parser) closeList(mark int, kind Kind) Value {
+	start := len(p.f.vals)
+	p.f.vals = append(p.f.vals, p.stack[mark:]...)
+	n := len(p.f.vals) - start
+	p.stack = p.stack[:mark]
+	return Value{Kind: kind, x: uint64(start), n: uint32(n), f: p.f}
+}
+
+// str appends text to the string arena and returns its handle.
+func (p *parser) str(kind Kind, text []byte) Value {
+	off := len(p.strs)
+	p.strs = append(p.strs, text...)
+	return Value{Kind: kind, x: uint64(off), n: uint32(len(text)), f: p.f}
+}
+
+// pushValue builds a Value from a leading token onto p.stack, recursing for
+// lists and typed values.
+func (p *parser) pushValue(tok Token) error {
+	v := Value{f: p.f}
 	switch tok.Kind {
 	case TokDollar:
-		return Value{Kind: KindNull}, nil
+		v.Kind = KindNull
 	case TokStar:
-		return Value{Kind: KindDerived}, nil
+		v.Kind = KindDerived
 	case TokRef:
-		id, err := strconv.ParseUint(string(tok.Text), 10, 32)
+		id, err := parseUint32(tok.Text)
 		if err != nil {
-			return Value{}, fmt.Errorf("step: bad ref #%s: %w", tok.Text, err)
+			return fmt.Errorf("step: bad ref #%s: %w", tok.Text, err)
 		}
-		return Value{Kind: KindRef, RefID: uint32(id)}, nil
+		v.Kind, v.x = KindRef, uint64(id)
 	case TokEnum:
-		return Value{Kind: KindEnum, Str: string(tok.Text)}, nil
+		v = p.str(KindEnum, tok.Text)
 	case TokBool:
 		// .T./.F. are BOOLEAN; .U. is the LOGICAL "unknown" — a distinct value, NOT
 		// false (matches ifcopenshell, which surfaces .U. as "UNKNOWN").
 		if len(tok.Text) == 1 && tok.Text[0] == 'U' {
-			return Value{Kind: KindLogical}, nil
+			v.Kind = KindLogical
+			break
 		}
-		return Value{Kind: KindBool, B: len(tok.Text) == 1 && tok.Text[0] == 'T'}, nil
+		v.Kind = KindBool
+		if len(tok.Text) == 1 && tok.Text[0] == 'T' {
+			v.x = 1
+		}
 	case TokInt:
 		n, err := strconv.ParseInt(string(tok.Text), 10, 64)
 		if err != nil {
-			return Value{}, fmt.Errorf("step: bad integer %q: %w", tok.Text, err)
+			return fmt.Errorf("step: bad integer %q: %w", tok.Text, err)
 		}
-		return Value{Kind: KindInt, I: n}, nil
+		v.Kind, v.x = KindInt, uint64(n)
 	case TokFloat:
 		f, err := strconv.ParseFloat(string(tok.Text), 64)
 		if err != nil {
-			return Value{}, fmt.Errorf("step: bad real %q: %w", tok.Text, err)
+			return fmt.Errorf("step: bad real %q: %w", tok.Text, err)
 		}
-		return Value{Kind: KindFloat, F: f}, nil
+		v.Kind, v.x = KindFloat, math.Float64bits(f)
 	case TokString:
-		str, err := decodeString(tok.Text)
-		if err != nil {
-			return Value{}, err
+		// Most strings carry no escapes and go into the arena as they are.
+		if bytes.IndexByte(tok.Text, '\'') < 0 && bytes.IndexByte(tok.Text, '\\') < 0 {
+			v = p.str(KindString, tok.Text)
+			break
 		}
-		return Value{Kind: KindString, Str: str}, nil
+		s, err := decodeString(tok.Text)
+		if err != nil {
+			return err
+		}
+		v = p.str(KindString, []byte(s))
 	case TokBinary:
-		return Value{Kind: KindBinary, Str: string(tok.Text)}, nil
+		v = p.str(KindBinary, tok.Text)
 	case TokLParen:
-		inner, err := parseArgs(s)
-		if err != nil {
-			return Value{}, err
+		mark := len(p.stack)
+		if err := p.parseArgs(); err != nil {
+			return err
 		}
-		return Value{Kind: KindList, List: inner}, nil
+		v = p.closeList(mark, KindList)
 	case TokKeyword:
-		// typed / simple value: KEYWORD ( inner )
-		open := s.Next()
-		if open.Kind != TokLParen {
-			return Value{}, fmt.Errorf("step: expected '(' after typed value %q, got %v", tok.Text, open.Kind)
+		// typed / simple value: KEYWORD ( inner ). The keyword is stored as the
+		// list's first member; Value.Str and Value.List split it back out.
+		if open := p.s.Next(); open.Kind != TokLParen {
+			return fmt.Errorf("step: expected '(' after typed value %q, got %v", tok.Text, open.Kind)
 		}
-		inner, err := parseArgs(s)
-		if err != nil {
-			return Value{}, err
+		mark := len(p.stack)
+		p.stack = append(p.stack, p.str(KindString, tok.Text))
+		if err := p.parseArgs(); err != nil {
+			return err
 		}
-		return Value{Kind: KindTyped, Str: string(tok.Text), List: inner}, nil
+		v = p.closeList(mark, KindTyped)
 	default:
-		return Value{}, fmt.Errorf("step: unexpected token %v in argument list", tok.Kind)
+		return fmt.Errorf("step: unexpected token %v in argument list", tok.Kind)
 	}
+	p.stack = append(p.stack, v)
+	return nil
+}
+
+// parseUint32 parses a decimal instance id without the string conversion
+// strconv needs; ids are on every reference, so this is the hottest number
+// parse in a file.
+func parseUint32(b []byte) (uint32, error) {
+	if len(b) == 0 || len(b) > 10 {
+		v, err := strconv.ParseUint(string(b), 10, 32)
+		return uint32(v), err
+	}
+	var n uint64
+	for _, c := range b {
+		if c < '0' || c > '9' {
+			v, err := strconv.ParseUint(string(b), 10, 32)
+			return uint32(v), err
+		}
+		n = n*10 + uint64(c-'0')
+	}
+	if n > math.MaxUint32 {
+		v, err := strconv.ParseUint(string(b), 10, 32)
+		return uint32(v), err
+	}
+	return uint32(n), nil
 }

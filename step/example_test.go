@@ -44,7 +44,7 @@ func ExampleFile_ByType() {
 		name, _ := wall.Get(2) // positional attribute (schema-agnostic)
 		placement, _ := wall.Ref(5)
 		fmt.Printf("#%d %s name=%q placement=#%d\n",
-			wall.ID(), wall.Type(), name.Str, placement.ID())
+			wall.ID(), wall.Type(), name.Str(), placement.ID())
 	}
 	// Output:
 	// #10 IFCWALL name="Wall A" placement=#11

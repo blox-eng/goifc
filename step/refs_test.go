@@ -11,14 +11,14 @@ func TestResolveAndInverse(t *testing.T) {
 	// forward: #4.arg0 resolves to #6
 	p, _ := f.ByID(4)
 	a0, _ := p.Get(0)
-	if a0.Kind != KindRef || a0.Ref == nil || a0.Ref.ID() != 6 {
+	if a0.Kind != KindRef || a0.Ref() == nil || a0.Ref().ID() != 6 {
 		t.Fatalf("fwd ref not resolved: %+v", a0)
 	}
 
 	// forward inside a list: #1.arg7 == (#2)
 	proj, _ := f.ByID(1)
 	a7, _ := proj.Get(7)
-	if a7.Kind != KindList || len(a7.List) == 0 || a7.List[0].Ref == nil || a7.List[0].Ref.ID() != 2 {
+	if a7.Kind != KindList || len(a7.List()) == 0 || a7.List()[0].Ref() == nil || a7.List()[0].Ref().ID() != 2 {
 		t.Fatalf("list ref not resolved: %+v", a7)
 	}
 
@@ -49,7 +49,7 @@ func TestResolveAndInverse(t *testing.T) {
 	// missing target #999 -> unresolved + non-fatal warning
 	w, _ := f.ByID(8)
 	a7w, _ := w.Get(7)
-	if a7w.Kind != KindRef || a7w.Ref != nil {
+	if a7w.Kind != KindRef || a7w.Ref() != nil {
 		t.Fatalf("missing ref should stay nil: %+v", a7w)
 	}
 	if len(f.Warnings()) == 0 {

@@ -1,6 +1,9 @@
 package step
 
-import "strconv"
+import (
+	"math"
+	"strconv"
+)
 
 // Kind tags the variant of a parsed STEP attribute value. It mirrors the runtime
 // categories ifcopenshell distinguishes from the SPF token alone (no schema): the
@@ -54,30 +57,87 @@ func (k Kind) String() string {
 	}
 }
 
-// Value is a parsed STEP attribute value: an eager, in-memory tagged union
-// (ported from ifcopenshell's attribute-value variant). It is a plain struct, not
-// a boxed interface, so the millions of values in a large model avoid per-value
-// heap allocation. Only the field(s) named for a Kind carry meaning.
+// Value is a parsed STEP attribute value: a tagged union read through methods.
+// Only the accessor named for a Kind is meaningful; the others return zero.
 //
-// Fields are ordered largest-alignment-first so the struct packs to 72 bytes (vs
-// 80 with a naive layout) — a ~10% cut on the dominant memory cost of a big model.
+// A Value is a 24-byte handle into its File, not a self-contained tree: strings
+// live in one arena per file, list members in one value slab, and a reference
+// is the target's id, looked up on access. A large model therefore holds a
+// handful of big allocations instead of millions of small ones, and nothing in
+// them but the file handle is a pointer, so the garbage collector has almost
+// nothing to scan.
 type Value struct {
-	Str   string    // KindString / KindEnum / KindBinary / KindTyped(keyword)
-	List  []Value   // KindList / KindTyped(inner args)
-	Ref   *Instance // KindRef (resolved target; nil if the target is missing)
-	F     float64   // KindFloat
-	I     int64     // KindInt
-	RefID uint32    // KindRef (target id, pre-resolution)
-	Kind  Kind      // variant tag
-	B     bool      // KindBool (.T. -> true, .F. -> false); .U. is KindLogical, not this field
+	x    uint64 // int64 / float64 bits / bool / ref id / string offset / list start
+	n    uint32 // string or list length
+	Kind Kind   // variant tag
+	f    *File
 }
 
+// Str returns the text of a KindString (decoded), KindEnum (label without the
+// dots), KindBinary (raw digits) or the keyword of a KindTyped value.
+func (v Value) Str() string {
+	switch v.Kind {
+	case KindString, KindEnum, KindBinary:
+		return v.f.strs[v.x : v.x+uint64(v.n)]
+	case KindTyped:
+		return v.f.vals[v.x].Str()
+	}
+	return ""
+}
+
+// List returns the members of a KindList, or the inner arguments of a
+// KindTyped value. The slice is shared with the File: do not mutate it.
+func (v Value) List() []Value {
+	switch v.Kind {
+	case KindList:
+		return v.f.vals[v.x : v.x+uint64(v.n)]
+	case KindTyped:
+		return v.f.vals[v.x+1 : v.x+uint64(v.n)]
+	}
+	return nil
+}
+
+// Ref returns the instance a KindRef points at, or nil when the value is not a
+// reference or its target is missing from the file.
+func (v Value) Ref() *Instance {
+	if v.Kind != KindRef || v.f == nil {
+		return nil
+	}
+	return v.f.instance(uint32(v.x))
+}
+
+// RefID returns the #id a KindRef names, whether or not the target exists.
+func (v Value) RefID() uint32 {
+	if v.Kind != KindRef {
+		return 0
+	}
+	return uint32(v.x)
+}
+
+// Float returns a KindFloat's value.
+func (v Value) Float() float64 {
+	if v.Kind != KindFloat {
+		return 0
+	}
+	return math.Float64frombits(v.x)
+}
+
+// Int returns a KindInt's value.
+func (v Value) Int() int64 {
+	if v.Kind != KindInt {
+		return 0
+	}
+	return int64(v.x)
+}
+
+// Bool returns a KindBool's value (.T. is true). .U. is KindLogical, not false.
+func (v Value) Bool() bool { return v.Kind == KindBool && v.x != 0 }
+
 // Walk applies fn to v and, pre-order, to every value nested within it (lists and
-// typed-value inner args). It operates on value copies — to mutate stored values
-// (e.g. resolving refs) the parser uses an internal by-pointer walk instead.
+// typed-value inner args).
 func (v Value) Walk(fn func(Value)) {
 	fn(v)
-	for _, c := range v.List {
+	for _, c := range v.List() {
 		c.Walk(fn)
 	}
 }

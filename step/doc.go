@@ -15,7 +15,7 @@
 //	----------------------------            ---------------------------------------
 //	attribute by INDEX  (inst.Get(i))       attribute by NAME  (inst.GlobalId)
 //	type keyword        (inst.Type/IsA)     is_a(supertype), subtype expansion
-//	forward refs        (Value.Ref)         named inverse attrs (.IsDecomposedBy)
+//	forward refs        (Value.Ref())         named inverse attrs (.IsDecomposedBy)
 //	inverse graph       (File.Inverse)      derived-attribute formulas
 //	traverse, by-id, by-type (exact)        by_guid, create_entity by name
 //
@@ -35,6 +35,7 @@
 //	for _, referrer := range f.Inverse(f.ByType("IfcSiUnit")[0]) { _ = referrer }
 //
 // Parsing is eager and in-memory: the whole file is tokenized into instances in
-// two passes (record load, then reference resolution + inverse indexing). Dangling
+// two passes (record load, then id, type and inverse indexing). Values are small
+// handles into per-file slabs, and references resolve on access. Dangling
 // references are non-fatal and surface via File.Warnings.
 package step

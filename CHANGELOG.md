@@ -19,6 +19,38 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Breaking
+
+- `step.Value`'s payload fields are methods: `v.Str()`, `v.List()`,
+  `v.Ref()`, `v.RefID()`, `v.Float()` (was `F`), `v.Int()` (was `I`) and
+  `v.Bool()` (was `B`). `v.Kind` is still a field. The fix is source-only:
+
+  | Before | After |
+  |---|---|
+  | `v.Str`, `v.List`, `v.Ref`, `v.RefID` | the same name, called |
+  | `v.F`, `v.I`, `v.B` | `v.Float()`, `v.Int()`, `v.Bool()` |
+  | `v.Ref == nil` | `v.Ref() == nil` |
+
+  Rewrite `v.Ref == nil` and `v.List != nil` by hand: both still compile once
+  `Ref` and `List` are methods, and compare a method value, which is never nil.
+  A `Value` can no longer be built with a struct literal outside the package;
+  values come from a parsed `File`.
+
+  The reason is memory. A `Value` is now a 24-byte handle into slabs its `File`
+  owns, where it was a 72-byte struct with three pointers, and the parse builds
+  a few large allocations instead of one or more per value. On a 28 MB ArchiCAD
+  export, parse time falls from ~0.55 s to ~0.18 s and the heap it leaves from
+  ~255 MiB to ~72 MiB. Every instance, value, inverse reference, warning,
+  extracted element and mesh is byte-identical to before on the seven
+  benchmark models.
+
+### Changed
+
+- `geometry.Build` meshes elements in parallel, and meshes a mapped
+  representation once rather than once per `IfcMappedItem` that places it.
+  Output is identical. On the Clinic Plumbing sample (3,703 placements of 384
+  shapes) tessellation falls from ~1.1 s to ~0.12 s.
+
 ### Added
 
 - A published benchmark against IfcOpenShell and web-ifc on seven models from
