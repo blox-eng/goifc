@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.0 — 2026-09-30
+
 ### Breaking
 
 - `step.Value`'s fields are methods: `v.Kind()`, `v.Str()`, `v.List()`,
