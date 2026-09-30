@@ -8,9 +8,27 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Breaking
+
+- `step.Value`'s fields are methods: `v.Kind()`, `v.Str()`, `v.List()`, `v.Ref()`, `v.RefID()`, `v.Float()` (was `F`), `v.Int()` (was `I`) and `v.Bool()` (was `B`). The fix is source-only:
+
+| Before                                          | After                              |
+| ----------------------------------------------- | ---------------------------------- |
+| `v.Kind`, `v.Str`, `v.List`, `v.Ref`, `v.RefID` | the same name, called              |
+| `v.F`, `v.I`, `v.B`                             | `v.Float()`, `v.Int()`, `v.Bool()` |
+| `v.Ref == nil`                                  | `v.Ref() == nil`                   |
+
+Rewrite `v.Ref == nil`, `v.List != nil` and a `v.Kind` passed to `fmt` by hand: they still compile once these are methods, and use a method value, which is never nil and prints as an address. A `Value` can no longer be built with a struct literal outside the package; values come from a parsed `File`.
+
+The reason is memory. A `Value` is now a 24-byte handle into slabs its `File` owns, where it was a 72-byte struct with three pointers, and the parse builds a few large allocations instead of one or more per value. Files of 2 MB and up are also parsed across all cores, with the serial parser as the fallback and the reference. On a 28 MB ArchiCAD export, parse time falls from ~0.55 s to ~0.05 s (~0.18 s on one core) and the heap it leaves from ~255 MiB to ~74 MiB. Every instance, value, inverse reference, warning, extracted element and mesh is byte-identical to before on the seven benchmark models.
+
+### Changed
+
+- `geometry.Build` meshes elements in parallel, and meshes a mapped representation once rather than once per `IfcMappedItem` that places it. Output is identical. On the Clinic Plumbing sample (3,703 placements of 384 shapes) tessellation falls from ~1.1 s to ~0.12 s.
+
 ### Added
 
-- A published benchmark against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB, losses included: goifc is fastest end to end and 7–14× faster at reading properties, but up to 2.4× slower to parse than web-ifc and up to twice the peak memory on large models. Runners, raw results and the reproduce steps are in `parity/bench`; the tables are on the [benchmarks](https://docs.goifc.org/latest/benchmarks/) page.
+- A published benchmark against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB, compared on the same job (no tool cuts openings) and the same cores. On one core goifc runs the whole job 2.7–4.1× faster than web-ifc with 1.1–5× less memory, parses about level with it, and trails on geometry: it cuts no openings, and a few walls per model get loose bounding boxes. Runners, raw results and the reproduce steps are in `parity/bench`; the tables are on the [benchmarks](https://docs.goifc.org/latest/benchmarks/) page.
 - The project now has a [Discord](https://discord.gg/mcDPQECCy), linked from goifc.org, the docs footer and the README, for questions that are not issues.
 
 ## v0.14.0 — 2026-09-28
