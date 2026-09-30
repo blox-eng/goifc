@@ -4,8 +4,9 @@ import (
 	"math"
 	"runtime"
 	"slices"
-	"sync"
 	"sync/atomic"
+
+	"github.com/blox-eng/goifc/internal/par"
 )
 
 // Exposure is what the Facing.Normal side of an element reaches.
@@ -171,11 +172,9 @@ func BuildFacings(elems []Element) map[string]Facing {
 	}
 
 	var next atomic.Int64
-	var wg sync.WaitGroup
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	var pg par.Group
+	for range workers {
+		pg.Go(func() {
 			for {
 				k := int(next.Add(1) - 1)
 				if k >= len(keys) {
@@ -195,9 +194,9 @@ func BuildFacings(elems []Element) map[string]Facing {
 				results[k] = band
 				// g dies here, so at most `workers` grids are ever live.
 			}
-		}()
+		})
 	}
-	wg.Wait()
+	pg.Wait()
 
 	// Merged in sorted key order, never in completion order. Bands hold disjoint
 	// elements so no key normally collides — but a malformed file CAN repeat a

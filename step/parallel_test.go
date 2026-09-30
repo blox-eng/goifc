@@ -13,7 +13,7 @@ func dump(f *File) string {
 	fmt.Fprintf(&b, "%q %d %q\n", f.Head, f.Len(), f.Warnings())
 	var val func(Value)
 	val = func(v Value) {
-		fmt.Fprintf(&b, "%d:%q/%d/%v/%d/%v/%d[", v.Kind, v.Str(), v.RefID(), v.Ref() != nil, v.Int(), v.Float(), bool2int(v.Bool()))
+		fmt.Fprintf(&b, "%d:%q/%d/%v/%d/%v/%d[", v.kind, v.Str(), v.RefID(), v.Ref() != nil, v.Int(), v.Float(), bool2int(v.Bool()))
 		for _, c := range v.List() {
 			val(c)
 		}
@@ -76,7 +76,7 @@ func TestParseParallelMatchesSerial(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, workers := range []int{2, 3, 5, 16} {
-		par, ok := parseParallelN(src, workers)
+		par, ok := parseParallelN(src, workers, parallelChunk)
 		if !ok {
 			t.Fatalf("%d workers: declined a well-formed file", workers)
 		}
@@ -99,7 +99,7 @@ func TestParseParallelTrapsMatchSerial(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, workers := range []int{2, 3, 5, 16} {
-		if par, ok := parseParallelN(src, workers); ok && dump(par) != dump(ser) {
+		if par, ok := parseParallelN(src, workers, parallelChunk); ok && dump(par) != dump(ser) {
 			t.Fatalf("%d workers: parallel and serial parses differ", workers)
 		}
 	}
@@ -122,7 +122,7 @@ func TestParseParallelDeclinesSplitsInsideStrings(t *testing.T) {
 	}
 	b.WriteString("');\nENDSEC;\nEND-ISO-10303-21;\n")
 	src := []byte(b.String())
-	if _, ok := parseParallelN(src, 8); ok {
+	if _, ok := parseParallelN(src, 8, parallelChunk); ok {
 		t.Fatal("parseParallel joined chunks split inside a string")
 	}
 	f, err := ParseBytes(src)

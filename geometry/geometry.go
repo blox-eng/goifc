@@ -2,9 +2,9 @@ package geometry
 
 import (
 	"runtime"
-	"sync"
 	"sync/atomic"
 
+	"github.com/blox-eng/goifc/internal/par"
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
 )
@@ -66,11 +66,9 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 	c := &meshCache{}
 	workers := min(runtime.GOMAXPROCS(0), len(r.Elements))
 	var next atomic.Int64
-	var wg sync.WaitGroup
+	var g par.Group
 	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		g.Go(func() {
 			for {
 				i := int(next.Add(1) - 1)
 				if i >= len(r.Elements) {
@@ -90,9 +88,9 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 				}
 				s.Elements[i] = ge
 			}
-		}()
+		})
 	}
-	wg.Wait()
+	g.Wait()
 	for _, e := range s.Elements {
 		if len(e.Verts) == 0 {
 			s.Warnings = append(s.Warnings, "no geometry for "+e.GlobalID)

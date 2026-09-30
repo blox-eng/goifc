@@ -56,6 +56,19 @@ func FuzzParseBytes(f *testing.F) {
 	f.Add([]byte(""))
 
 	f.Fuzz(func(t *testing.T, src []byte) {
+		// ParseBytes only splits files of megabytes, which the fuzzer never
+		// builds, so split each input into tiny chunks here: the parallel parse
+		// must decline or reproduce the serial one exactly.
+		ser, serr := parseSerial(src)
+		if par, ok := parseParallelN(src, 4, 16); ok {
+			if serr != nil {
+				t.Fatalf("parallel parse accepted input the serial parse rejects: %v", serr)
+			}
+			if dump(par) != dump(ser) {
+				t.Fatal("parallel and serial parses differ")
+			}
+		}
+
 		file, err := ParseBytes(src)
 		if err != nil {
 			if file != nil {

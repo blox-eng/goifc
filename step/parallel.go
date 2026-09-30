@@ -3,7 +3,8 @@ package step
 import (
 	"errors"
 	"runtime"
-	"sync"
+
+	"github.com/blox-eng/goifc/internal/par"
 )
 
 // parallelChunk is the smallest DATA-section chunk worth a goroutine. Below it
@@ -21,11 +22,13 @@ var errSplit = errors.New("step: chunk boundary is not a record boundary")
 // reference: parseParallel returns a result only when it is the same one, and
 // leaves every error, with its exact offset, to the serial path.
 func parseParallel(src []byte) (*File, bool) {
-	return parseParallelN(src, runtime.GOMAXPROCS(0))
+	return parseParallelN(src, runtime.GOMAXPROCS(0), parallelChunk)
 }
 
-func parseParallelN(src []byte, workers int) (*File, bool) {
-	if workers < 2 || len(src) < 2*parallelChunk {
+// parseParallelN is parseParallel with the worker count and the smallest chunk
+// as parameters, so tests and the fuzzer can split small inputs.
+func parseParallelN(src []byte, workers, chunk int) (*File, bool) {
+	if workers < 2 || len(src) < 2*chunk {
 		return nil, false
 	}
 	f := &File{}
@@ -34,18 +37,16 @@ func parseParallelN(src []byte, workers int) (*File, bool) {
 	if err := head.parseDocument(); err != nil || !head.atData {
 		return nil, false
 	}
-	bounds := splitRecords(src, head.s.pos, workers)
+	bounds := splitRecords(src, head.s.pos, workers, chunk)
 	if len(bounds) < 3 {
 		return nil, false
 	}
 	chunks := len(bounds) - 1
 	ps := make([]*parser, chunks)
 	errs := make([]error, chunks)
-	var wg sync.WaitGroup
+	var g par.Group
 	for i := range chunks {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		g.Go(func() {
 			p := newParser(src, f, uint16(i+1), bounds[i+1]-bounds[i])
 			p.s.pos = bounds[i]
 			ps[i] = p
@@ -58,9 +59,9 @@ func parseParallelN(src []byte, workers int) (*File, bool) {
 			if errs[i] = p.parseRecords(); errs[i] == nil {
 				errs[i] = p.parseDocument()
 			}
-		}()
+		})
 	}
-	wg.Wait()
+	g.Wait()
 	for _, err := range errs {
 		if err != nil {
 			return nil, false
@@ -96,9 +97,10 @@ func (p *parser) parseChunk(end int) error {
 // splitRecords returns chunk boundaries for the DATA section starting at start:
 // start itself, then up to workers-1 offsets, each the '#' of the first record
 // that follows a ';' at or after an even share of the remaining bytes, then
-// len(src). The boundaries are guesses that parseChunk verifies.
-func splitRecords(src []byte, start, workers int) []int {
-	n := min(workers, (len(src)-start)/parallelChunk)
+// len(src). No chunk is planned smaller than chunk bytes. The boundaries are
+// guesses that parseChunk verifies.
+func splitRecords(src []byte, start, workers, chunk int) []int {
+	n := min(workers, (len(src)-start)/chunk)
 	bounds := []int{start}
 	for i := 1; i < n; i++ {
 		b := nextRecord(src, start+(len(src)-start)*i/n)
