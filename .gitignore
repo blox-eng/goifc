@@ -22,3 +22,9 @@ docs/plans/
 # go-semantic-release/action step. Never the real CHANGELOG.md — that's
 # promoted by hand in a separate workflow step.
 /.release-notes.md
+
+# reader benchmark: downloaded models, built runner, npm install
+parity/bench/.cache/
+parity/bench/node_modules/
+parity/bench/.venv/
+parity/bench/__pycache__/
