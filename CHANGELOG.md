@@ -21,18 +21,19 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Breaking
 
-- `step.Value`'s payload fields are methods: `v.Str()`, `v.List()`,
+- `step.Value`'s fields are methods: `v.Kind()`, `v.Str()`, `v.List()`,
   `v.Ref()`, `v.RefID()`, `v.Float()` (was `F`), `v.Int()` (was `I`) and
-  `v.Bool()` (was `B`). `v.Kind` is still a field. The fix is source-only:
+  `v.Bool()` (was `B`). The fix is source-only:
 
   | Before | After |
   |---|---|
-  | `v.Str`, `v.List`, `v.Ref`, `v.RefID` | the same name, called |
+  | `v.Kind`, `v.Str`, `v.List`, `v.Ref`, `v.RefID` | the same name, called |
   | `v.F`, `v.I`, `v.B` | `v.Float()`, `v.Int()`, `v.Bool()` |
   | `v.Ref == nil` | `v.Ref() == nil` |
 
-  Rewrite `v.Ref == nil` and `v.List != nil` by hand: both still compile once
-  `Ref` and `List` are methods, and compare a method value, which is never nil.
+  Rewrite `v.Ref == nil`, `v.List != nil` and a `v.Kind` passed to `fmt` by
+  hand: they still compile once these are methods, and use a method value,
+  which is never nil and prints as an address.
   A `Value` can no longer be built with a struct literal outside the package;
   values come from a parsed `File`.
 

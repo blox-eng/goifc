@@ -3,7 +3,8 @@ package step
 import (
 	"fmt"
 	"runtime"
-	"sync"
+
+	"github.com/blox-eng/goifc/internal/par"
 )
 
 // denseSlack bounds how sparse ids may be before the id index falls back from a
@@ -85,15 +86,11 @@ func each(rs [][2]int, fn func(g, lo, hi int)) {
 		fn(0, rs[0][0], rs[0][1])
 		return
 	}
-	var wg sync.WaitGroup
+	var pg par.Group
 	for g, r := range rs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			fn(g, r[0], r[1])
-		}()
+		pg.Go(func() { fn(g, r[0], r[1]) })
 	}
-	wg.Wait()
+	pg.Wait()
 }
 
 // typesOf calls fn with every type an instance is indexed under: each part of
@@ -204,7 +201,7 @@ func indexInverse(f *File) {
 // walkRefs invokes fn with the target id of every reference within v, recursing
 // into lists and typed-value inner args.
 func walkRefs(v Value, fn func(uint32)) {
-	switch v.Kind {
+	switch v.kind {
 	case KindRef:
 		fn(uint32(v.x))
 	case KindList, KindTyped:

@@ -10,13 +10,13 @@ func TestScanner_LeadingDotReal(t *testing.T) {
 	}
 	p, _ := f.ByID(1)
 	a0, _ := p.Get(0)
-	if a0.Kind != KindList || len(a0.List()) != 3 {
+	if a0.kind != KindList || len(a0.List()) != 3 {
 		t.Fatalf("coords mis-parsed (leading-dot swallowed?): %+v", a0)
 	}
-	if a0.List()[0].Kind != KindFloat || a0.List()[0].Float() != 0.5 {
+	if a0.List()[0].kind != KindFloat || a0.List()[0].Float() != 0.5 {
 		t.Fatalf("arg .5 = %+v want float 0.5", a0.List()[0])
 	}
-	if a0.List()[2].Kind != KindFloat || a0.List()[2].Float() != -0.25 {
+	if a0.List()[2].kind != KindFloat || a0.List()[2].Float() != -0.25 {
 		t.Fatalf("arg -.25 = %+v want float -0.25", a0.List()[2])
 	}
 }

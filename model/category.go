@@ -27,7 +27,7 @@ func predefinedType(f *step.File, inst *step.Instance) string {
 		return ""
 	}
 	v, ok := inst.Get(idx)
-	if !ok || v.Kind != step.KindEnum {
+	if !ok || v.Kind() != step.KindEnum {
 		return ""
 	}
 	return v.Str()

@@ -61,7 +61,7 @@ func triangulatedMesh(item *step.Instance, pts []step.Value) ([]float32, []uint3
 		return nil, nil, false
 	}
 	triV, has := item.Get(attrTfsCoordIndex)
-	if !has || triV.Kind != step.KindList || len(triV.List()) == 0 {
+	if !has || triV.Kind() != step.KindList || len(triV.List()) == 0 {
 		return nil, nil, false
 	}
 	// A network flags each triangle: -2 is an invisible void, -1 an invisible
@@ -106,13 +106,13 @@ func polygonalMesh(item *step.Instance, pts []step.Value) ([]float32, []uint32, 
 		return nil, nil, false
 	}
 	facesV, has := item.Get(attrPfsFaces)
-	if !has || facesV.Kind != step.KindList || len(facesV.List()) == 0 {
+	if !has || facesV.Kind() != step.KindList || len(facesV.List()) == 0 {
 		return nil, nil, false
 	}
 	var verts []float32
 	var tris []uint32
 	for _, fv := range facesV.List() {
-		if fv.Kind != step.KindRef || fv.Ref() == nil || !isIndexedPolygonalFace(fv.Ref()) {
+		if fv.Kind() != step.KindRef || fv.Ref() == nil || !isIndexedPolygonalFace(fv.Ref()) {
 			return nil, nil, false
 		}
 		loopV, _ := fv.Ref().Get(attrIndexedFaceCoord)
@@ -149,7 +149,7 @@ type faceIndex struct {
 
 func newFaceIndex(pnV step.Value, pts []step.Value) (faceIndex, bool) {
 	idx := faceIndex{pts: pts}
-	if pnV.Kind != step.KindList {
+	if pnV.Kind() != step.KindList {
 		return idx, true // $: corners index the point list directly
 	}
 	pn, ok := intsOf(pnV)
@@ -202,7 +202,7 @@ func pointList(inst *step.Instance) ([]step.Value, bool) {
 		return nil, false
 	}
 	listV, has := inst.Get(attrPointListCoords)
-	if !has || listV.Kind != step.KindList || len(listV.List()) == 0 {
+	if !has || listV.Kind() != step.KindList || len(listV.List()) == 0 {
 		return nil, false
 	}
 	return listV.List(), true
@@ -210,18 +210,18 @@ func pointList(inst *step.Instance) ([]step.Value, bool) {
 
 // isIndexLists reports whether v is a non-empty list of lists.
 func isIndexLists(v step.Value) bool {
-	return v.Kind == step.KindList && len(v.List()) > 0 && v.List()[0].Kind == step.KindList
+	return v.Kind() == step.KindList && len(v.List()) > 0 && v.List()[0].Kind() == step.KindList
 }
 
 // numbersOf is strict where floatsOf skips bad members: a coordinate that is
 // silently dropped would shift a point rather than decline it.
 func numbersOf(v step.Value) ([]float64, bool) {
-	if v.Kind != step.KindList {
+	if v.Kind() != step.KindList {
 		return nil, false
 	}
 	out := make([]float64, len(v.List()))
 	for i, e := range v.List() {
-		switch e.Kind {
+		switch e.Kind() {
 		case step.KindFloat:
 			out[i] = e.Float()
 		case step.KindInt:
@@ -234,12 +234,12 @@ func numbersOf(v step.Value) ([]float64, bool) {
 }
 
 func intsOf(v step.Value) ([]int64, bool) {
-	if v.Kind != step.KindList {
+	if v.Kind() != step.KindList {
 		return nil, false
 	}
 	out := make([]int64, len(v.List()))
 	for i, e := range v.List() {
-		if e.Kind != step.KindInt {
+		if e.Kind() != step.KindInt {
 			return nil, false
 		}
 		out[i] = e.Int()

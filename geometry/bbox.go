@@ -96,7 +96,7 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		// found no points, got no box, and vanished. Every well-formed entry
 		// counts: a box over them all is a superset of whatever the set meshes.
 		if inst.IsA("IfcCartesianPointList3D") {
-			if listV, ok := inst.Get(attrPointListCoords); ok && listV.Kind == step.KindList {
+			if listV, ok := inst.Get(attrPointListCoords); ok && listV.Kind() == step.KindList {
 				for _, pv := range listV.List() {
 					if c, ok := numbersOf(pv); ok && len(c) == 3 {
 						pts = append(pts, v3{c[0], c[1], c[2]})
@@ -130,7 +130,7 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		}
 		for _, a := range inst.Args() {
 			a.Walk(func(vv step.Value) {
-				if vv.Kind == step.KindRef && vv.Ref() != nil {
+				if vv.Kind() == step.KindRef && vv.Ref() != nil {
 					walk(vv.Ref(), depth+1)
 				}
 			})

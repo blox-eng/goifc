@@ -76,11 +76,11 @@ func TrueNorth(f *step.File) [2]float64 {
 // position is what makes the malformed case distinguishable at all.
 func dirXY(inst *step.Instance) (x, y float64, ok bool) {
 	v, got := inst.Get(attrCoordinates)
-	if !got || v.Kind != step.KindList || len(v.List()) < 2 {
+	if !got || v.Kind() != step.KindList || len(v.List()) < 2 {
 		return 0, 0, false
 	}
 	num := func(e step.Value) (float64, bool) {
-		switch e.Kind {
+		switch e.Kind() {
 		case step.KindFloat:
 			return e.Float(), true
 		case step.KindInt:

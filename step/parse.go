@@ -26,10 +26,10 @@ func Parse(r io.Reader) (*File, error) {
 }
 
 // ParseBytes parses an in-memory STEP/SPF (ISO 10303-21) document into a navigable
-// entity graph. It runs two passes: pass 1 tokenizes the HEADER and every DATA
-// record into instances (references captured but unresolved) and builds the id and
-// type indexes; pass 2 resolves references to instance pointers and builds the
-// inverse index. Dangling references are non-fatal warnings.
+// entity graph. It runs two passes: pass 1 reads the HEADER and every DATA record
+// into instances, with references kept as ids, across all cores for a large
+// file; pass 2 builds the id, type and inverse indexes. A reference is looked up
+// by id when it is read. Dangling references are non-fatal warnings.
 func ParseBytes(src []byte) (*File, error) {
 	if f, ok := parseParallel(src); ok {
 		return f, nil
@@ -178,7 +178,7 @@ func (p *parser) setHeader(kw string, args []Value) {
 		if len(args) > 0 {
 			p.f.Head.Description = flattenStrings(args[0])
 		}
-		if len(args) > 1 && args[1].Kind == KindString {
+		if len(args) > 1 && args[1].kind == KindString {
 			p.f.Head.ImplementationLevel = args[1].Str()
 		}
 	case "FILE_NAME":
@@ -322,7 +322,7 @@ func (p *parser) register(id uint32, typ string, mark int, parts []string) {
 func headerTopLevelStrings(args []Value) []string {
 	out := make([]string, len(args))
 	for i, v := range args {
-		if v.Kind == KindString {
+		if v.kind == KindString {
 			out[i] = v.Str()
 		}
 	}
@@ -332,13 +332,13 @@ func headerTopLevelStrings(args []Value) []string {
 // flattenStrings collects the string values of a value (a list, or a scalar
 // string) into a flat slice, preserving order. Non-string members become "".
 func flattenStrings(v Value) []string {
-	switch v.Kind {
+	switch v.kind {
 	case KindString:
 		return []string{v.Str()}
 	case KindList:
 		out := make([]string, 0, len(v.List()))
 		for _, c := range v.List() {
-			switch c.Kind {
+			switch c.kind {
 			case KindString:
 				out = append(out, c.Str())
 			case KindList:

@@ -36,14 +36,14 @@ func (p *parser) closeList(mark int, kind Kind) Value {
 	p.vals = append(p.vals, p.stack[mark:]...)
 	n := len(p.vals) - start
 	p.stack = p.stack[:mark]
-	return Value{Kind: kind, x: slabRef(p.slab, start), n: uint32(n), f: p.f}
+	return Value{kind: kind, x: slabRef(p.slab, start), n: uint32(n), f: p.f}
 }
 
 // str appends text to the string arena and returns its handle.
 func (p *parser) str(kind Kind, text []byte) Value {
 	off := len(p.strs)
 	p.strs = append(p.strs, text...)
-	return Value{Kind: kind, x: slabRef(p.slab, off), n: uint32(len(text)), f: p.f}
+	return Value{kind: kind, x: slabRef(p.slab, off), n: uint32(len(text)), f: p.f}
 }
 
 // pushValue builds a Value from a leading token onto p.stack, recursing for
@@ -52,25 +52,25 @@ func (p *parser) pushValue(tok Token) error {
 	v := Value{f: p.f}
 	switch tok.Kind {
 	case TokDollar:
-		v.Kind = KindNull
+		v.kind = KindNull
 	case TokStar:
-		v.Kind = KindDerived
+		v.kind = KindDerived
 	case TokRef:
 		id, err := parseUint32(tok.Text)
 		if err != nil {
 			return fmt.Errorf("step: bad ref #%s: %w", tok.Text, err)
 		}
-		v.Kind, v.x = KindRef, uint64(id)
+		v.kind, v.x = KindRef, uint64(id)
 	case TokEnum:
 		v = p.str(KindEnum, tok.Text)
 	case TokBool:
 		// .T./.F. are BOOLEAN; .U. is the LOGICAL "unknown" — a distinct value, NOT
 		// false (matches ifcopenshell, which surfaces .U. as "UNKNOWN").
 		if len(tok.Text) == 1 && tok.Text[0] == 'U' {
-			v.Kind = KindLogical
+			v.kind = KindLogical
 			break
 		}
-		v.Kind = KindBool
+		v.kind = KindBool
 		if len(tok.Text) == 1 && tok.Text[0] == 'T' {
 			v.x = 1
 		}
@@ -79,13 +79,13 @@ func (p *parser) pushValue(tok Token) error {
 		if err != nil {
 			return fmt.Errorf("step: bad integer %q: %w", tok.Text, err)
 		}
-		v.Kind, v.x = KindInt, uint64(n)
+		v.kind, v.x = KindInt, uint64(n)
 	case TokFloat:
 		f, err := strconv.ParseFloat(string(tok.Text), 64)
 		if err != nil {
 			return fmt.Errorf("step: bad real %q: %w", tok.Text, err)
 		}
-		v.Kind, v.x = KindFloat, math.Float64bits(f)
+		v.kind, v.x = KindFloat, math.Float64bits(f)
 	case TokString:
 		// Most strings carry no escapes and go into the arena as they are.
 		if bytes.IndexByte(tok.Text, '\'') < 0 && bytes.IndexByte(tok.Text, '\\') < 0 {

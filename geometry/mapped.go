@@ -64,12 +64,12 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 // mappedItemMesh: a representation mapped a thousand times is meshed once.
 func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *meshCache) mesh {
 	itemsV, has := mappedRep.Get(attrRepresentationItems)
-	if !has || itemsV.Kind != step.KindList {
+	if !has || itemsV.Kind() != step.KindList {
 		return mesh{src: SourceOBB}
 	}
 	m := mesh{src: SourceOBB}
 	for _, iv := range itemsV.List() {
-		if iv.Kind != step.KindRef || iv.Ref() == nil {
+		if iv.Kind() != step.KindRef || iv.Ref() == nil {
 			continue
 		}
 		mv, mt, ms := tessellateItemDepth(iv.Ref(), unitScale, depth+1, c) // recurse into A/B/C in scaled meters
@@ -101,7 +101,7 @@ func transformOperator3D(op *step.Instance) model.Mat4 {
 	// derivation fixes Y = Z×X (see orthonormalize below), so a supplied Axis2 is
 	// not consulted — matching ifcopenshell's kernel.
 	scale := 1.0
-	if sv, ok := op.Get(attrCTOScale); ok && sv.Kind == step.KindFloat {
+	if sv, ok := op.Get(attrCTOScale); ok && sv.Kind() == step.KindFloat {
 		scale = sv.Float()
 	}
 	// IfcCartesianTransformationOperator3DNonUniform adds Scale2 (Y, attr 5) and
@@ -113,10 +113,10 @@ func transformOperator3D(op *step.Instance) model.Mat4 {
 	// uniform Scale is applied.
 	scaleY, scaleZ := scale, scale
 	if op.IsA("IfcCartesianTransformationOperator3DNonUniform") {
-		if sv, ok := op.Get(attrCTOScale2); ok && sv.Kind == step.KindFloat {
+		if sv, ok := op.Get(attrCTOScale2); ok && sv.Kind() == step.KindFloat {
 			scaleY = sv.Float()
 		}
-		if sv, ok := op.Get(attrCTOScale3); ok && sv.Kind == step.KindFloat {
+		if sv, ok := op.Get(attrCTOScale3); ok && sv.Kind() == step.KindFloat {
 			scaleZ = sv.Float()
 		}
 	}

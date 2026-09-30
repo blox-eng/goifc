@@ -13,14 +13,14 @@ type Kind uint8
 const (
 	KindNull    Kind = iota // $  (unset / omitted optional)
 	KindDerived             // *  (value derived in a supertype)
-	KindInt                 // integer literal        -> I
-	KindFloat               // real literal           -> F
+	KindInt                 // integer literal        -> Int
+	KindFloat               // real literal           -> Float
 	KindString              // '...' (decoded)        -> Str
 	KindEnum                // .LABEL.                -> Str (label, no dots)
-	KindBool                // .T./.F.                -> B (EXPRESS BOOLEAN)
+	KindBool                // .T./.F.                -> Bool (EXPRESS BOOLEAN)
 	KindLogical             // .U.                    -> (no payload) EXPRESS LOGICAL "unknown", distinct from false
 	KindBinary              // "0..." binary          -> Str (raw hex/bit text)
-	KindRef                 // #id                    -> RefID, Ref (nil until resolved)
+	KindRef                 // #id                    -> RefID, Ref (nil when the target is missing)
 	KindList                // (...) aggregate        -> List
 	KindTyped               // KEYWORD(inner)         -> Str (keyword) + List (inner args)
 )
@@ -63,14 +63,14 @@ func (k Kind) String() string {
 // A Value is a 24-byte handle into its File, not a self-contained tree: strings
 // live in a string arena, list members in a value slab, and a reference is the
 // target's id, looked up on access. A file parsed in parallel has one arena and
-// slab per chunk, named by the top bits of the handle's offset. A large model therefore holds a
-// handful of big allocations instead of millions of small ones, and nothing in
-// them but the file handle is a pointer, so the garbage collector has almost
-// nothing to scan.
+// slab per chunk, named by the top bits of the handle's offset. A large model
+// therefore holds a handful of big allocations instead of millions of small
+// ones. The only pointer in a Value is its File, so the garbage collector has
+// no small objects to chase, only that one pointer per value to read.
 type Value struct {
 	x    uint64 // int64 / float64 bits / bool / ref id / slab<<slabShift | string or list offset
 	n    uint32 // string or list length
-	Kind Kind   // variant tag
+	kind Kind
 	f    *File
 }
 
@@ -81,19 +81,22 @@ const (
 	offMask   = 1<<slabShift - 1
 )
 
+// Kind reports which variant v holds, and so which accessor is meaningful.
+func (v Value) Kind() Kind { return v.kind }
+
 func slabRef(slab uint16, off int) uint64 { return uint64(slab)<<slabShift | uint64(off) }
 
-func (v Value) slab() (*slab, uint64) { return &v.f.slabs[v.x>>slabShift], v.x & offMask }
+func (v Value) loc() (*slab, uint64) { return &v.f.slabs[v.x>>slabShift], v.x & offMask }
 
 // Str returns the text of a KindString (decoded), KindEnum (label without the
 // dots), KindBinary (raw digits) or the keyword of a KindTyped value.
 func (v Value) Str() string {
-	switch v.Kind {
+	switch v.kind {
 	case KindString, KindEnum, KindBinary:
-		s, off := v.slab()
+		s, off := v.loc()
 		return s.strs[off : off+uint64(v.n)]
 	case KindTyped:
-		s, off := v.slab()
+		s, off := v.loc()
 		return s.vals[off].Str()
 	}
 	return ""
@@ -102,12 +105,12 @@ func (v Value) Str() string {
 // List returns the members of a KindList, or the inner arguments of a
 // KindTyped value. The slice is shared with the File: do not mutate it.
 func (v Value) List() []Value {
-	switch v.Kind {
+	switch v.kind {
 	case KindList:
-		s, off := v.slab()
+		s, off := v.loc()
 		return s.vals[off : off+uint64(v.n)]
 	case KindTyped:
-		s, off := v.slab()
+		s, off := v.loc()
 		return s.vals[off+1 : off+uint64(v.n)]
 	}
 	return nil
@@ -116,7 +119,7 @@ func (v Value) List() []Value {
 // Ref returns the instance a KindRef points at, or nil when the value is not a
 // reference or its target is missing from the file.
 func (v Value) Ref() *Instance {
-	if v.Kind != KindRef || v.f == nil {
+	if v.kind != KindRef || v.f == nil {
 		return nil
 	}
 	return v.f.instance(uint32(v.x))
@@ -124,7 +127,7 @@ func (v Value) Ref() *Instance {
 
 // RefID returns the #id a KindRef names, whether or not the target exists.
 func (v Value) RefID() uint32 {
-	if v.Kind != KindRef {
+	if v.kind != KindRef {
 		return 0
 	}
 	return uint32(v.x)
@@ -132,7 +135,7 @@ func (v Value) RefID() uint32 {
 
 // Float returns a KindFloat's value.
 func (v Value) Float() float64 {
-	if v.Kind != KindFloat {
+	if v.kind != KindFloat {
 		return 0
 	}
 	return math.Float64frombits(v.x)
@@ -140,14 +143,14 @@ func (v Value) Float() float64 {
 
 // Int returns a KindInt's value.
 func (v Value) Int() int64 {
-	if v.Kind != KindInt {
+	if v.kind != KindInt {
 		return 0
 	}
 	return int64(v.x)
 }
 
 // Bool returns a KindBool's value (.T. is true). .U. is KindLogical, not false.
-func (v Value) Bool() bool { return v.Kind == KindBool && v.x != 0 }
+func (v Value) Bool() bool { return v.kind == KindBool && v.x != 0 }
 
 // Walk applies fn to v and, pre-order, to every value nested within it (lists and
 // typed-value inner args).

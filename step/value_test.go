@@ -28,8 +28,8 @@ func TestParseArgs_Scalars(t *testing.T) {
 		t.Fatalf("len %d want %d (%+v)", len(vs), len(want), vs)
 	}
 	for i := range vs {
-		if vs[i].Kind != want[i] {
-			t.Fatalf("arg %d kind %v want %v", i, vs[i].Kind, want[i])
+		if vs[i].kind != want[i] {
+			t.Fatalf("arg %d kind %v want %v", i, vs[i].kind, want[i])
 		}
 	}
 	if vs[0].Str() != "MILLI" {
@@ -45,13 +45,13 @@ func TestParseArgs_Scalars(t *testing.T) {
 
 func TestParseArgs_NestedAndTyped(t *testing.T) {
 	vs := argsOf(t, "((0.,0.,0.),IFCLABEL('n'),(#1,#2))")
-	if vs[0].Kind != KindList || len(vs[0].List()) != 3 || vs[0].List()[0].Float() != 0. {
+	if vs[0].kind != KindList || len(vs[0].List()) != 3 || vs[0].List()[0].Float() != 0. {
 		t.Fatalf("nested list wrong: %+v", vs[0])
 	}
-	if vs[1].Kind != KindTyped || vs[1].Str() != "IFCLABEL" || vs[1].List()[0].Str() != "n" {
+	if vs[1].kind != KindTyped || vs[1].Str() != "IFCLABEL" || vs[1].List()[0].Str() != "n" {
 		t.Fatalf("typed wrong: %+v", vs[1])
 	}
-	if vs[2].Kind != KindList || vs[2].List()[1].RefID() != 2 {
+	if vs[2].kind != KindList || vs[2].List()[1].RefID() != 2 {
 		t.Fatalf("ref list wrong: %+v", vs[2])
 	}
 }
@@ -59,13 +59,13 @@ func TestParseArgs_NestedAndTyped(t *testing.T) {
 func TestParseArgs_LogicalUnknown(t *testing.T) {
 	// EXPRESS LOGICAL: .T./.Float(). are booleans, .U. is "unknown" (distinct from false).
 	vs := argsOf(t, "(.T.,.F.,.U.)")
-	if vs[0].Kind != KindBool || vs[0].Bool() != true {
+	if vs[0].kind != KindBool || vs[0].Bool() != true {
 		t.Fatalf(".T. = %+v want bool true", vs[0])
 	}
-	if vs[1].Kind != KindBool || vs[1].Bool() != false {
+	if vs[1].kind != KindBool || vs[1].Bool() != false {
 		t.Fatalf(".F. = %+v want bool false", vs[1])
 	}
-	if vs[2].Kind != KindLogical {
+	if vs[2].kind != KindLogical {
 		t.Fatalf(".U. = %+v want KindLogical (not bool false)", vs[2])
 	}
 }
@@ -75,7 +75,7 @@ func TestValue_Walk(t *testing.T) {
 	var refs int
 	for _, v := range vs {
 		v.Walk(func(x Value) {
-			if x.Kind == KindRef {
+			if x.kind == KindRef {
 				refs++
 			}
 		})

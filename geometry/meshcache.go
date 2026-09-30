@@ -46,7 +46,11 @@ func (c *meshCache) mapped(rep *step.Instance, scale float64, depth int, build f
 	}
 	// Every worker asking for one shape waits on the first to build it: a
 	// popular fitting requested by all workers at once is still meshed once.
-	e, _ := c.m.LoadOrStore(mapKey{rep.ID(), scale, depth}, &cachedMesh{})
+	key := mapKey{rep.ID(), scale, depth}
+	e, ok := c.m.Load(key)
+	if !ok {
+		e, _ = c.m.LoadOrStore(key, &cachedMesh{})
+	}
 	cm := e.(*cachedMesh)
 	cm.once.Do(func() { cm.mesh = build() })
 	return cm.mesh

@@ -34,12 +34,12 @@ func reverseV3(p []v3) {
 
 func floatsOf(inst *step.Instance, attr int) []float64 {
 	v, ok := inst.Get(attr)
-	if !ok || v.Kind != step.KindList {
+	if !ok || v.Kind() != step.KindList {
 		return nil
 	}
 	out := make([]float64, 0, len(v.List()))
 	for _, e := range v.List() {
-		switch e.Kind {
+		switch e.Kind() {
 		case step.KindFloat:
 			out = append(out, e.Float())
 		case step.KindInt:

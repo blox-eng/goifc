@@ -103,11 +103,11 @@ func MaterialLayers(f *step.File, inst *step.Instance, scale float64) LayerSet {
 			continue
 		}
 		v, ok := set.Get(attrMaterialLayers)
-		if !ok || v.Kind != step.KindList {
+		if !ok || v.Kind() != step.KindList {
 			continue
 		}
 		for _, item := range v.List() {
-			if item.Kind != step.KindRef || item.Ref() == nil || !item.Ref().IsA("IfcMaterialLayer") {
+			if item.Kind() != step.KindRef || item.Ref() == nil || !item.Ref().IsA("IfcMaterialLayer") {
 				continue
 			}
 			out.Layers = append(out.Layers, readMaterialLayer(item.Ref(), scale))
@@ -130,7 +130,7 @@ func readMaterialLayer(l *step.Instance, scale float64) MaterialLayer {
 	}
 	// KindBool is .T./.F. only. .U. parses as KindLogical and $ as KindNull, and
 	// both leave IsVentilated nil — the UNKNOWN third state.
-	if v, ok := l.Get(attrLayerIsVentilated); ok && v.Kind == step.KindBool {
+	if v, ok := l.Get(attrLayerIsVentilated); ok && v.Kind() == step.KindBool {
 		b := v.Bool()
 		out.IsVentilated = &b
 	}
@@ -139,7 +139,7 @@ func readMaterialLayer(l *step.Instance, scale float64) MaterialLayer {
 
 func enumAt(inst *step.Instance, idx int) string {
 	v, ok := inst.Get(idx)
-	if !ok || v.Kind != step.KindEnum {
+	if !ok || v.Kind() != step.KindEnum {
 		return ""
 	}
 	return v.Str()
