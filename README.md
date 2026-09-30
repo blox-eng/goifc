@@ -120,7 +120,7 @@ Schependomlaan housing model, one core, medians:
 | Triangles | 256k | 262k | 262k |
 | Peak memory | **398 MiB** | 627 MiB | 458 MiB |
 | On all 26 cores, whole job | **0.22 s** | — | 4.3 s |
-| Cold start | **4 ms** | 367 ms | 314 ms |
+| Cold start | **3 ms** | 266 ms | 314 ms |
 | Install | **3.2 MB binary** | 24 MB | 230 MB |
 
 Across the real models, on one core, the whole job is 2.7–4.1× faster than
