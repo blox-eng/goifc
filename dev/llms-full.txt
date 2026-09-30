@@ -713,6 +713,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.15.0 — 2026-09-30
+
 ### Breaking
 
 - `step.Value`'s fields are methods: `v.Kind()`, `v.Str()`, `v.List()`, `v.Ref()`, `v.RefID()`, `v.Float()` (was `F`), `v.Int()` (was `I`) and `v.Bool()` (was `B`). The fix is source-only:
