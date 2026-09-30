@@ -68,9 +68,16 @@ def tools():
     threads = os.cpu_count()
     return {
         "goifc": lambda model, boxes: [str(goifc), "-boxes", boxes, model],
+        "goifc-1t": lambda model, boxes: [str(goifc), "-procs", "1", "-boxes", boxes, model],
         "ifcopenshell": lambda model, boxes: ios + [model, "--boxes", boxes],
         f"ifcopenshell-{threads}t": lambda model, boxes: ios + [model, "--boxes", boxes, "--threads", str(threads)],
         "web-ifc": lambda model, boxes: ["node", str(HERE / "webifc_run.mjs"), model, "--boxes", boxes],
+        # The same job goifc does: no opening subtraction.
+        "ifcopenshell-noopen": lambda model, boxes: ios + [model, "--boxes", boxes, "--no-openings"],
+        f"ifcopenshell-noopen-{threads}t": lambda model, boxes: ios + [
+            model, "--boxes", boxes, "--no-openings", "--threads", str(threads)],
+        "web-ifc-noopen": lambda model, boxes: [
+            "node", str(HERE / "webifc_run.mjs"), model, "--boxes", boxes, "--no-openings"],
     }
 
 
@@ -109,6 +116,7 @@ def summarize(runs):
            for k in ("parse_ms", "walk_ms", "geom_ms", "wall_ms", "peak_rss_mib")}
     out["total_ms"] = out["parse_ms"] + out["walk_ms"] + out["geom_ms"]
     out["meshes"] = ok[0]["meshes"]
+    out["tris"] = ok[0].get("tris")
     out["runs"] = len(ok)
     return out
 
@@ -189,13 +197,19 @@ def main():
                 if "error" in runs[-1]:
                     break
             entry["tools"][tool] = summarize(runs)
-        ref = CACHE / "boxes" / f"ifcopenshell-{m['name']}.json"
-        if ref.exists():
+
+    # Score every tool against IfcOpenShell twice: doing its default job
+    # (openings cut) and doing goifc's (openings not cut).
+    for name, entry in results["models"].items():
+        for ref_tool, key in (("ifcopenshell", "agreement"), ("ifcopenshell-noopen", "agreement_noopen")):
+            ref = CACHE / "boxes" / f"{ref_tool}-{name}.json"
+            if not ref.exists():
+                continue
             ref_boxes = json.loads(ref.read_text())
             for tool, s in entry["tools"].items():
-                b = CACHE / "boxes" / f"{tool}-{m['name']}.json"
+                b = CACHE / "boxes" / f"{tool}-{name}.json"
                 if "error" not in s and b.exists():
-                    s["agreement"] = agreement(ref_boxes, json.loads(b.read_text()))
+                    s[key] = agreement(ref_boxes, json.loads(b.read_text()))
 
     results["env"] = versions()
     results["footprint"] = footprint(CACHE / "goifc-bench")

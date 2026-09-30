@@ -16,7 +16,7 @@ built on top.
 |---|---|
 | attribute by **index** — `inst.Get(i)`, `inst.Args()` | attribute by **name** — `inst.GlobalId` |
 | type keyword — `inst.Type()`, `inst.IsA()` (exact) | `is_a(supertype)`, `ByType` subtype expansion |
-| forward refs — `Value.Ref` (resolved `#id`) | named inverse attrs — `.IsDecomposedBy` |
+| forward refs — `Value.Ref()` (resolved `#id`) | named inverse attrs — `.IsDecomposedBy` |
 | inverse graph — `File.Inverse` / `InverseIndices` / `TotalInverses` | derived-attribute formulas |
 | `Traverse`, `ByID`, `ByType` (exact), `All` | `by_guid`, `create_entity` by name |
 
@@ -48,18 +48,35 @@ line-based), so multi-line records and `/* */` comments parse correctly.
 
 ## Design
 
-Eager, two-pass, in-memory (ported from ifcopenshell's default in-memory variant):
+Eager, two-pass, in-memory, laid out as a few flat slabs rather than a tree of
+small objects:
 
 ```
 ParseBytes(src)
-  pass 1  scan HEADER + every #id=KEYWORD(args); record
-          -> Instance{id, type, []Value}   (refs captured, unresolved)
-          -> byID map, byType index, insertion order
-  pass 2  walk every attribute
-          -> resolve #ref -> *Instance (in place)
-          -> build inverse index (target id -> []{referrer, attrIndex})
+  pass 1  scan HEADER + every #id=KEYWORD(args); split across cores (below)
+          -> Instance{id, type, args range}   appended to one []Instance
+          -> every value, list member and arg  appended to one []Value
+          -> every string, enum and binary     appended to one string arena
+  pass 2  -> id index: a slice when ids are compact, a map when they are not
+          -> type index, sized by a counting pass
+          -> inverse index as one flat []InverseRef plus per-instance offsets
           -> dangling ref = non-fatal warning (ifcopenshell SYN 28 parity)
 ```
+
+Pass 1 runs in parallel on files of 2 MB and up. The header is read serially to
+`DATA;`, the records are cut into GOMAXPROCS chunks at a `;` followed by `#`,
+and each chunk parses into its own slab. A cut can land inside a string or
+comment that happens to hold `;#`, so each chunk must end exactly where the next
+one begins; if any does not, or any chunk fails, the whole file is parsed again
+serially. The result, and every error with its offset, is the serial parser's.
+Pass 2 builds the type and inverse indexes over instance ranges in parallel,
+keeping source order.
+
+A `Value` is a 24-byte handle into its `File`: a kind, a payload (an int, a
+float's bits, a reference id, or an offset into the string arena or value slab)
+and a length. References resolve on access through the id index rather than
+being patched in place. Read values through `Str`, `List`, `Ref`, `RefID`,
+`Float`, `Int` and `Bool`.
 
 ## Measured — a 28 MB IFC2X3 ArchiCAD export
 
@@ -67,19 +84,15 @@ ParseBytes(src)
 |---|---|
 | File size | ~28 MB |
 | Instances | 528,228 |
-| Entity types | 93 |
-| Inverse edges | 857,962 |
-| **Parse time** | **~0.48–0.66 s** (i7-14700K) |
-| **Peak heap** | **~306 MB** |
-| Allocations | ~500 MB / 3.7 M allocs per parse |
+| Inverse edges | 858,642 |
+| **Parse time** | **~0.05 s** on 26 cores, ~0.18 s on one (i7-14700K, best of five) |
+| **Live heap after parse** | **~74 MiB**, excluding the source bytes |
+| Allocations | ~166 MiB in ~5,600 allocations per parse |
 
-**Memory driver:** peak is dominated by the
-~3.7 M `Value` structs (**72 B each ≈ 266 MB**, after field-order packing from 80 B),
-not string data — so string interning would not move peak. At ~30% of a 1 GB budget
-there's ample headroom; a columnar/arena `Value` rework is deferred behind this
-measurement and only worth it if a future input class blows the budget. Size worker
-limits against ~310 MB peak per 28 MB IFC, scaling roughly linearly with instance
-count.
+Before the slab layout the same file took ~0.55 s and held ~255 MiB in 3.7 M
+allocations, most of it 72-byte `Value` structs carrying three pointers each
+that the garbage collector had to trace. The allocations that remain are the
+per-chunk slabs, the frozen string arenas and the index-building scratch.
 
 ## Not in this package
 

@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -25,28 +26,36 @@ type record struct {
 	GeomMS     float64 `json:"geom_ms"`
 	Products   int     `json:"products"`
 	Meshes     int     `json:"meshes"`
+	Tris       int     `json:"tris"`
 	PeakRSSMiB float64 `json:"peak_rss_mib"`
 }
 
 func main() {
 	boxes := flag.String("boxes", "", "write GlobalID -> world AABB JSON here")
+	procs := flag.Int("procs", 0, "limit goifc to this many cores (0: all)")
 	flag.Parse()
+	if *procs > 0 {
+		runtime.GOMAXPROCS(*procs)
+	}
 	if flag.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: goifc [-boxes out.json] model.ifc")
 		os.Exit(2)
 	}
-	if err := run(flag.Arg(0), *boxes); err != nil {
+	if err := run(flag.Arg(0), *boxes, *procs); err != nil {
 		fmt.Fprintln(os.Stderr, "goifc:", err)
 		os.Exit(1)
 	}
 }
 
-func run(path, boxesPath string) error {
+func run(path, boxesPath string, procs int) error {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	rec := record{Tool: "goifc"}
+	if procs > 0 {
+		rec.Tool = fmt.Sprintf("goifc-%dt", procs)
+	}
 
 	t := time.Now()
 	f, err := step.ParseBytes(src)
@@ -77,6 +86,7 @@ func run(path, boxesPath string) error {
 			continue
 		}
 		rec.Meshes++
+		rec.Tris += len(e.Tris) / 3
 		out[e.GlobalID] = aabb{Min: e.BBoxMin, Max: e.BBoxMax}
 	}
 	rec.PeakRSSMiB = peakRSSMiB()

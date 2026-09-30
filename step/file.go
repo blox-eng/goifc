@@ -2,6 +2,7 @@ package step
 
 import (
 	"iter"
+	"math"
 	"strings"
 )
 
@@ -34,19 +35,55 @@ type InverseRef struct {
 }
 
 // File is a parsed STEP model: the header plus a navigable entity graph. Lookups
-// (ByID/ByType), the forward reference graph (resolved on Value.Ref), and the
+// (ByID/ByType), the forward reference graph (Value.Ref, resolved on access), and the
 // inverse index are all pure-SPF — no EXPRESS schema required.
 type File struct {
-	Head    Header
-	byID    map[uint32]*Instance
-	byType  map[string][]*Instance
-	inverse map[uint32][]InverseRef
-	order   []uint32
+	Head  Header
+	insts []Instance // source order
+	// dense maps an id to 1+its index in insts (0 = no such instance) when ids
+	// are compact enough for a slice; sparse takes over when they are not, so a
+	// hostile #4294967295 cannot allocate gigabytes.
+	dense  []int32
+	sparse map[uint32]int32
+	byType map[string][]*Instance
+	slabs  []slab
+	// The inverse index, flattened: the referrers of insts[i] are
+	// inv[invStart[i]:invStart[i+1]].
+	inv      []InverseRef
+	invStart []uint32
 	// complexTypes holds the additional part type keywords of ISO-10303-21 complex
 	// instances (#id=(TYPEA(...)TYPEB(...))), keyed by id. Nil/absent for the common
 	// simple instance; Instance.Type reports the first part, IsA matches any part.
 	complexTypes map[uint32][]string
 	warnings     []string
+}
+
+// slab holds the values and strings one parser produced: the whole file for a
+// serial parse, one chunk of it for a parallel one.
+type slab struct {
+	vals []Value // every argument and list member, instances' args included
+	strs string  // every decoded string, enum and binary value
+}
+
+// index returns id's position in insts, or -1.
+func (f *File) index(id uint32) int {
+	if f.dense != nil {
+		if int(id) < len(f.dense) {
+			return int(f.dense[id]) - 1
+		}
+		return -1
+	}
+	if i, ok := f.sparse[id]; ok {
+		return int(i)
+	}
+	return -1
+}
+
+func (f *File) instance(id uint32) *Instance {
+	if i := f.index(id); i >= 0 {
+		return &f.insts[i]
+	}
+	return nil
 }
 
 // SchemaID returns the first FILE_SCHEMA identifier (e.g. "IFC2X3"), or "".
@@ -58,7 +95,7 @@ func (f *File) SchemaID() string {
 }
 
 // Len returns the number of DATA-section instances.
-func (f *File) Len() int { return len(f.order) }
+func (f *File) Len() int { return len(f.insts) }
 
 // Warnings returns non-fatal issues encountered during parse (e.g. dangling
 // references to missing instances), mirroring ifcopenshell's SYN diagnostics.
@@ -66,8 +103,11 @@ func (f *File) Warnings() []string { return f.warnings }
 
 // ByID looks up an instance by its STEP name (#id).
 func (f *File) ByID(id int) (*Instance, bool) {
-	inst, ok := f.byID[uint32(id)]
-	return inst, ok
+	if id < 0 || uint64(id) > math.MaxUint32 {
+		return nil, false
+	}
+	inst := f.instance(uint32(id))
+	return inst, inst != nil
 }
 
 // ByType returns all instances whose exact type keyword matches (case-insensitive).
@@ -85,8 +125,8 @@ func (f *File) ByType(keyword string) []*Instance {
 //	}
 func (f *File) All() iter.Seq[*Instance] {
 	return func(yield func(*Instance) bool) {
-		for _, id := range f.order {
-			if !yield(f.byID[id]) {
+		for i := range f.insts {
+			if !yield(&f.insts[i]) {
 				return
 			}
 		}
@@ -96,7 +136,7 @@ func (f *File) All() iter.Seq[*Instance] {
 // Inverse returns the distinct instances that reference inst via any forward
 // attribute (the raw referrer set). Order follows first-seen referrer.
 func (f *File) Inverse(inst *Instance) []*Instance {
-	refs := f.inverse[inst.id]
+	refs := f.InverseIndices(inst)
 	out := make([]*Instance, 0, len(refs))
 	seen := make(map[uint32]bool, len(refs))
 	for _, r := range refs {
@@ -113,12 +153,16 @@ func (f *File) Inverse(inst *Instance) []*Instance {
 // including multiple entries for one referrer that references inst more than once.
 // This is what a schema layer filters to build named inverse attributes.
 func (f *File) InverseIndices(inst *Instance) []InverseRef {
-	return f.inverse[inst.id]
+	i := f.index(inst.id)
+	if i < 0 || i+1 >= len(f.invStart) {
+		return nil
+	}
+	return f.inv[f.invStart[i]:f.invStart[i+1]]
 }
 
 // TotalInverses returns the count of distinct instances referencing inst.
 func (f *File) TotalInverses(inst *Instance) int {
-	refs := f.inverse[inst.id]
+	refs := f.InverseIndices(inst)
 	seen := make(map[uint32]bool, len(refs))
 	for _, r := range refs {
 		seen[r.From.id] = true
@@ -156,18 +200,19 @@ func (f *File) Traverse(inst *Instance, maxLevels int, order TraverseOrder) []*I
 		}
 		nd := cur.depth + 1
 		cur.inst.Walk(func(v Value) {
-			if v.Kind != KindRef || v.Ref == nil {
+			ref := v.Ref()
+			if ref == nil {
 				return
 			}
-			if bd, ok := bestDepth[v.Ref.id]; ok && bd <= nd {
+			if bd, ok := bestDepth[ref.id]; ok && bd <= nd {
 				return // already reached at an equal-or-shorter depth
 			}
-			bestDepth[v.Ref.id] = nd
-			if !inOut[v.Ref.id] {
-				inOut[v.Ref.id] = true
-				out = append(out, v.Ref)
+			bestDepth[ref.id] = nd
+			if !inOut[ref.id] {
+				inOut[ref.id] = true
+				out = append(out, ref)
 			}
-			queue = append(queue, item{v.Ref, nd})
+			queue = append(queue, item{ref, nd})
 		})
 	}
 	return out

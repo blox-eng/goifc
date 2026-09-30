@@ -7,10 +7,12 @@ import "strings"
 // schema concern layered on by a later component. The type keyword and argument
 // list come straight from the SPF record.
 type Instance struct {
-	id   uint32
-	typ  string // interned, upper-cased type keyword (e.g. "IFCWALL")
-	args []Value
-	file *File
+	typ   string // interned, upper-cased type keyword (e.g. "IFCWALL")
+	file  *File
+	id    uint32
+	start uint32 // args are file.slabs[slab].vals[start : start+n]
+	n     uint32
+	slab  uint16
 }
 
 // ID returns the STEP instance name (#id). The zero-value Instance reports 0.
@@ -22,18 +24,23 @@ func (i *Instance) ID() int { return int(i.id) }
 func (i *Instance) Type() string { return i.typ }
 
 // Len returns the number of positional attributes.
-func (i *Instance) Len() int { return len(i.args) }
+func (i *Instance) Len() int { return int(i.n) }
 
 // Get returns the attribute at idx and whether idx is in range.
 func (i *Instance) Get(idx int) (Value, bool) {
-	if idx < 0 || idx >= len(i.args) {
+	if idx < 0 || idx >= int(i.n) {
 		return Value{}, false
 	}
-	return i.args[idx], true
+	return i.file.slabs[i.slab].vals[int(i.start)+idx], true
 }
 
 // Args returns the underlying attribute slice. Callers must not mutate it.
-func (i *Instance) Args() []Value { return i.args }
+func (i *Instance) Args() []Value {
+	if i.file == nil {
+		return nil
+	}
+	return i.file.slabs[i.slab].vals[i.start : i.start+i.n]
+}
 
 // File returns the owning file.
 func (i *Instance) File() *File { return i.file }
@@ -43,10 +50,11 @@ func (i *Instance) File() *File { return i.file }
 // or a dangling ref whose target was missing.
 func (i *Instance) Ref(idx int) (*Instance, bool) {
 	v, ok := i.Get(idx)
-	if !ok || v.Kind != KindRef || v.Ref == nil {
+	if !ok {
 		return nil, false
 	}
-	return v.Ref, true
+	r := v.Ref()
+	return r, r != nil
 }
 
 // IsA reports whether this instance's exact type keyword equals keyword
@@ -54,7 +62,7 @@ func (i *Instance) Ref(idx int) (*Instance, bool) {
 // This is exact-only: supertype checks (IfcWall IS-A IfcElement) require the
 // EXPRESS schema and are out of scope here.
 func (i *Instance) IsA(keyword string) bool {
-	if strings.EqualFold(i.typ, keyword) {
+	if len(i.typ) == len(keyword) && strings.EqualFold(i.typ, keyword) {
 		return true
 	}
 	if i.file != nil {
@@ -70,7 +78,7 @@ func (i *Instance) IsA(keyword string) bool {
 // Walk applies fn to every value in every attribute, pre-order (nested lists and
 // typed values included).
 func (i *Instance) Walk(fn func(Value)) {
-	for _, a := range i.args {
+	for _, a := range i.Args() {
 		a.Walk(fn)
 	}
 }

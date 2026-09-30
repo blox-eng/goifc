@@ -185,16 +185,16 @@ func orthogonalize(x, z []float64) []float64 {
 // coords extracts the float list from an IfcCartesianPoint / IfcDirection.
 func coords(inst *step.Instance) []float64 {
 	v, ok := inst.Get(attrCoordinates)
-	if !ok || v.Kind != step.KindList {
+	if !ok || v.Kind() != step.KindList {
 		return nil
 	}
-	out := make([]float64, 0, len(v.List))
-	for _, e := range v.List {
-		switch e.Kind {
+	out := make([]float64, 0, len(v.List()))
+	for _, e := range v.List() {
+		switch e.Kind() {
 		case step.KindFloat:
-			out = append(out, e.F)
+			out = append(out, e.Float())
 		case step.KindInt:
-			out = append(out, float64(e.I))
+			out = append(out, float64(e.Int()))
 		}
 	}
 	return out

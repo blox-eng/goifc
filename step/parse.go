@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -27,40 +26,87 @@ func Parse(r io.Reader) (*File, error) {
 }
 
 // ParseBytes parses an in-memory STEP/SPF (ISO 10303-21) document into a navigable
-// entity graph. It runs two passes: pass 1 tokenizes the HEADER and every DATA
-// record into instances (references captured but unresolved) and builds the id and
-// type indexes; pass 2 resolves references to instance pointers and builds the
-// inverse index. Dangling references are non-fatal warnings.
+// entity graph. It runs two passes: pass 1 reads the HEADER and every DATA record
+// into instances, with references kept as ids, across all cores for a large
+// file; pass 2 builds the id, type and inverse indexes. A reference is looked up
+// by id when it is read. Dangling references are non-fatal warnings.
 func ParseBytes(src []byte) (*File, error) {
-	f := &File{
-		byID:    make(map[uint32]*Instance),
-		byType:  make(map[string][]*Instance),
-		inverse: make(map[uint32][]InverseRef),
+	if f, ok := parseParallel(src); ok {
+		return f, nil
 	}
-	p := &parser{s: NewScanner(src), f: f, intern: make(map[string]string)}
+	return parseSerial(src)
+}
+
+// parseSerial parses src with one parser: the reference parseParallel must
+// reproduce, and the path that reports every parse error.
+func parseSerial(src []byte) (*File, error) {
+	f := &File{}
+	p := newParser(src, f, 0, len(src))
 	if err := p.parseDocument(); err != nil {
 		// Errors propagate up without further scanning, so Pos() is at or just past
 		// the offending token — a good-enough error location. Attach it once here.
 		return nil, &ParseError{Offset: p.s.Pos(), Err: err}
 	}
-	resolveAndIndex(f)
+	finish(f, []*parser{p})
 	return f, nil
 }
 
+// parser reads one stretch of a file into its own slab: the whole file, or one
+// chunk of the DATA section when parsing in parallel.
 type parser struct {
-	s      *Scanner
-	f      *File
-	intern map[string]string // type-keyword interning: one string per distinct type
+	s       *Scanner
+	f       *File
+	slab    uint16
+	intern  map[string]string // type-keyword interning: one string per distinct type
+	stack   []Value           // values of the lists being parsed, innermost last
+	vals    []Value
+	strs    []byte // frozen into the slab by finish
+	insts   []Instance
+	complex map[uint32][]string
+	header  []headerRecord // read before the arena is frozen, decoded after
+
+	// stopAtData makes parseDocument return right after "DATA;", with atData
+	// set, so the records that follow can be split across parsers.
+	stopAtData bool
+	atData     bool
+}
+
+// newParser returns a parser for src with slabs sized for n bytes of it. An IFC
+// instance averages 55-70 bytes of text and a value 13-14, so the slabs rarely
+// grow; over-sizing costs address space, not resident memory.
+func newParser(src []byte, f *File, slab uint16, n int) *parser {
+	return &parser{
+		s:      NewScanner(src),
+		f:      f,
+		slab:   slab,
+		intern: make(map[string]string),
+		vals:   make([]Value, 0, n/12+64),
+		strs:   make([]byte, 0, n/4+64),
+		insts:  make([]Instance, 0, n/48+16),
+	}
+}
+
+// headerRecord is a HEADER entry kept until finish, when its strings exist.
+type headerRecord struct {
+	kw   string
+	args Value
 }
 
 // internType returns a shared, upper-cased copy of a type keyword so all instances
 // of one type point at the same backing string.
+// The map is keyed by the keyword as written as well as upper-cased, and looked
+// up with string(raw), which Go does without allocating: one allocation per
+// distinct spelling instead of one per instance.
 func (p *parser) internType(raw []byte) string {
-	up := strings.ToUpper(string(raw))
-	if s, ok := p.intern[up]; ok {
+	if s, ok := p.intern[string(raw)]; ok {
 		return s
 	}
+	up := strings.ToUpper(string(raw))
+	if s, ok := p.intern[up]; ok {
+		up = s
+	}
 	p.intern[up] = up
+	p.intern[string(raw)] = up
 	return up
 }
 
@@ -81,6 +127,13 @@ func (p *parser) parseDocument() error {
 			case "END-ISO-10303-21":
 				return nil
 			case "DATA":
+				if p.stopAtData {
+					if semi := p.s.Next(); semi.Kind != TokSemi {
+						return fmt.Errorf("step: expected ';' after DATA, got %v", semi.Kind)
+					}
+					p.atData = true
+					return nil
+				}
 				if err := p.parseData(); err != nil {
 					return err
 				}
@@ -107,20 +160,26 @@ func (p *parser) parseHeaderRecord(kw string) error {
 	if open.Kind != TokLParen {
 		return fmt.Errorf("step: expected '(' after header keyword %s, got %v", kw, open.Kind)
 	}
-	args, err := parseArgs(p.s)
-	if err != nil {
+	mark := len(p.stack)
+	if err := p.parseArgs(); err != nil {
 		return err
 	}
 	if semi := p.s.Next(); semi.Kind != TokSemi {
 		return fmt.Errorf("step: expected ';' after header record %s, got %v", kw, semi.Kind)
 	}
+	p.header = append(p.header, headerRecord{kw, p.closeList(mark, KindList)})
+	return nil
+}
+
+// setHeader decodes one HEADER record into f.Head.
+func (p *parser) setHeader(kw string, args []Value) {
 	switch kw {
 	case "FILE_DESCRIPTION":
 		if len(args) > 0 {
 			p.f.Head.Description = flattenStrings(args[0])
 		}
-		if len(args) > 1 && args[1].Kind == KindString {
-			p.f.Head.ImplementationLevel = args[1].Str
+		if len(args) > 1 && args[1].kind == KindString {
+			p.f.Head.ImplementationLevel = args[1].Str()
 		}
 	case "FILE_NAME":
 		// FILE_NAME has 7 positional fields, two of which (author, organization)
@@ -132,7 +191,6 @@ func (p *parser) parseHeaderRecord(kw string) error {
 			p.f.Head.Schema = flattenStrings(args[0])
 		}
 	}
-	return nil
 }
 
 // parseData consumes DATA-section instance records until ENDSEC.
@@ -141,6 +199,11 @@ func (p *parser) parseData() error {
 	if semi.Kind != TokSemi {
 		return fmt.Errorf("step: expected ';' after DATA, got %v", semi.Kind)
 	}
+	return p.parseRecords()
+}
+
+// parseRecords consumes DATA-section instance records until ENDSEC.
+func (p *parser) parseRecords() error {
 	for {
 		tok := p.s.Next()
 		switch tok.Kind {
@@ -167,7 +230,7 @@ func (p *parser) parseData() error {
 // the token after '=': a keyword begins a simple instance "#id=KEYWORD(args);"; a
 // '(' begins an ISO-10303-21 complex instance "#id=(TYPEA(args)TYPEB(args)...);".
 func (p *parser) parseInstance(ref Token) error {
-	id, err := strconv.ParseUint(string(ref.Text), 10, 32)
+	id, err := parseUint32(ref.Text)
 	if err != nil {
 		return fmt.Errorf("step: bad instance id #%s: %w", ref.Text, err)
 	}
@@ -191,14 +254,14 @@ func (p *parser) finishSimpleInstance(id uint32, kwTok Token) error {
 	if open := p.s.Next(); open.Kind != TokLParen {
 		return fmt.Errorf("step: expected '(' for #%d %s, got %v", id, typ, open.Kind)
 	}
-	args, err := parseArgs(p.s)
-	if err != nil {
+	mark := len(p.stack)
+	if err := p.parseArgs(); err != nil {
 		return fmt.Errorf("step: #%d %s: %w", id, typ, err)
 	}
 	if semi := p.s.Next(); semi.Kind != TokSemi {
 		return fmt.Errorf("step: expected ';' after #%d %s, got %v", id, typ, semi.Kind)
 	}
-	p.register(&Instance{id: id, typ: typ, args: args, file: p.f}, nil)
+	p.register(id, typ, mark, nil)
 	return nil
 }
 
@@ -208,7 +271,7 @@ func (p *parser) finishSimpleInstance(id uint32, kwTok Token) error {
 // instance is indexed under every part type.
 func (p *parser) finishComplexInstance(id uint32) error {
 	var parts []string
-	var allArgs []Value
+	mark := len(p.stack)
 	for {
 		tok := p.s.Next()
 		if tok.Kind == TokRParen {
@@ -221,12 +284,12 @@ func (p *parser) finishComplexInstance(id uint32) error {
 		if open := p.s.Next(); open.Kind != TokLParen {
 			return fmt.Errorf("step: expected '(' after %s in complex #%d, got %v", kw, id, open.Kind)
 		}
-		args, err := parseArgs(p.s)
-		if err != nil {
+		// Part attribute lists land on the stack back to back, which is the
+		// concatenation a complex instance's attributes are.
+		if err := p.parseArgs(); err != nil {
 			return fmt.Errorf("step: complex #%d %s: %w", id, kw, err)
 		}
 		parts = append(parts, kw)
-		allArgs = append(allArgs, args...)
 	}
 	if len(parts) == 0 {
 		return fmt.Errorf("step: empty complex instance #%d", id)
@@ -234,27 +297,23 @@ func (p *parser) finishComplexInstance(id uint32) error {
 	if semi := p.s.Next(); semi.Kind != TokSemi {
 		return fmt.Errorf("step: expected ';' after complex #%d, got %v", id, semi.Kind)
 	}
-	p.register(&Instance{id: id, typ: parts[0], args: allArgs, file: p.f}, parts)
+	p.register(id, parts[0], mark, parts)
 	return nil
 }
 
-// register adds inst to the id index, insertion order, and the type index under
-// each of its types (parts is nil for a simple instance, or the full part list for
-// a complex one; extra part types are recorded for IsA).
-func (p *parser) register(inst *Instance, parts []string) {
-	p.f.byID[inst.id] = inst
-	p.f.order = append(p.f.order, inst.id)
-	if len(parts) <= 1 {
-		p.f.byType[inst.typ] = append(p.f.byType[inst.typ], inst)
-		return
+// register moves the instance's arguments, p.stack[mark:], into the value slab
+// and appends the instance. parts is nil for a simple instance, or the full part
+// list for a complex one; extra part types are recorded for IsA. Indexing by id
+// and type waits for finish, when the instance slab stops moving.
+func (p *parser) register(id uint32, typ string, mark int, parts []string) {
+	args := p.closeList(mark, KindList)
+	p.insts = append(p.insts, Instance{typ: typ, file: p.f, id: id, start: uint32(args.x & offMask), n: args.n, slab: p.slab})
+	if len(parts) > 1 {
+		if p.complex == nil {
+			p.complex = make(map[uint32][]string)
+		}
+		p.complex[id] = parts
 	}
-	for _, pt := range parts {
-		p.f.byType[pt] = append(p.f.byType[pt], inst)
-	}
-	if p.f.complexTypes == nil {
-		p.f.complexTypes = make(map[uint32][]string)
-	}
-	p.f.complexTypes[inst.id] = parts
 }
 
 // headerTopLevelStrings maps a header record's top-level args to strings without
@@ -263,8 +322,8 @@ func (p *parser) register(inst *Instance, parts []string) {
 func headerTopLevelStrings(args []Value) []string {
 	out := make([]string, len(args))
 	for i, v := range args {
-		if v.Kind == KindString {
-			out[i] = v.Str
+		if v.kind == KindString {
+			out[i] = v.Str()
 		}
 	}
 	return out
@@ -273,15 +332,15 @@ func headerTopLevelStrings(args []Value) []string {
 // flattenStrings collects the string values of a value (a list, or a scalar
 // string) into a flat slice, preserving order. Non-string members become "".
 func flattenStrings(v Value) []string {
-	switch v.Kind {
+	switch v.kind {
 	case KindString:
-		return []string{v.Str}
+		return []string{v.Str()}
 	case KindList:
-		out := make([]string, 0, len(v.List))
-		for _, c := range v.List {
-			switch c.Kind {
+		out := make([]string, 0, len(v.List()))
+		for _, c := range v.List() {
+			switch c.kind {
 			case KindString:
-				out = append(out, c.Str)
+				out = append(out, c.Str())
 			case KindList:
 				out = append(out, flattenStrings(c)...)
 			default:

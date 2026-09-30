@@ -34,26 +34,26 @@ func representationItems(f *step.File, expressID int) []*step.Instance {
 		return nil
 	}
 	repsV, ok := shape.Get(attrShapeRepresentations)
-	if !ok || repsV.Kind != step.KindList {
+	if !ok || repsV.Kind() != step.KindList {
 		return nil
 	}
 	var body, all []*step.Instance
-	for _, rv := range repsV.List {
-		if rv.Kind != step.KindRef || rv.Ref == nil || !rv.Ref.IsA("IfcShapeRepresentation") {
+	for _, rv := range repsV.List() {
+		if rv.Kind() != step.KindRef || rv.Ref() == nil || !rv.Ref().IsA("IfcShapeRepresentation") {
 			continue
 		}
-		itemsV, ok := rv.Ref.Get(attrRepresentationItems)
-		if !ok || itemsV.Kind != step.KindList {
+		itemsV, ok := rv.Ref().Get(attrRepresentationItems)
+		if !ok || itemsV.Kind() != step.KindList {
 			continue
 		}
 		var items []*step.Instance
-		for _, iv := range itemsV.List {
-			if iv.Kind == step.KindRef && iv.Ref != nil {
-				items = append(items, iv.Ref)
+		for _, iv := range itemsV.List() {
+			if iv.Kind() == step.KindRef && iv.Ref() != nil {
+				items = append(items, iv.Ref())
 			}
 		}
 		all = append(all, items...)
-		if identV, ok := rv.Ref.Get(attrRepresentationIdent); ok && identV.Kind == step.KindString && identV.Str == "Body" {
+		if identV, ok := rv.Ref().Get(attrRepresentationIdent); ok && identV.Kind() == step.KindString && identV.Str() == "Body" {
 			body = append(body, items...)
 		}
 	}

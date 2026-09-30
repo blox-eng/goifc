@@ -28,14 +28,14 @@ const (
 // siblings in the same element.
 func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint32, ok bool) {
 	boundaryV, has := m.Get(attr)
-	if !has || boundaryV.Kind != step.KindList {
+	if !has || boundaryV.Kind() != step.KindList {
 		return nil, nil, false
 	}
-	for _, sv := range boundaryV.List {
-		if sv.Kind != step.KindRef || sv.Ref == nil {
+	for _, sv := range boundaryV.List() {
+		if sv.Kind() != step.KindRef || sv.Ref() == nil {
 			return nil, nil, false
 		}
-		v, t, shellOK := brepMesh(sv.Ref)
+		v, t, shellOK := brepMesh(sv.Ref())
 		if !shellOK {
 			return nil, nil, false
 		}
@@ -61,14 +61,14 @@ func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
 		shell = s
 	}
 	facesV, has := shell.Get(attrShellFaces)
-	if !has || facesV.Kind != step.KindList {
+	if !has || facesV.Kind() != step.KindList {
 		return nil, nil, false
 	}
-	for _, fv := range facesV.List {
-		if fv.Kind != step.KindRef || fv.Ref == nil || !fv.Ref.IsA("IfcFace") {
+	for _, fv := range facesV.List() {
+		if fv.Kind() != step.KindRef || fv.Ref() == nil || !fv.Ref().IsA("IfcFace") {
 			return nil, nil, false
 		}
-		loop := faceOuterLoop(fv.Ref)
+		loop := faceOuterLoop(fv.Ref())
 		if len(loop) < 3 {
 			return nil, nil, false
 		}
@@ -90,15 +90,15 @@ func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
 // a hole to the face's outline.
 func faceOuterLoop(face *step.Instance) []v3 {
 	boundsV, ok := face.Get(attrFaceBounds)
-	if !ok || boundsV.Kind != step.KindList {
+	if !ok || boundsV.Kind() != step.KindList {
 		return nil
 	}
 	var fallback []v3
-	for _, bv := range boundsV.List {
-		if bv.Kind != step.KindRef || bv.Ref == nil {
+	for _, bv := range boundsV.List() {
+		if bv.Kind() != step.KindRef || bv.Ref() == nil {
 			return nil
 		}
-		loop, ok := bv.Ref.Ref(attrBoundLoop)
+		loop, ok := bv.Ref().Ref(attrBoundLoop)
 		if !ok || !loop.IsA("IfcPolyLoop") {
 			return nil
 		}
@@ -112,10 +112,10 @@ func faceOuterLoop(face *step.Instance) []v3 {
 		// matches the intended outward facing. Ignoring this ships those facets
 		// inside-out (inward normals / backface-culled), and the AABB cross-check
 		// is blind to it since the vertex set is identical.
-		if o, ok := bv.Ref.Get(attrBoundOrientation); ok && o.Kind == step.KindBool && !o.B {
+		if o, ok := bv.Ref().Get(attrBoundOrientation); ok && o.Kind() == step.KindBool && !o.Bool() {
 			reverseV3(pts)
 		}
-		if bv.Ref.IsA("IfcFaceOuterBound") {
+		if bv.Ref().IsA("IfcFaceOuterBound") {
 			return pts
 		}
 		if fallback == nil {
@@ -128,15 +128,15 @@ func faceOuterLoop(face *step.Instance) []v3 {
 // loopPoints returns an IfcPolyLoop's points, or nil if any is not a 3D point.
 func loopPoints(loop *step.Instance) []v3 {
 	v, ok := loop.Get(attrLoopPolygon)
-	if !ok || v.Kind != step.KindList {
+	if !ok || v.Kind() != step.KindList {
 		return nil
 	}
-	out := make([]v3, 0, len(v.List))
-	for _, pv := range v.List {
-		if pv.Kind != step.KindRef || pv.Ref == nil {
+	out := make([]v3, 0, len(v.List()))
+	for _, pv := range v.List() {
+		if pv.Kind() != step.KindRef || pv.Ref() == nil {
 			return nil
 		}
-		c := floatsOf(pv.Ref, attrCoordinates)
+		c := floatsOf(pv.Ref(), attrCoordinates)
 		if len(c) < 3 {
 			return nil
 		}

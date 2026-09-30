@@ -26,8 +26,10 @@ def main():
     ap.add_argument("model")
     ap.add_argument("--boxes")
     ap.add_argument("--threads", type=int, default=1)
+    ap.add_argument("--no-openings", action="store_true", help="skip opening subtraction, as goifc does")
     args = ap.parse_args()
-    rec = {"tool": "ifcopenshell" if args.threads == 1 else f"ifcopenshell-{args.threads}t"}
+    tool = "ifcopenshell-noopen" if args.no_openings else "ifcopenshell"
+    rec = {"tool": tool if args.threads == 1 else f"{tool}-{args.threads}t"}
 
     t = time.perf_counter()
     f = ifcopenshell.open(args.model)
@@ -47,13 +49,16 @@ def main():
 
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
+    settings.set("disable-opening-subtractions", args.no_openings)
     t = time.perf_counter()
     shapes = []
+    tris = 0
     it = ifcopenshell.geom.iterator(settings, f, args.threads)
     if it.initialize():
         while True:
             shape = it.get()
             shapes.append((shape.guid, shape.geometry.verts))
+            tris += len(shape.geometry.faces) // 3
             if not it.next():
                 break
     rec["geom_ms"] = ms(t)
@@ -69,6 +74,7 @@ def main():
             "type": f.by_guid(guid).is_a(),
         }
     rec["meshes"] = len(boxes)
+    rec["tris"] = tris
     rec["peak_rss_mib"] = peak_rss_mib()
 
     if args.boxes:

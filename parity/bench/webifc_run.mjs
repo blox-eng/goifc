@@ -6,6 +6,8 @@ import * as WebIFC from "web-ifc";
 const args = process.argv.slice(2);
 const boxesAt = args.indexOf("--boxes");
 const boxesPath = boxesAt >= 0 ? args.splice(boxesAt, 2)[1] : null;
+const noOpenAt = args.indexOf("--no-openings");
+const noOpenings = noOpenAt >= 0 && args.splice(noOpenAt, 1).length > 0;
 const [modelPath] = args;
 
 const peakRSSMiB = () => {
@@ -15,8 +17,18 @@ const peakRSSMiB = () => {
 
 const api = new WebIFC.IfcAPI();
 await api.Init(undefined, true);
-const data = readFileSync(modelPath);
-const rec = { tool: "web-ifc" };
+let data = readFileSync(modelPath);
+// web-ifc has no switch for opening subtraction, but it only cuts the openings
+// IfcRelVoidsElement records name, and nothing references those records. So
+// removing them before load is the same as switching subtraction off. It
+// happens before any timed stage.
+if (noOpenings) {
+  data = Buffer.from(
+    data.toString("latin1").replace(/#\d+\s*=\s*IFCRELVOIDSELEMENT\s*\([^;]*\);/gi, ""),
+    "latin1",
+  );
+}
+const rec = { tool: noOpenings ? "web-ifc-noopen" : "web-ifc" };
 
 let t = performance.now();
 const id = api.OpenModel(data);
@@ -53,15 +65,19 @@ for (const pid of api.GetLineIDsWithType(id, WebIFC.IFCPRODUCT, true)) {
 rec.walk_ms = performance.now() - t;
 rec.products = products;
 
-// Tessellate, and read each vertex buffer out of the heap as a caller must.
+// Tessellate, and read each vertex and index buffer out of the heap as a
+// caller must.
 t = performance.now();
 const meshes = [];
+let tris = 0;
 api.StreamAllMeshes(id, (mesh) => {
   const parts = [];
   for (let i = 0; i < mesh.geometries.size(); i++) {
     const pg = mesh.geometries.get(i);
     const g = api.GetGeometry(id, pg.geometryExpressID);
     const v = api.GetVertexArray(g.GetVertexData(), g.GetVertexDataSize()).slice();
+    const ix = api.GetIndexArray(g.GetIndexData(), g.GetIndexDataSize()).slice();
+    tris += ix.length / 3;
     parts.push({ v, m: pg.flatTransformation.slice() });
     g.delete();
   }
@@ -87,6 +103,7 @@ for (const { id: eid, parts } of meshes) {
   if (guid && Number.isFinite(lo[0])) boxes[guid] = { min: lo, max: hi };
 }
 rec.meshes = Object.keys(boxes).length;
+rec.tris = tris;
 rec.peak_rss_mib = peakRSSMiB();
 
 if (boxesPath) writeFileSync(boxesPath, JSON.stringify(boxes));

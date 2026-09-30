@@ -146,7 +146,7 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	// is the void's true footprint — not a bounding box around it.
 	var footprints [][3][2]float64
 	for _, op := range openings {
-		ov, otris, src := elementMesh(f, op.ID(), unitScale)
+		ov, otris, src := elementMesh(f, op.ID(), unitScale, nil)
 		if src == SourceOBB {
 			// No real solid to measure — an OBB fallback is the opening's box, not
 			// its footprint. Distrust the whole host rather than guess.
