@@ -10,13 +10,44 @@ const (
 )
 
 // extrudeSolid tessellates an IfcExtrudedAreaSolid into an element-local mesh in
-// RAW file units. Caller scales to meters. ok=false when the profile is not parseable.
-func extrudeSolid(solid *step.Instance) (verts []float32, tris []uint32, ok bool) {
+// RAW file units. Caller scales to meters. ok=false when the profile is not
+// parseable or its cap cannot be triangulated within b.
+func extrudeSolid(solid *step.Instance, b *budget) (verts []float32, tris []uint32, ok bool) {
+	poly, verts, ok := extrudeRings(solid)
+	if !ok {
+		return nil, nil, false
+	}
+	// Caps: ear-clip the 2D profile polygon ONCE (handles concave footprints —
+	// a naive fan inverts on L-shaped walls/slabs), emit bottom (reversed
+	// winding, downward normal) and top rings from the same triangulation.
+	capTris, ok := triangulatePolygon(poly, b)
+	if !ok {
+		return nil, nil, false
+	}
+	n := len(poly)
+	// Side walls.
+	for i := 0; i < n; i++ {
+		j := (i + 1) % n
+		b0, b1, t0, t1 := uint32(i), uint32(j), uint32(n+i), uint32(n+j)
+		tris = append(tris, b0, b1, t1, b0, t1, t0)
+	}
+	for t := 0; t+2 < len(capTris); t += 3 {
+		a, b, c := capTris[t], capTris[t+1], capTris[t+2]
+		tris = append(tris, a, c, b)                               // bottom
+		tris = append(tris, uint32(n)+a, uint32(n)+b, uint32(n)+c) // top
+	}
+	return verts, tris, true
+}
+
+// extrudeRings returns an IfcExtrudedAreaSolid's profile and its bottom (z=0)
+// and top (z=depth along the direction) rings, raw units. The box fallback needs
+// only the rings, so it never pays for the caps' triangulation.
+func extrudeRings(solid *step.Instance) (poly [][2]float64, verts []float32, ok bool) {
 	prof, ok := solid.Ref(attrSweptArea)
 	if !ok {
 		return nil, nil, false
 	}
-	poly := profilePolygon(prof)
+	poly = profilePolygon(prof)
 	if len(poly) < 3 {
 		return nil, nil, false
 	}
@@ -37,9 +68,8 @@ func extrudeSolid(solid *step.Instance) (verts []float32, tris []uint32, ok bool
 		place = axisPlacement3D(pos)
 	}
 
-	n := len(poly)
 	// Bottom ring (z=0) then top ring (z=depth along dir), both placed by `place`.
-	local := make([]v3, 0, 2*n)
+	local := make([]v3, 0, 2*len(poly))
 	for _, p := range poly {
 		local = append(local, applyMat(place, v3{p[0], p[1], 0}))
 	}
@@ -50,20 +80,5 @@ func extrudeSolid(solid *step.Instance) (verts []float32, tris []uint32, ok bool
 	for _, p := range local {
 		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
 	}
-	// Side walls.
-	for i := 0; i < n; i++ {
-		j := (i + 1) % n
-		b0, b1, t0, t1 := uint32(i), uint32(j), uint32(n+i), uint32(n+j)
-		tris = append(tris, b0, b1, t1, b0, t1, t0)
-	}
-	// Caps: ear-clip the 2D profile polygon ONCE (handles concave footprints —
-	// a naive fan inverts on L-shaped walls/slabs), emit bottom (reversed
-	// winding, downward normal) and top rings from the same triangulation.
-	capTris := triangulatePolygon(poly)
-	for t := 0; t+2 < len(capTris); t += 3 {
-		a, b, c := capTris[t], capTris[t+1], capTris[t+2]
-		tris = append(tris, a, c, b)                               // bottom
-		tris = append(tris, uint32(n)+a, uint32(n)+b, uint32(n)+c) // top
-	}
-	return verts, tris, true
+	return poly, verts, true
 }

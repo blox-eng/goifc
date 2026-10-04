@@ -28,7 +28,8 @@ func TestOBBRateNoGeometry(t *testing.T) {
 	}
 }
 
-// Gate 2: the measured OBB rate must not exceed the committed baseline.
+// Gate 2: neither the measured OBB rate nor the count of partial meshes may
+// exceed the committed baseline.
 func TestGate2CoverageDoesNotRegress(t *testing.T) {
 	if *updateBaseline {
 		next := make(map[string]Coverage, len(Public))
@@ -74,6 +75,10 @@ func TestGate2CoverageDoesNotRegress(t *testing.T) {
 			if got.Total != want.Total {
 				t.Errorf("%s: element count is %d, baseline %d — the OBB rate is no longer measured over the same set of elements, so it is not comparable; if this change is intended, `make parity-baseline` records it",
 					name, got.Total, want.Total)
+			}
+			if got.Partial > want.Partial {
+				t.Errorf("%s: %d elements shipped a partial mesh, baseline %d — a representation item stopped meshing",
+					name, got.Partial, want.Partial)
 			}
 			if gotRate > wantRate+1e-9 {
 				t.Errorf("%s: OBB rate rose to %.4f from %.4f — a geometry path regressed",

@@ -45,6 +45,9 @@ type Element struct {
 	BBoxMin   [3]float64 // world-space AABB, meters
 	BBoxMax   [3]float64
 	Source    GeomSource
+	// partial: a representation item meshed to nothing and was left out, so
+	// the mesh (and its AABB) can be smaller than the element.
+	partial bool
 }
 
 // Scene is the assembled proxy geometry for a whole IFC model: one Element per
@@ -56,7 +59,9 @@ type Scene struct {
 
 // Stats counts elements by the geometry path that produced them; Empty counts
 // elements that yielded no mesh at all (Total == Extrude+Brep+OBB+Empty).
-type Stats struct{ Total, Extrude, Brep, OBB, Empty int }
+// Partial counts, across the other buckets, elements that shipped a mesh with
+// a representation item left out: their bounds may be too small.
+type Stats struct{ Total, Extrude, Brep, OBB, Empty, Partial int }
 
 // Build assembles proxy geometry for every element in r, rendering ALL elements
 // regardless of Emit. Elements are meshed in parallel; the result is identical
@@ -64,6 +69,7 @@ type Stats struct{ Total, Extrude, Brep, OBB, Empty int }
 func Build(f *step.File, r *model.Result) (*Scene, error) {
 	s := &Scene{Elements: make([]Element, len(r.Elements))}
 	c := &meshCache{}
+	overBudget := make([]bool, len(r.Elements))
 	workers := min(runtime.GOMAXPROCS(0), len(r.Elements))
 	var next atomic.Int64
 	var g par.Group
@@ -75,25 +81,33 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 					return
 				}
 				el := &r.Elements[i]
-				verts, tris, src := elementMesh(f, el.ExpressID, r.UnitScale, c)
+				m := elementMesh(f, el.ExpressID, r.UnitScale, c)
 				ge := Element{
 					GlobalID:  el.GlobalID,
-					Verts:     verts,
-					Tris:      tris,
+					Verts:     m.verts,
+					Tris:      m.tris,
 					Placement: el.Placement,
-					Source:    src,
+					Source:    m.src,
+					partial:   m.partial,
 				}
-				if len(verts) > 0 {
-					ge.BBoxMin, ge.BBoxMax = worldAABB(verts, el.Placement)
+				if len(m.verts) > 0 {
+					ge.BBoxMin, ge.BBoxMax = worldAABB(m.verts, el.Placement)
 				}
 				s.Elements[i] = ge
+				overBudget[i] = m.overBudget
 			}
 		})
 	}
 	g.Wait()
-	for _, e := range s.Elements {
-		if len(e.Verts) == 0 {
+	for i, e := range s.Elements {
+		switch {
+		case len(e.Verts) == 0:
 			s.Warnings = append(s.Warnings, "no geometry for "+e.GlobalID)
+		case e.partial:
+			s.Warnings = append(s.Warnings, "partial geometry for "+e.GlobalID+": a representation item has none")
+		}
+		if overBudget[i] {
+			s.Warnings = append(s.Warnings, "tessellation budget exceeded for "+e.GlobalID+": items boxed or left out")
 		}
 	}
 	return s, nil
@@ -104,12 +118,15 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 // would otherwise recurse unbounded and stack-overflow the import.
 const maxMapDepth = 8
 
-func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *meshCache) ([]float32, []uint32, GeomSource) {
+// tessellateItemDepth meshes one representation item, element-local meters.
+// Every case falls back to the item's box except a failed IfcMappedItem; b
+// bounds the work, and an item that exhausts it is boxed.
+func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *meshCache, b *budget) mesh {
 	switch {
 	case item.IsA("IfcMappedItem"):
-		v, t, s, ok := mappedItemMesh(item, unitScale, depth, c)
+		m, ok := mappedItemMesh(item, unitScale, depth, c, b)
 		if ok {
-			return v, t, s
+			return m
 		}
 		// Deliberately do NOT fall through to obbFromItem here like every other
 		// case below. collectPoints would walk the MappingSource's item in ITS
@@ -118,14 +135,14 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 		// the wrong location, silently corrupting the element's AABB rather
 		// than just being conservatively empty. Returning nil/OBB-tagged-empty
 		// is safer than a mis-placed box.
-		return nil, nil, SourceOBB
+		return mesh{src: SourceOBB, partial: m.partial, overBudget: m.overBudget || b.exhausted()}
 	case item.IsA("IfcExtrudedAreaSolid"):
-		if v, t, ok := extrudeSolid(item); ok {
-			return scaleVerts(v, unitScale), t, SourceExtrude
+		if v, t, ok := extrudeSolid(item, b); ok {
+			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceExtrude, ok: true}
 		}
 	case item.IsA("IfcFacetedBrep"), item.IsA("IfcClosedShell"), item.IsA("IfcConnectedFaceSet"), item.IsA("IfcOpenShell"):
-		if v, t, ok := brepMesh(item); ok {
-			return scaleVerts(v, unitScale), t, SourceBrep
+		if v, t, ok := brepMesh(item, b); ok {
+			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceBrep, ok: true}
 		}
 	case item.IsA("IfcShellBasedSurfaceModel"):
 		// SbsmBoundary is a SET of IfcShell (IfcClosedShell/IfcOpenShell) — union
@@ -136,64 +153,87 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 		// overall reported Source stayed "brep" (since brep still won on the other
 		// sibling items) — a few stray boxed sub-shells shift the whole element's
 		// AABB by a few mm-cm without ever showing up as a Source mismatch.
-		if v, t, ok := surfaceModelMesh(item, attrSbsmBoundary); ok {
-			return scaleVerts(v, unitScale), t, SourceBrep
+		if v, t, ok := surfaceModelMesh(item, attrSbsmBoundary, b); ok {
+			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceBrep, ok: true}
 		}
 	case item.IsA("IfcFaceBasedSurfaceModel"):
 		// FbsmFaces is a SET of IfcConnectedFaceSet — union their faces, the
 		// same traversal the shell-based case above does over IfcShell.
 		// Without this case duplex_a's 235 nested face sets are unreachable,
 		// and every element built from one becomes a box.
-		if v, t, ok := surfaceModelMesh(item, attrFbsmFaces); ok {
-			return scaleVerts(v, unitScale), t, SourceBrep
+		if v, t, ok := surfaceModelMesh(item, attrFbsmFaces, b); ok {
+			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceBrep, ok: true}
 		}
 	case item.IsA("IfcTriangulatedFaceSet"), item.IsA("IfcTriangulatedIrregularNetwork"), item.IsA("IfcPolygonalFaceSet"):
 		// IFC4's native tessellated body. Its points live in an
 		// IfcCartesianPointList3D, which the OBB fallback below also reads, so a
 		// declined set still gets a box.
-		if v, t, ok := faceSetMesh(item); ok {
-			return scaleVerts(v, unitScale), t, SourceBrep
+		// ok with no triangles is a network flagged all void: authored as
+		// empty, not a failure.
+		if v, t, ok := faceSetMesh(item, b); ok {
+			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceBrep, ok: true}
 		}
 	case item.IsA("IfcBooleanClippingResult"), item.IsA("IfcBooleanResult"):
-		if v, t, s, ok := clipMeshByDifference(item, unitScale, depth, c); ok {
-			return v, t, s
+		if m, ok := clipMeshByDifference(item, unitScale, depth, c, b); ok {
+			return m
 		}
 	}
-	v, t := obbFromItem(item, unitScale)
-	return v, t, SourceOBB
+	v, t := obbFromItem(item, unitScale, c)
+	return mesh{verts: v, tris: t, src: SourceOBB, ok: len(t) > 0, overBudget: b.exhausted()}
 }
 
 // elementMesh returns the element-local mesh (meters) for expressID. Dispatches
-// each representation item via tessellateItemDepth (extrude/brep/mapped/OBB fallback).
-func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) ([]float32, []uint32, GeomSource) {
-	items := representationItems(f, expressID)
-	var verts []float32
-	var tris []uint32
-	src := SourceOBB
-	for _, item := range items {
-		v, t, s := tessellateItemDepth(item, unitScale, 0, c)
-		if len(v) == 0 {
-			continue
-		}
-		if verts == nil {
-			// tessellateItemDepth's slices are the caller's own, so the first
-			// item's mesh becomes the element's without a copy.
-			verts, tris = v, t
-		} else {
-			appendMesh(&verts, &tris, v, t)
-		}
-		src = promoteSource(src, s)
-	}
-	if len(verts) == 0 {
-		return nil, nil, src
-	}
-	return verts, tris, src
+// each representation item via tessellateItemDepth (extrude/brep/mapped/OBB
+// fallback), all of them sharing one budget.
+func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) mesh {
+	return unionItems(representationItems(f, expressID), unitScale, 0, c, newBudget())
 }
 
-func obbFromItem(item *step.Instance, unitScale float64) ([]float32, []uint32) {
-	v, t, _, _ := obbMesh(collectPoints(item), unitScale)
-	return v, t
+// unionItems meshes items into one mesh. An item that comes back empty is left
+// out, and marks the union partial unless it was authored empty.
+func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCache, b *budget) mesh {
+	u := mesh{src: SourceOBB}
+	seen := make(map[int]bool, len(items))
+	for _, item := range items {
+		// The same item named twice is the same geometry twice: mesh it once.
+		if seen[item.ID()] {
+			continue
+		}
+		seen[item.ID()] = true
+		m := tessellateItemDepth(item, unitScale, depth, c, b)
+		u.partial = u.partial || m.partial || (len(m.verts) == 0 && !m.ok)
+		u.overBudget = u.overBudget || m.overBudget
+		if len(m.verts) == 0 {
+			continue
+		}
+		if u.verts == nil {
+			// tessellateItemDepth's slices are the caller's own, so the first
+			// item's mesh becomes the union's without a copy.
+			u.verts, u.tris = m.verts, m.tris
+		} else {
+			appendMesh(&u.verts, &u.tris, m.verts, m.tris)
+		}
+		u.src = promoteSource(u.src, m.src)
+	}
+	u.ok = len(u.tris) > 0
+	if !u.ok {
+		u.partial = false // nothing shipped, so nothing is partial: the element is empty
+	}
+	return u
 }
+
+func obbFromItem(item *step.Instance, unitScale float64, c *meshCache) ([]float32, []uint32) {
+	lo, hi, ok := c.itemBox(item, unitScale, func() (v3, v3, bool) {
+		b := pointsBox(collectPoints(item, c))
+		return scaleV3(b.lo, unitScale), scaleV3(b.hi, unitScale), b.ok
+	})
+	if !ok {
+		return nil, nil
+	}
+	return boxMesh(lo, hi)
+}
+
+func scaleV3(p v3, s float64) v3 { return v3{p[0] * s, p[1] * s, p[2] * s} }
 
 func scaleVerts(v []float32, s float64) []float32 {
 	out := make([]float32, len(v))
@@ -223,6 +263,9 @@ func (s *Scene) Stats() Stats {
 			// Empty only, not also in the OBB bucket.
 			st.Empty++
 			continue
+		}
+		if e.partial {
+			st.Partial++
 		}
 		switch e.Source {
 		case SourceExtrude:

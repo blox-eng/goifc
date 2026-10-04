@@ -15,6 +15,9 @@ type Coverage struct {
 	Brep    int `json:"brep"`
 	OBB     int `json:"obb"`
 	Empty   int `json:"empty"`
+	// Partial counts, across the other buckets, elements that shipped a mesh
+	// with a representation item left out (their bounds may be too small).
+	Partial int `json:"partial"`
 }
 
 // OBBRate is the share of elements THAT PRODUCED GEOMETRY which fell back to a
@@ -42,6 +45,7 @@ func MeasureCoverage(name string) (Coverage, error) {
 		Brep:    st.Brep,
 		OBB:     st.OBB,
 		Empty:   st.Empty,
+		Partial: st.Partial,
 	}, nil
 }
 

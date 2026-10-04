@@ -34,12 +34,15 @@ ratio would be exactly 0, a well-formed number for the worst
 possible outcome, which would drag p50 and p90 toward 1.0 and read
 as an improvement. Gate 1 fails on them; this column is here so
 the page cannot quietly disagree with the gate.
+**Partial** counts, across the other columns, elements that shipped a
+mesh with a representation item left out, so their bounds may be too
+small. Gate 2 fails if it rises.
 
-| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | Collapsed | AABB ratio p50 | p90 | max |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `ifcopenhouse` | 40 | 34 | 0 | 0 | 6 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0000 |
-| `duplex_a` | 218 | 150 | 65 | 0 | 3 | 0.0% | 0 | 1.0000 | 1.0000 | 1.1156 |
-| `fzk_haus` | 85 | 18 | 64 | 0 | 3 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0334 |
+| Model | Elements | Extrude | Brep | OBB | Empty | Partial | OBB rate | Collapsed | AABB ratio p50 | p90 | max |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `ifcopenhouse` | 40 | 34 | 0 | 0 | 6 | 0 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0000 |
+| `duplex_a` | 218 | 150 | 65 | 0 | 3 | 0 | 0.0% | 0 | 1.0000 | 1.0000 | 1.1156 |
+| `fzk_haus` | 85 | 18 | 64 | 0 | 3 | 0 | 0.0% | 0 | 1.0000 | 1.0000 | 1.0334 |
 
 ## What falls back, and how often
 

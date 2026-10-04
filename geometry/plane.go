@@ -121,10 +121,5 @@ func signedDist(p Plane, q v3) float64 { return dotv(subv(q, p.Origin), p.N) }
 
 // finite3 reports whether every component of a is finite (no NaN, no Inf).
 func finite3(a v3) bool {
-	for _, c := range a {
-		if math.IsNaN(c) || math.IsInf(c, 0) {
-			return false
-		}
-	}
-	return true
+	return finite(a[0]) && finite(a[1]) && finite(a[2])
 }

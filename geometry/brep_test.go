@@ -96,7 +96,7 @@ func TestFaceBasedSurfaceModel_EmptyDeclines(t *testing.T) {
 			if !ok {
 				t.Fatal("fixture instance #61 missing")
 			}
-			if _, _, gotOK := surfaceModelMesh(item, attrFbsmFaces); gotOK {
+			if _, _, gotOK := surfaceModelMesh(item, attrFbsmFaces, nil); gotOK {
 				t.Error("surfaceModelMesh accepted an unusable FbsmFaces set; want ok=false so the caller boxes the element")
 			}
 		})

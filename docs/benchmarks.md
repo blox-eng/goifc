@@ -214,12 +214,12 @@ tool divides them, and which elements get a mesh at all.
 
 | Model | goifc, 1 thread | IfcOpenShell, no openings | web-ifc, no openings | goifc vs best other |
 |---|---|---|---|---|
-| `ifcopenhouse` | 468 | 1,078 | 1,030 | **2.2× fewer** |
-| `duplex_a` | 24,827 | 26,928 | 25,868 | even |
+| `ifcopenhouse` | 538 | 1,078 | 1,030 | **1.9× fewer** |
+| `duplex_a` | 24,427 | 26,928 | 25,868 | even |
 | `fzk_haus` | 18,020 | 22,272 | 19,754 | even |
-| `clinic_arch` | 157,093 | 184,977 | 167,949 | even |
-| `schependomlaan` | 256,177 | 261,882 | 261,959 | even |
-| `clinic_plumbing` | 3,329,982 | 3,354,132 | 3,178,306 | even |
+| `clinic_arch` | 156,363 | 184,977 | 167,949 | even |
+| `schependomlaan` | 253,953 | 261,882 | 261,959 | even |
+| `clinic_plumbing` | 3,253,679 | 3,354,132 | 3,178,306 | even |
 | private model (30 MB) | 1,107,556 | 1,133,261 | 1,127,634 | even |
 
 #### Peak memory
@@ -327,12 +327,12 @@ openings out of walls, goifc does not. Faster here partly means doing less.
 
 | Model | goifc | IfcOpenShell, 26 threads | web-ifc | goifc vs best other |
 |---|---|---|---|---|
-| `ifcopenhouse` | 468 | 1,146 | 1,098 | **2.3× fewer** |
-| `duplex_a` | 24,827 | 27,740 | 26,774 | even |
+| `ifcopenhouse` | 538 | 1,146 | 1,098 | **2.0× fewer** |
+| `duplex_a` | 24,427 | 27,740 | 26,774 | even |
 | `fzk_haus` | 18,020 | 24,168 | 21,722 | **1.2× fewer** |
-| `clinic_arch` | 157,093 | 191,265 | 174,325 | **1.1× fewer** |
-| `schependomlaan` | 256,177 | 261,238 | 261,315 | even |
-| `clinic_plumbing` | 3,329,982 | 3,354,132 | 3,178,306 | even |
+| `clinic_arch` | 156,363 | 191,265 | 174,325 | **1.1× fewer** |
+| `schependomlaan` | 253,953 | 261,238 | 261,315 | even |
+| `clinic_plumbing` | 3,253,679 | 3,354,132 | 3,178,306 | even |
 | private model (30 MB) | 1,107,556 | 1,137,319 | 1,132,259 | even |
 
 ### Geometry agreement with IfcOpenShell's default job

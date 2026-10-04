@@ -26,17 +26,27 @@ const (
 // depth bounds recursion into nested IfcMappedItem chains (see maxMapDepth) —
 // a cyclic or pathologically-nested mapped structure in an untrusted IFC
 // upload returns gracefully (ok=false) instead of overflowing the stack.
-func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache) (verts []float32, tris []uint32, src GeomSource, ok bool) {
+//
+// The representation's cost is charged to b every time, cached or not, so an
+// element's work stays bounded however many shapes it maps, and the result does
+// not depend on which element meshed a shape first. An element whose budget is
+// already spent maps no further shape. One that is not takes the shape whole,
+// even when it costs more than is left: refusing it would leave the element
+// smaller than it is, and the shape's own work was bounded when it was meshed.
+func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache, b *budget) (mesh, bool) {
 	if depth >= maxMapDepth {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
+	}
+	if b.exhausted() {
+		return mesh{overBudget: true}, false
 	}
 	repMap, has := item.Ref(attrMapSource)
 	if !has {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	mappedRep, has := repMap.Ref(attrMappedRep)
 	if !has {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	xform := model.Identity()
 	if origin, has := repMap.Ref(attrMapOrigin); has {
@@ -48,38 +58,44 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 	local := c.mapped(mappedRep, unitScale, depth, func() mesh {
 		return mappedRepMesh(mappedRep, unitScale, depth, c)
 	})
+	b.spend(local.cost)
 	if !local.ok {
-		return nil, nil, SourceOBB, false
+		return mesh{partial: local.partial, overBudget: local.overBudget || b.exhausted()}, false
 	}
 	// local is already in meters; apply the (unitless-rotation + raw-translation)
 	// mapping transform, whose translation is raw units → scale it too.
 	x := scaleTransformTranslation(xform, unitScale)
 	// The cached triangles are shared by every placement; hand back a copy so
 	// what tessellateItemDepth returns is always the caller's to keep.
-	return transformVerts(local.verts, x), slices.Clone(local.tris), local.src, true
+	m := local
+	m.verts, m.tris, m.cost = transformVerts(local.verts, x), slices.Clone(local.tris), 0
+	m.overBudget = local.overBudget || b.exhausted()
+	return m, true
 }
 
 // mappedRepMesh tessellates a mapped representation's items into one mesh in
 // the representation's own frame. It is the per-occurrence-invariant half of
 // mappedItemMesh: a representation mapped a thousand times is meshed once.
+//
+// It spends a budget of its own rather than the element's: the result is
+// cached and shared, so it must not depend on which element reached it first.
+// That budget is a share of an element's, so that a chain of representations
+// mapping one another (up to maxMapDepth deep) costs an element at most about
+// two budgets, however each link is filled.
 func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *meshCache) mesh {
 	itemsV, has := mappedRep.Get(attrRepresentationItems)
 	if !has || itemsV.Kind() != step.KindList {
 		return mesh{src: SourceOBB}
 	}
-	m := mesh{src: SourceOBB}
+	var items []*step.Instance
 	for _, iv := range itemsV.List() {
-		if iv.Kind() != step.KindRef || iv.Ref() == nil {
-			continue
+		if iv.Kind() == step.KindRef && iv.Ref() != nil {
+			items = append(items, iv.Ref())
 		}
-		mv, mt, ms := tessellateItemDepth(iv.Ref(), unitScale, depth+1, c) // recurse into A/B/C in scaled meters
-		if len(mv) == 0 {
-			continue
-		}
-		appendMesh(&m.verts, &m.tris, mv, mt)
-		m.src = promoteSource(m.src, ms)
 	}
-	m.ok = len(m.tris) > 0
+	b := sizedBudget(elementBudget / (maxMapDepth + 1))
+	m := unionItems(items, unitScale, depth+1, c, b) // recurse into A/B/C in scaled meters
+	m.cost = b.spent()
 	return m
 }
 

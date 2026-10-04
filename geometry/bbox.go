@@ -29,15 +29,23 @@ const maxWalkDepth = 4096
 const maxApproxLadder = 8
 
 // collectPoints returns every IfcCartesianPoint coordinate reachable from item
-// (walking the forward-reference subgraph), in raw file units.
-func collectPoints(item *step.Instance) []v3 {
-	return collectPointsLadder(item, 0)
+// (walking the forward-reference subgraph), in raw file units. A point list
+// contributes the corners of its box, read once per Build through c.
+func collectPoints(item *step.Instance, c *meshCache) []v3 {
+	return collectPointsLadder(item, 0, c, map[[2]int][]v3{})
+}
+
+// pointBox is the box around a set of points; ok is false when there are none
+// or a whole axis is NaN.
+type pointBox struct {
+	lo, hi v3
+	ok     bool
 }
 
 // collectPointsLadder is collectPoints with the extrude-approximation ladder
 // depth threaded through, so the collectPoints <-> extrudedAreaApproxPoints
 // recursion is bounded (see maxApproxLadder).
-func collectPointsLadder(item *step.Instance, ladder int) []v3 {
+func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx map[[2]int][]v3) []v3 {
 	var pts []v3
 	if ladder > maxApproxLadder {
 		return pts
@@ -95,13 +103,11 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		// IfcCartesianPoint entities. Without this a declined face set's element
 		// found no points, got no box, and vanished. Every well-formed entry
 		// counts: a box over them all is a superset of whatever the set meshes.
+		// Its eight corners stand in for the entries, so a box built from them
+		// (even under a further transform) still contains every point.
 		if inst.IsA("IfcCartesianPointList3D") {
-			if listV, ok := inst.Get(attrPointListCoords); ok && listV.Kind() == step.KindList {
-				for _, pv := range listV.List() {
-					if c, ok := numbersOf(pv); ok && len(c) == 3 {
-						pts = append(pts, v3{c[0], c[1], c[2]})
-					}
-				}
+			if lo, hi, ok := c.pointListBounds(inst); ok {
+				pts = append(pts, boxCorners(lo, hi)...)
 			}
 		}
 		// IfcExtrudedAreaSolid stores its Z extent as a scalar Depth, not a
@@ -114,18 +120,18 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		// (profile ring at z=0 and z=depth, in the solid's own placement) so the
 		// fallback box at least spans the solid's real extent.
 		if inst.IsA("IfcExtrudedAreaSolid") {
-			if verts, _, ok := extrudeSolid(inst); ok {
+			if _, verts, ok := extrudeRings(inst); ok {
 				for i := 0; i+2 < len(verts); i += 3 {
 					pts = append(pts, v3{float64(verts[i]), float64(verts[i+1]), float64(verts[i+2])})
 				}
 			} else {
 				// profilePolygon couldn't build a full ordered polygon (e.g. a
 				// composite-curve profile with an elliptical or B-spline segment).
-				// Still extrude every raw profile point reachable, conic corners
-				// included, to z=0 and z=depth — an envelope beats a box that
+				// Still extrude the raw profile points reachable (or, past a
+				// handful, their box), conic corners included, to z=0 and z=depth — an envelope beats a box that
 				// never saw the depth and collapses to a sliver along the
 				// extrusion axis.
-				pts = append(pts, extrudedAreaApproxPoints(inst, ladder)...)
+				pts = append(pts, extrudedAreaApproxPoints(inst, ladder, c, approx)...)
 			}
 		}
 		for _, a := range inst.Args() {
@@ -170,18 +176,32 @@ func conicCorners(conic *step.Instance) []v3 {
 	}
 }
 
-// extrudedAreaApproxPoints extrudes every raw point reachable in the solid's
-// profile subtree to z=0 and z=depth (under the solid's own Position and
-// ExtrudedDirection) — a point-cloud approximation used only when extrudeSolid
-// couldn't build the exact profile polygon. Point ORDER doesn't matter here,
-// only that the returned cloud spans the solid's real min/max extent.
-func extrudedAreaApproxPoints(solid *step.Instance, ladder int) []v3 {
+// extrudedAreaApproxPoints extrudes the profile's points reachable in the
+// solid's subtree to z=0 and z=depth (under the solid's own Position and
+// ExtrudedDirection) — an approximation used only when extrudeRings couldn't
+// build the exact profile polygon. A profile with more than maxApproxPoints
+// points extrudes the corners of their box instead: the corners' image under
+// the placement still contains every point's, and it keeps each step of the
+// ladder bounded. Few points are kept as they are, because a box around a
+// diagonal profile is loose once the placement turns it.
+//
+// approx memoises the profile's representative points per ladder hop for one
+// collectPoints call. A profile that lists solids built on itself would
+// otherwise be walked again for every solid at every hop, and each walk's
+// output would feed the next.
+func extrudedAreaApproxPoints(solid *step.Instance, ladder int, c *meshCache, approx map[[2]int][]v3) []v3 {
 	prof, ok := solid.Ref(attrSweptArea)
 	if !ok {
 		return nil
 	}
-	profPts := collectPointsLadder(prof, ladder+1)
-	if len(profPts) == 0 {
+	key := [2]int{prof.ID(), ladder + 1}
+	reps, done := approx[key]
+	if !done {
+		approx[key] = nil // a profile reached again mid-walk adds nothing
+		reps = representativePoints(collectPointsLadder(prof, ladder+1, c, approx))
+		approx[key] = reps
+	}
+	if len(reps) == 0 {
 		return nil
 	}
 	depth := scalarAt(solid, attrExtrudeDepth)
@@ -195,44 +215,68 @@ func extrudedAreaApproxPoints(solid *step.Instance, ladder int) []v3 {
 	if pos, ok := solid.Ref(attrSolidPosition); ok {
 		place = axisPlacement3D(pos)
 	}
-	out := make([]v3, 0, 2*len(profPts))
-	for _, p := range profPts {
+	out := make([]v3, 0, 2*len(reps))
+	for _, p := range reps {
 		out = append(out, applyMat(place, v3{p[0], p[1], 0}))
 		out = append(out, applyMat(place, v3{p[0] + dir[0]*depth, p[1] + dir[1]*depth, dir[2] * depth}))
 	}
 	return out
 }
 
-// obbMesh builds an axis-aligned box (element-local meters) spanning pts.
-func obbMesh(pts []v3, unitScale float64) (verts []float32, tris []uint32, lmin, lmax v3) {
-	if len(pts) == 0 {
-		return nil, nil, v3{}, v3{}
+// maxApproxPoints is how many profile points the approximation extrudes as they
+// are before it extrudes their box's corners instead.
+const maxApproxPoints = 64
+
+// representativePoints returns pts when there are few, else the four corners
+// of their box in the profile plane (the approximation drops z).
+func representativePoints(pts []v3) []v3 {
+	if len(pts) <= maxApproxPoints {
+		return pts
 	}
-	lmin = v3{math.Inf(1), math.Inf(1), math.Inf(1)}
-	lmax = v3{math.Inf(-1), math.Inf(-1), math.Inf(-1)}
+	b := pointsBox(pts)
+	if !b.ok {
+		return nil
+	}
+	return []v3{{b.lo[0], b.lo[1], 0}, {b.hi[0], b.lo[1], 0}, {b.hi[0], b.hi[1], 0}, {b.lo[0], b.hi[1], 0}}
+}
+
+// pointsBox is the box around pts.
+func pointsBox(pts []v3) pointBox {
+	if len(pts) == 0 {
+		return pointBox{}
+	}
+	b := pointBox{lo: v3{math.Inf(1), math.Inf(1), math.Inf(1)}, hi: v3{math.Inf(-1), math.Inf(-1), math.Inf(-1)}, ok: true}
 	for _, p := range pts {
-		for k := 0; k < 3; k++ {
-			s := p[k] * unitScale
-			if s < lmin[k] {
-				lmin[k] = s
+		for k := range 3 {
+			if p[k] < b.lo[k] {
+				b.lo[k] = p[k]
 			}
-			if s > lmax[k] {
-				lmax[k] = s
+			if p[k] > b.hi[k] {
+				b.hi[k] = p[k]
 			}
 		}
 	}
-	verts, tris = boxMesh(lmin, lmax)
-	return verts, tris, lmin, lmax
+	for k := range 3 {
+		if !(b.lo[k] <= b.hi[k]) {
+			b.ok = false
+		}
+	}
+	return b
 }
 
-// boxMesh returns 8 corner verts + 12 triangles for the AABB min..max.
-func boxMesh(min, max v3) ([]float32, []uint32) {
-	c := [8]v3{
+// boxCorners returns the 8 corners of the AABB min..max, in boxMesh's order.
+func boxCorners(min, max v3) []v3 {
+	return []v3{
 		{min[0], min[1], min[2]}, {max[0], min[1], min[2]},
 		{max[0], max[1], min[2]}, {min[0], max[1], min[2]},
 		{min[0], min[1], max[2]}, {max[0], min[1], max[2]},
 		{max[0], max[1], max[2]}, {min[0], max[1], max[2]},
 	}
+}
+
+// boxMesh returns 8 corner verts + 12 triangles for the AABB min..max.
+func boxMesh(min, max v3) ([]float32, []uint32) {
+	c := boxCorners(min, max)
 	verts := make([]float32, 0, 24)
 	for _, p := range c {
 		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))

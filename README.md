@@ -117,7 +117,7 @@ Schependomlaan housing model, one core, medians:
 | Parse | **0.30 s** | 0.38 s | 0.74 s |
 | Walk: properties, quantities, containers | **0.24 s** | 1.9 s | 0.76 s |
 | Tessellate | **0.14 s** | 0.23 s | 15.6 s |
-| Triangles | 256k | 262k | 262k |
+| Triangles | 254k | 262k | 262k |
 | Peak memory | **398 MiB** | 627 MiB | 458 MiB |
 | On all 26 cores, whole job | **0.22 s** | — | 4.3 s |
 | Cold start | **3 ms** | 266 ms | 314 ms |

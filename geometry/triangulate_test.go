@@ -53,7 +53,7 @@ func TestEnsureCCW_LeavesCounterClockwiseUnchanged(t *testing.T) {
 // triangle. Ear-clipping must yield exactly n-2 = 4 triangles, all inside the polygon.
 func TestTriangulate_ConcaveL(t *testing.T) {
 	L := [][2]float64{{0, 0}, {2, 0}, {2, 1}, {1, 1}, {1, 2}, {0, 2}}
-	tris := triangulatePolygon(L)
+	tris, _ := triangulatePolygon(L, nil)
 	if len(tris) != (len(L)-2)*3 {
 		t.Fatalf("got %d indices, want %d (n-2 triangles)", len(tris), (len(L)-2)*3)
 	}
@@ -91,7 +91,7 @@ func faceTrisAgreeWithNormal(t *testing.T, loop []v3) bool {
 		n[1] += (loop[i][2] - loop[j][2]) * (loop[i][0] + loop[j][0])
 		n[2] += (loop[i][0] - loop[j][0]) * (loop[i][1] + loop[j][1])
 	}
-	tris := triangulateFace(loop)
+	tris, _ := triangulateFace(loop, nil)
 	if len(tris) < 3 {
 		t.Fatalf("triangulateFace returned %d indices, want >=3", len(tris))
 	}
