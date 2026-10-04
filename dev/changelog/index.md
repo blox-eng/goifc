@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.15.1 — 2026-10-04
+
 ### Added
 
 - `Stats.Partial` counts elements that shipped a mesh with a representation item left out (an item that meshed to nothing and had nothing to box), so their bounds may be too small. Each one also gets a "partial geometry" warning in `Scene.Warnings`. Previously they shipped silently, tagged with their surviving items' source (#76).
