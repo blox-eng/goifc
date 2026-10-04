@@ -107,7 +107,7 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 			s.Warnings = append(s.Warnings, "partial geometry for "+e.GlobalID+": a representation item has none")
 		}
 		if overBudget[i] {
-			s.Warnings = append(s.Warnings, "tessellation budget exceeded for "+e.GlobalID+": boxed")
+			s.Warnings = append(s.Warnings, "tessellation budget exceeded for "+e.GlobalID+": items boxed or left out")
 		}
 	}
 	return s, nil
@@ -124,7 +124,8 @@ const maxMapDepth = 8
 func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *meshCache, b *budget) mesh {
 	switch {
 	case item.IsA("IfcMappedItem"):
-		if m, ok := mappedItemMesh(item, unitScale, depth, c, b); ok {
+		m, ok := mappedItemMesh(item, unitScale, depth, c, b)
+		if ok {
 			return m
 		}
 		// Deliberately do NOT fall through to obbFromItem here like every other
@@ -134,7 +135,7 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 		// the wrong location, silently corrupting the element's AABB rather
 		// than just being conservatively empty. Returning nil/OBB-tagged-empty
 		// is safer than a mis-placed box.
-		return mesh{src: SourceOBB, overBudget: b.exhausted()}
+		return mesh{src: SourceOBB, partial: m.partial, overBudget: m.overBudget || b.exhausted()}
 	case item.IsA("IfcExtrudedAreaSolid"):
 		if v, t, ok := extrudeSolid(item, b); ok {
 			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceExtrude, ok: true}
@@ -192,7 +193,13 @@ func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) m
 // out, and marks the union partial unless it was authored empty.
 func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCache, b *budget) mesh {
 	u := mesh{src: SourceOBB}
+	seen := make(map[int]bool, len(items))
 	for _, item := range items {
+		// The same item named twice is the same geometry twice: mesh it once.
+		if seen[item.ID()] {
+			continue
+		}
+		seen[item.ID()] = true
 		m := tessellateItemDepth(item, unitScale, depth, c, b)
 		u.partial = u.partial || m.partial || (len(m.verts) == 0 && !m.ok)
 		u.overBudget = u.overBudget || m.overBudget
@@ -216,9 +223,17 @@ func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCac
 }
 
 func obbFromItem(item *step.Instance, unitScale float64, c *meshCache) ([]float32, []uint32) {
-	v, t, _, _ := obbMesh(collectPoints(item, c), unitScale)
-	return v, t
+	lo, hi, ok := c.itemBox(item, unitScale, func() (v3, v3, bool) {
+		b := pointsBox(collectPoints(item, c))
+		return scaleV3(b.lo, unitScale), scaleV3(b.hi, unitScale), b.ok
+	})
+	if !ok {
+		return nil, nil
+	}
+	return boxMesh(lo, hi)
 }
+
+func scaleV3(p v3, s float64) v3 { return v3{p[0] * s, p[1] * s, p[2] * s} }
 
 func scaleVerts(v []float32, s float64) []float32 {
 	out := make([]float32, len(v))

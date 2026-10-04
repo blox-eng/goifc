@@ -69,10 +69,13 @@ func Report() (string, error) {
 	b.WriteString("ratio would be exactly 0, a well-formed number for the worst\n")
 	b.WriteString("possible outcome, which would drag p50 and p90 toward 1.0 and read\n")
 	b.WriteString("as an improvement. Gate 1 fails on them; this column is here so\n")
-	b.WriteString("the page cannot quietly disagree with the gate.\n\n")
+	b.WriteString("the page cannot quietly disagree with the gate.\n")
+	b.WriteString("**Partial** counts, across the other columns, elements that shipped a\n")
+	b.WriteString("mesh with a representation item left out, so their bounds may be too\n")
+	b.WriteString("small. Gate 2 fails if it rises.\n\n")
 
-	b.WriteString("| Model | Elements | Extrude | Brep | OBB | Empty | OBB rate | Collapsed | AABB ratio p50 | p90 | max |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Model | Elements | Extrude | Brep | OBB | Empty | Partial | OBB rate | Collapsed | AABB ratio p50 | p90 | max |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	covs := make(map[string]Coverage, len(Public))
 	for _, name := range Public {
 		c, err := MeasureCoverage(name)
@@ -84,8 +87,8 @@ func Report() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&b, "| `%s` | %d | %d | %d | %d | %d | %.1f%% | %d | %.4f | %.4f | %.4f |\n",
-			name, c.Total, c.Extrude, c.Brep, c.OBB, c.Empty, 100*OBBRate(c), l.Collapsed, l.P50, l.P90, l.Max)
+		fmt.Fprintf(&b, "| `%s` | %d | %d | %d | %d | %d | %d | %.1f%% | %d | %.4f | %.4f | %.4f |\n",
+			name, c.Total, c.Extrude, c.Brep, c.OBB, c.Empty, c.Partial, 100*OBBRate(c), l.Collapsed, l.P50, l.P90, l.Max)
 	}
 
 	totals := map[string]int{}

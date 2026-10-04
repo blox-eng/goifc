@@ -58,9 +58,9 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 	local := c.mapped(mappedRep, unitScale, depth, func() mesh {
 		return mappedRepMesh(mappedRep, unitScale, depth, c)
 	})
-	b.spend(int(local.cost))
+	b.spend(local.cost)
 	if !local.ok {
-		return mesh{}, false
+		return mesh{partial: local.partial, overBudget: local.overBudget || b.exhausted()}, false
 	}
 	// local is already in meters; apply the (unitless-rotation + raw-translation)
 	// mapping transform, whose translation is raw units → scale it too.
@@ -69,6 +69,7 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 	// what tessellateItemDepth returns is always the caller's to keep.
 	m := local
 	m.verts, m.tris, m.cost = transformVerts(local.verts, x), slices.Clone(local.tris), 0
+	m.overBudget = local.overBudget || b.exhausted()
 	return m, true
 }
 
@@ -78,6 +79,9 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 //
 // It spends a budget of its own rather than the element's: the result is
 // cached and shared, so it must not depend on which element reached it first.
+// That budget is a share of an element's, so that a chain of representations
+// mapping one another (up to maxMapDepth deep) costs an element at most about
+// two budgets, however each link is filled.
 func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *meshCache) mesh {
 	itemsV, has := mappedRep.Get(attrRepresentationItems)
 	if !has || itemsV.Kind() != step.KindList {
@@ -89,9 +93,9 @@ func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *me
 			items = append(items, iv.Ref())
 		}
 	}
-	b := newBudget()
+	b := sizedBudget(elementBudget / (maxMapDepth + 1))
 	m := unionItems(items, unitScale, depth+1, c, b) // recurse into A/B/C in scaled meters
-	m.cost = elementBudget - b.left
+	m.cost = b.spent()
 	return m
 }
 

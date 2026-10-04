@@ -10,13 +10,17 @@ import (
 // are not supported (v1: walls solid, profiles outer-only). Repeated points and
 // zero-width spikes are dropped before clipping.
 //
-// ok is false when the triangles cannot cover the polygon's area (a
-// self-intersecting or pinched loop) or when b runs out. Shipping the part it
-// managed would make the mesh smaller than the solid, so callers decline to the
-// box instead.
+// ok is false when clipping stalls short of the polygon's area or when b runs
+// out. A loop that touches or crosses itself (a keyhole, two lobes meeting at
+// a point, a bowtie) stalls, because a repeated or crossing point blocks every
+// ear that would cover it. Shipping the part it managed would make the mesh
+// smaller than the solid, so callers decline to the box instead.
 func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 	if len(poly) < 3 {
 		return nil, true
+	}
+	if !b.spend(int64(len(poly))) {
+		return nil, false
 	}
 	// Coverage is judged against the loop as given, so cleanup that collapses
 	// a thin but real profile declines instead of passing as empty. Below
@@ -25,6 +29,11 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 	ext := loopExtent(poly)
 	floor := (1e-7 * ext) * (1e-7 * ext)
 	area := math.Abs(indexedLoopArea(poly, nil))
+	// Coordinates large enough to overflow the area (or NaN) would make the
+	// coverage check below compare non-finite values, which never fails.
+	if !finite(ext) || !finite(floor) || !finite(area) {
+		return nil, false
+	}
 	idx := simplifyLoop(poly, 1e-9*ext)
 	if len(idx) < 3 {
 		return nil, area <= floor
@@ -36,13 +45,17 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 	var out []uint32
 	covered := 0.0
 	for len(idx) > 3 {
-		work := 0
 		clipped := false
 		for i := 0; i < len(idx); i++ {
-			work++
+			// Charged per candidate, not per pass: one pass can cost n², and the
+			// budget must stop it within one ear test of running out.
+			work := int64(1)
 			ia, ib, ic := idx[(i+len(idx)-1)%len(idx)], idx[i], idx[(i+1)%len(idx)]
 			pa, pb, pc := poly[ia], poly[ib], poly[ic]
 			if cross2D(pa, pb, pc) <= 0 {
+				if !b.spend(work) {
+					return nil, false
+				}
 				continue // reflex vertex, not an ear
 			}
 			isEar := true
@@ -56,6 +69,9 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 					break
 				}
 			}
+			if !b.spend(work) {
+				return nil, false
+			}
 			if !isEar {
 				continue
 			}
@@ -64,9 +80,6 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 			idx = slices.Delete(idx, i, i+1)
 			clipped = true
 			break
-		}
-		if !b.spend(work) {
-			return nil, false
 		}
 		if !clipped {
 			break // no ear left; the coverage check below decides
@@ -139,6 +152,8 @@ func indexedLoopArea(poly [][2]float64, idx []int) float64 {
 	}
 	return a
 }
+
+func finite(f float64) bool { return !math.IsNaN(f) && !math.IsInf(f, 0) }
 
 // loopExtent is the larger side of poly's bounding box.
 func loopExtent(poly [][2]float64) float64 {

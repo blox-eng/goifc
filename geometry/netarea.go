@@ -148,9 +148,10 @@ func reconcileHost(f *step.File, openings []*step.Instance, gross float64, axis 
 	for _, op := range openings {
 		om := elementMesh(f, op.ID(), unitScale, nil)
 		ov, otris := om.verts, om.tris
-		if om.src == SourceOBB {
-			// No real solid to measure — an OBB fallback is the opening's box, not
-			// its footprint. Distrust the whole host rather than guess.
+		if om.src == SourceOBB || om.partial || om.overBudget {
+			// No real solid to measure — an OBB fallback is the opening's box, and
+			// a partial or over-budget mesh is missing part of the void: neither
+			// is its footprint. Distrust the whole host rather than guess.
 			na.Reason = "opening had no solid geometry"
 			return na
 		}

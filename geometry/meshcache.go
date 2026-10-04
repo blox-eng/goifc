@@ -33,6 +33,13 @@ type mesh struct {
 type meshCache struct {
 	m      sync.Map // mapKey -> *cachedMesh
 	bounds sync.Map // point list instance id -> *cachedBounds
+	boxes  sync.Map // boxKey -> *cachedBounds
+}
+
+// boxKey includes scale because a box is built in scaled units.
+type boxKey struct {
+	item  int
+	scale float64
 }
 
 type cachedMesh struct {
@@ -78,9 +85,18 @@ func (c *meshCache) pointListBounds(list *step.Instance) (lo, hi v3, ok bool) {
 	if c == nil {
 		return listBounds(list)
 	}
-	e, _ := c.bounds.LoadOrStore(list.ID(), &cachedBounds{})
+	return onceBounds(&c.bounds, list.ID(), func() (v3, v3, bool) { return listBounds(list) })
+}
+
+// onceBounds returns m[key]'s bounds, computing them with walk the first time.
+// Every worker asking for one key waits on the first to compute it.
+func onceBounds(m *sync.Map, key any, walk func() (lo, hi v3, ok bool)) (lo, hi v3, ok bool) {
+	e, found := m.Load(key)
+	if !found {
+		e, _ = m.LoadOrStore(key, &cachedBounds{})
+	}
 	cb := e.(*cachedBounds)
-	cb.once.Do(func() { cb.lo, cb.hi, cb.ok = listBounds(list) })
+	cb.once.Do(func() { cb.lo, cb.hi, cb.ok = walk() })
 	return cb.lo, cb.hi, cb.ok
 }
 
@@ -97,7 +113,7 @@ func listBounds(list *step.Instance) (lo, hi v3, ok bool) {
 			continue
 		}
 		ok = true
-		// Comparisons, not min/max: a NaN coordinate is skipped, as obbMesh skips it.
+		// Comparisons, not min/max: a NaN coordinate is skipped, as pointsBox skips it.
 		for k := range 3 {
 			if c[k] < lo[k] {
 				lo[k] = c[k]
@@ -107,5 +123,21 @@ func listBounds(list *step.Instance) (lo, hi v3, ok bool) {
 			}
 		}
 	}
+	// An axis no point bounded (every value NaN) would box to infinity.
+	for k := range 3 {
+		if !(lo[k] <= hi[k]) {
+			return lo, hi, false
+		}
+	}
 	return lo, hi, ok
+}
+
+// itemBox returns the OBB-fallback box of item, walked once per Build: many
+// elements, or many references within one, can share an item whose walk is
+// large even when its meshing declined at once.
+func (c *meshCache) itemBox(item *step.Instance, scale float64, walk func() (lo, hi v3, ok bool)) (lo, hi v3, ok bool) {
+	if c == nil {
+		return walk()
+	}
+	return onceBounds(&c.boxes, boxKey{item.ID(), scale}, walk)
 }

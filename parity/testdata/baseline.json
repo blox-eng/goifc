@@ -4,20 +4,23 @@
     "extrude": 150,
     "brep": 65,
     "obb": 0,
-    "empty": 3
+    "empty": 3,
+    "partial": 0
   },
   "fzk_haus": {
     "total": 85,
     "extrude": 18,
     "brep": 64,
     "obb": 0,
-    "empty": 3
+    "empty": 3,
+    "partial": 0
   },
   "ifcopenhouse": {
     "total": 40,
     "extrude": 34,
     "brep": 0,
     "obb": 0,
-    "empty": 6
+    "empty": 6,
+    "partial": 0
   }
 }

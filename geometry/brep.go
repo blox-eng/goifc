@@ -70,7 +70,7 @@ func brepMesh(brep *step.Instance, b *budget) (verts []float32, tris []uint32, o
 			return nil, nil, false
 		}
 		loop := faceOuterLoop(fv.Ref())
-		if len(loop) < 3 || !b.spend(len(loop)) {
+		if len(loop) < 3 || !b.spend(int64(len(loop))) {
 			return nil, nil, false
 		}
 		// Ear-clip (not fan) — brep faces can be concave.

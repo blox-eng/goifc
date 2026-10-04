@@ -70,7 +70,7 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *
 	// unscaled frame for clipping; scale to meters once, at the end.
 	m := tessellateItemDepth(first, 1.0, depth+1, c, b)
 	verts, tris := m.verts, m.tris
-	if len(verts) == 0 || len(tris) == 0 {
+	if len(verts) == 0 || len(tris) == 0 || !b.spend(int64(len(tris))) {
 		return mesh{}, false
 	}
 	// Empirically (verified against the ifcopenshell parity oracle on a real

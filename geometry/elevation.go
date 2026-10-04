@@ -398,9 +398,9 @@ func openingLoopsOn(f *step.File, expressID int, unitScale float64, p Plane, out
 	for _, op := range model.OpeningsOf(f, inst) {
 		om := elementMesh(f, op.ID(), unitScale, nil)
 		ov, otris := om.verts, om.tris
-		if om.src == SourceOBB || len(otris) < 3 {
-			// A box around the void is not its outline; drawing one would punch a
-			// rectangle where the model never had one.
+		if om.src == SourceOBB || om.partial || om.overBudget || len(otris) < 3 {
+			// A box around the void is not its outline, nor is a mesh missing part
+			// of the void; drawing either would punch a shape the model never had.
 			continue
 		}
 		// The void's LocalPlacement translation is in RAW file units and must be

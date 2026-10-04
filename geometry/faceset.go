@@ -61,7 +61,7 @@ func triangulatedMesh(item *step.Instance, pts []step.Value, b *budget) ([]float
 		return nil, nil, false
 	}
 	triV, has := item.Get(attrTfsCoordIndex)
-	if !has || triV.Kind() != step.KindList || len(triV.List()) == 0 || !b.spend(3*len(triV.List())) {
+	if !has || triV.Kind() != step.KindList || len(triV.List()) == 0 || !b.spend(3*int64(len(triV.List()))) {
 		return nil, nil, false
 	}
 	// A network flags each triangle: -2 is an invisible void, -1 an invisible
@@ -117,7 +117,7 @@ func polygonalMesh(item *step.Instance, pts []step.Value, b *budget) ([]float32,
 		}
 		loopV, _ := fv.Ref().Get(attrIndexedFaceCoord)
 		corners, ok := intsOf(loopV)
-		if !ok || len(corners) < 3 || !b.spend(len(corners)) {
+		if !ok || len(corners) < 3 || !b.spend(int64(len(corners))) {
 			return nil, nil, false
 		}
 		loop := make([]v3, len(corners))
