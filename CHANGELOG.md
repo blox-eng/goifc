@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.1 — 2026-10-04
+
 ### Added
 
 - `Stats.Partial` counts elements that shipped a mesh with a representation
