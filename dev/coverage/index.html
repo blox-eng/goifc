@@ -1210,7 +1210,10 @@ goifc's own box has zero volume — flat, inverted, or empty. Their
 ratio would be exactly 0, a well-formed number for the worst
 possible outcome, which would drag p50 and p90 toward 1.0 and read
 as an improvement. Gate 1 fails on them; this column is here so
-the page cannot quietly disagree with the gate.</p>
+the page cannot quietly disagree with the gate.
+<strong>Partial</strong> counts, across the other columns, elements that shipped a
+mesh with a representation item left out, so their bounds may be too
+small. Gate 2 fails if it rises.</p>
 <table>
 <thead>
 <tr>
@@ -1220,6 +1223,7 @@ the page cannot quietly disagree with the gate.</p>
 <th>Brep</th>
 <th>OBB</th>
 <th>Empty</th>
+<th>Partial</th>
 <th>OBB rate</th>
 <th>Collapsed</th>
 <th>AABB ratio p50</th>
@@ -1235,6 +1239,7 @@ the page cannot quietly disagree with the gate.</p>
 <td>0</td>
 <td>0</td>
 <td>6</td>
+<td>0</td>
 <td>0.0%</td>
 <td>0</td>
 <td>1.0000</td>
@@ -1248,6 +1253,7 @@ the page cannot quietly disagree with the gate.</p>
 <td>65</td>
 <td>0</td>
 <td>3</td>
+<td>0</td>
 <td>0.0%</td>
 <td>0</td>
 <td>1.0000</td>
@@ -1261,6 +1267,7 @@ the page cannot quietly disagree with the gate.</p>
 <td>64</td>
 <td>0</td>
 <td>3</td>
+<td>0</td>
 <td>0.0%</td>
 <td>0</td>
 <td>1.0000</td>

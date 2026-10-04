@@ -8,6 +8,17 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- `Stats.Partial` counts elements that shipped a mesh with a representation item left out (an item that meshed to nothing and had nothing to box), so their bounds may be too small. Each one also gets a "partial geometry" warning in `Scene.Warnings`. Previously they shipped silently, tagged with their surviving items' source (#76).
+
+### Fixed
+
+- Tessellation work is bounded per element, including the shapes it maps: each mapped shape's cost is charged to every element that uses it, a mapped representation meshes on a share of the budget so a chain of them stays under two budgets, and the ear-clipper checks the budget at every candidate ear, not once per pass. A crafted file could stall an import: a 110 KB file naming one comb-shaped face 5,000 times took 77 s, and a single 1.6 MB face took 4 s. Past the budget the element's remaining items are boxed or, for mapped items, left out, with a warning; both files now finish in about half a second. The budget bounds work, not output size: #108 tracks the rest (#70).
+- The box fallback computes each item's box once per `Build`, and a point list's bounds once: one element naming the same large item a thousand times took 18 s before. A profile whose solids reference it back no longer compounds the walk at every approximation step (5 s for 7 solids before, and gigabytes once the profile held a point). An element that names one representation item twice meshes it once (#70).
+- The ear-clipper no longer ships a partial face. Repeated points, near-repeats at curve joins and zero-width spikes are dropped first, which completes extrusion caps that were missing area (33 elements of the IfcOpenHouse sample). A loop it cannot finish (one that touches itself, such as a keyhole or two lobes meeting at a point, or a bowtie) declines to the box instead of shipping the part it managed. Reading holes and pinched loops properly, with earcut, is tracked in #91 (#70).
+- `NetAreas` and elevations no longer take an opening whose mesh is partial or over budget as its footprint (#76).
+
 ## v0.15.0 — 2026-09-30
 
 ### Breaking
