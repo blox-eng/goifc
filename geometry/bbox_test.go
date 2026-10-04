@@ -44,7 +44,7 @@ func TestCollectPoints_DepthBound(t *testing.T) {
 		t.Fatal("root instance #1 missing")
 	}
 
-	pts := collectPoints(root)
+	pts := collectPoints(root, nil)
 
 	// The point past maxWalkDepth must NOT be reached — proves the bound
 	// actually stopped the walk (rather than the chain just happening to be

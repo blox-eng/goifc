@@ -38,7 +38,7 @@ END-ISO-10303-21;
 	}
 	// Must return (not stack-overflow); a self-referential solid carries no
 	// CartesianPoints, so the collected set is empty.
-	if pts := collectPoints(solid); len(pts) != 0 {
+	if pts := collectPoints(solid, nil); len(pts) != 0 {
 		t.Errorf("collectPoints on a self-referential solid returned %d points, want 0", len(pts))
 	}
 }
@@ -92,7 +92,7 @@ END-ISO-10303-21;
 func TestTriangulateFace_WindingMatchesNormal(t *testing.T) {
 	// A concave (L-shaped) planar face in z=0, CCW → Newell normal +Z.
 	loop := []v3{{0, 0, 0}, {2, 0, 0}, {2, 1, 0}, {1, 1, 0}, {1, 2, 0}, {0, 2, 0}}
-	tris := triangulateFace(loop)
+	tris, _ := triangulateFace(loop, nil)
 	if len(tris) != (len(loop)-2)*3 {
 		t.Fatalf("got %d indices, want %d", len(tris), (len(loop)-2)*3)
 	}

@@ -1,42 +1,58 @@
 package geometry
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 // triangulatePolygon ear-clips a simple 2D polygon (CCW or CW) into triangle
-// indices into poly. Correct for concave polygons (a naive fan is not). Returns
-// nil for < 3 points. Holes are not supported (v1: walls solid, profiles outer-only).
-func triangulatePolygon(poly [][2]float64) []uint32 {
-	n := len(poly)
-	if n < 3 {
-		return nil
+// indices into poly. Correct for concave polygons (a naive fan is not). Holes
+// are not supported (v1: walls solid, profiles outer-only). Repeated points and
+// zero-width spikes are dropped before clipping.
+//
+// ok is false when the triangles cannot cover the polygon's area (a
+// self-intersecting or pinched loop) or when b runs out. Shipping the part it
+// managed would make the mesh smaller than the solid, so callers decline to the
+// box instead.
+func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
+	if len(poly) < 3 {
+		return nil, true
 	}
-	idx := make([]int, n)
+	idx := simplifyLoop(poly)
+	if len(idx) < 3 {
+		return nil, true // nothing left with any area to cover
+	}
+	// Areas are taken relative to one vertex: shoelace terms at georeferenced
+	// coordinates cancel catastrophically and would fail the coverage check.
+	o := poly[idx[0]]
+	area := 0.0
 	for i := range idx {
-		idx[i] = i
+		area += cross2D(o, poly[idx[i]], poly[idx[(i+1)%len(idx)]]) / 2
 	}
 	// Ensure CCW so the "convex vertex" test has a consistent sign.
-	if polygonArea2D(poly) < 0 {
-		for i, j := 0, n-1; i < j; i, j = i+1, j-1 {
-			idx[i], idx[j] = idx[j], idx[i]
-		}
+	if area < 0 {
+		slices.Reverse(idx)
+		area = -area
 	}
 	var out []uint32
-	guard := 0
-	for len(idx) > 3 && guard < 10*n {
-		guard++
+	covered := 0.0
+	for len(idx) > 3 {
+		work := 0
 		clipped := false
 		for i := 0; i < len(idx); i++ {
+			work++
 			ia, ib, ic := idx[(i+len(idx)-1)%len(idx)], idx[i], idx[(i+1)%len(idx)]
-			a, b, c := poly[ia], poly[ib], poly[ic]
-			if cross2D(a, b, c) <= 0 {
+			pa, pb, pc := poly[ia], poly[ib], poly[ic]
+			if cross2D(pa, pb, pc) <= 0 {
 				continue // reflex vertex, not an ear
 			}
 			isEar := true
 			for _, j := range idx {
+				work++
 				if j == ia || j == ib || j == ic {
 					continue
 				}
-				if pointInTri(poly[j], a, b, c) {
+				if pointInTri(poly[j], pa, pb, pc) {
 					isEar = false
 					break
 				}
@@ -45,25 +61,86 @@ func triangulatePolygon(poly [][2]float64) []uint32 {
 				continue
 			}
 			out = append(out, uint32(ia), uint32(ib), uint32(ic))
-			idx = append(idx[:i], idx[i+1:]...)
+			covered += cross2D(pa, pb, pc) / 2
+			idx = slices.Delete(idx, i, i+1)
 			clipped = true
 			break
 		}
+		if !b.spend(work) {
+			return nil, false
+		}
 		if !clipped {
-			break // degenerate polygon; emit what we have
+			break // no ear left; the coverage check below decides
 		}
 	}
 	if len(idx) == 3 {
 		out = append(out, uint32(idx[0]), uint32(idx[1]), uint32(idx[2]))
+		covered += math.Abs(cross2D(poly[idx[0]], poly[idx[1]], poly[idx[2]])) / 2
 	}
-	return out
+	if math.Abs(covered-area) > 1e-6*math.Max(covered, area) {
+		return nil, false
+	}
+	return out, true
+}
+
+// simplifyLoop returns the indices of poly's loop without consecutive repeated
+// points or zero-width spikes (a, b, a), seam included. Exporters emit both, and
+// joined curve segments leave near-repeats (cos(π/2) is 6e-17, not 0); any of
+// them stops the ear-clipper short of the polygon's area. Points closer than a
+// billionth of the loop's extent count as one.
+func simplifyLoop(poly [][2]float64) []int {
+	eps := 1e-9 * loopExtent(poly)
+	same := func(i, j int) bool {
+		return math.Abs(poly[i][0]-poly[j][0]) <= eps && math.Abs(poly[i][1]-poly[j][1]) <= eps
+	}
+	idx := make([]int, 0, len(poly))
+	for i := range poly {
+		idx = append(idx, i)
+		for {
+			k := len(idx)
+			if k >= 2 && same(idx[k-1], idx[k-2]) {
+				idx = idx[:k-1]
+				continue
+			}
+			if k >= 3 && same(idx[k-1], idx[k-3]) {
+				idx = idx[:k-2]
+				continue
+			}
+			break
+		}
+	}
+	for len(idx) >= 3 {
+		k := len(idx)
+		switch {
+		case same(idx[k-1], idx[0]):
+			idx = idx[:k-1]
+		case same(idx[k-2], idx[0]):
+			idx = idx[:k-2]
+		case same(idx[k-1], idx[1]):
+			idx = idx[1 : k-1]
+		default:
+			return idx
+		}
+	}
+	return idx
+}
+
+// loopExtent is the larger side of poly's bounding box.
+func loopExtent(poly [][2]float64) float64 {
+	lo, hi := poly[0], poly[0]
+	for _, p := range poly[1:] {
+		for k := range 2 {
+			lo[k], hi[k] = min(lo[k], p[k]), max(hi[k], p[k])
+		}
+	}
+	return max(hi[0]-lo[0], hi[1]-lo[1])
 }
 
 // triangulateFace ear-clips a 3D planar face by projecting onto its dominant
 // plane, returning triangle indices into loop.
-func triangulateFace(loop []v3) []uint32 {
+func triangulateFace(loop []v3, b *budget) ([]uint32, bool) {
 	if len(loop) < 3 {
-		return nil
+		return nil, true
 	}
 	// Face normal via Newell's method → drop the largest-magnitude axis to project.
 	var nx, ny, nz float64
@@ -85,7 +162,10 @@ func triangulateFace(loop []v3) []uint32 {
 			poly[i] = [2]float64{p[0], p[1]}
 		}
 	}
-	tris := triangulatePolygon(poly)
+	tris, ok := triangulatePolygon(poly, b)
+	if !ok {
+		return nil, false
+	}
 	// triangulatePolygon winds its output CCW in the PROJECTED 2D plane. The
 	// projection above drops the dominant axis without regard to the SIGN of that
 	// axis's normal component, so a face whose true outward normal points along
@@ -105,7 +185,7 @@ func triangulateFace(loop []v3) []uint32 {
 			}
 		}
 	}
-	return tris
+	return tris, true
 }
 
 // ensureCCW returns poly wound counter-clockwise, reversing it when it is

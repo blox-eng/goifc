@@ -236,7 +236,7 @@ func TestFaceSet_MalformedDeclines(t *testing.T) {
 		{"polygon face member of the wrong type", unitCubePoints + "#50=IFCINDEXEDPOLYGONALFACE((1,2,3));\n#51=IFCINDEXEDTRIANGLETEXTUREMAP((1,2,3));\n#61=IFCPOLYGONALFACESET(#60,.F.,(#50,#51),$);\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, _, ok := faceSetMesh(faceSetItem(t, tc.data)); ok {
+			if _, _, ok := faceSetMesh(faceSetItem(t, tc.data), nil); ok {
 				t.Error("faceSetMesh accepted a malformed face set; want ok=false so the caller boxes the element")
 			}
 		})

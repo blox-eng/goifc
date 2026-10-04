@@ -29,15 +29,16 @@ const maxWalkDepth = 4096
 const maxApproxLadder = 8
 
 // collectPoints returns every IfcCartesianPoint coordinate reachable from item
-// (walking the forward-reference subgraph), in raw file units.
-func collectPoints(item *step.Instance) []v3 {
-	return collectPointsLadder(item, 0)
+// (walking the forward-reference subgraph), in raw file units. A point list
+// contributes the corners of its box, read once per Build through c.
+func collectPoints(item *step.Instance, c *meshCache) []v3 {
+	return collectPointsLadder(item, 0, c)
 }
 
 // collectPointsLadder is collectPoints with the extrude-approximation ladder
 // depth threaded through, so the collectPoints <-> extrudedAreaApproxPoints
 // recursion is bounded (see maxApproxLadder).
-func collectPointsLadder(item *step.Instance, ladder int) []v3 {
+func collectPointsLadder(item *step.Instance, ladder int, c *meshCache) []v3 {
 	var pts []v3
 	if ladder > maxApproxLadder {
 		return pts
@@ -95,13 +96,11 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		// IfcCartesianPoint entities. Without this a declined face set's element
 		// found no points, got no box, and vanished. Every well-formed entry
 		// counts: a box over them all is a superset of whatever the set meshes.
+		// Its eight corners stand in for the entries, so a box built from them
+		// (even under a further transform) still contains every point.
 		if inst.IsA("IfcCartesianPointList3D") {
-			if listV, ok := inst.Get(attrPointListCoords); ok && listV.Kind() == step.KindList {
-				for _, pv := range listV.List() {
-					if c, ok := numbersOf(pv); ok && len(c) == 3 {
-						pts = append(pts, v3{c[0], c[1], c[2]})
-					}
-				}
+			if lo, hi, ok := c.pointListBounds(inst); ok {
+				pts = append(pts, boxCorners(lo, hi)...)
 			}
 		}
 		// IfcExtrudedAreaSolid stores its Z extent as a scalar Depth, not a
@@ -114,7 +113,7 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 		// (profile ring at z=0 and z=depth, in the solid's own placement) so the
 		// fallback box at least spans the solid's real extent.
 		if inst.IsA("IfcExtrudedAreaSolid") {
-			if verts, _, ok := extrudeSolid(inst); ok {
+			if _, verts, ok := extrudeRings(inst); ok {
 				for i := 0; i+2 < len(verts); i += 3 {
 					pts = append(pts, v3{float64(verts[i]), float64(verts[i+1]), float64(verts[i+2])})
 				}
@@ -125,7 +124,7 @@ func collectPointsLadder(item *step.Instance, ladder int) []v3 {
 				// included, to z=0 and z=depth — an envelope beats a box that
 				// never saw the depth and collapses to a sliver along the
 				// extrusion axis.
-				pts = append(pts, extrudedAreaApproxPoints(inst, ladder)...)
+				pts = append(pts, extrudedAreaApproxPoints(inst, ladder, c)...)
 			}
 		}
 		for _, a := range inst.Args() {
@@ -175,12 +174,12 @@ func conicCorners(conic *step.Instance) []v3 {
 // ExtrudedDirection) — a point-cloud approximation used only when extrudeSolid
 // couldn't build the exact profile polygon. Point ORDER doesn't matter here,
 // only that the returned cloud spans the solid's real min/max extent.
-func extrudedAreaApproxPoints(solid *step.Instance, ladder int) []v3 {
+func extrudedAreaApproxPoints(solid *step.Instance, ladder int, c *meshCache) []v3 {
 	prof, ok := solid.Ref(attrSweptArea)
 	if !ok {
 		return nil
 	}
-	profPts := collectPointsLadder(prof, ladder+1)
+	profPts := collectPointsLadder(prof, ladder+1, c)
 	if len(profPts) == 0 {
 		return nil
 	}
@@ -225,14 +224,19 @@ func obbMesh(pts []v3, unitScale float64) (verts []float32, tris []uint32, lmin,
 	return verts, tris, lmin, lmax
 }
 
-// boxMesh returns 8 corner verts + 12 triangles for the AABB min..max.
-func boxMesh(min, max v3) ([]float32, []uint32) {
-	c := [8]v3{
+// boxCorners returns the 8 corners of the AABB min..max, in boxMesh's order.
+func boxCorners(min, max v3) []v3 {
+	return []v3{
 		{min[0], min[1], min[2]}, {max[0], min[1], min[2]},
 		{max[0], max[1], min[2]}, {min[0], max[1], min[2]},
 		{min[0], min[1], max[2]}, {max[0], min[1], max[2]},
 		{max[0], max[1], max[2]}, {min[0], max[1], max[2]},
 	}
+}
+
+// boxMesh returns 8 corner verts + 12 triangles for the AABB min..max.
+func boxMesh(min, max v3) ([]float32, []uint32) {
+	c := boxCorners(min, max)
 	verts := make([]float32, 0, 24)
 	for _, p := range c {
 		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))

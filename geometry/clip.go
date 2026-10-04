@@ -42,35 +42,36 @@ func isHalfSpaceSolid(inst *step.Instance) bool {
 // (IfcPolygonalBoundedHalfSpace, Revit's usual wall/slab/beam miter-join cut).
 // Returns ok=false for a non-DIFFERENCE operator or a non-planar base surface,
 // letting the caller fall back to the (safe, conservative-superset) OBB path.
-func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *meshCache) ([]float32, []uint32, GeomSource, bool) {
+func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *meshCache, b *budget) (mesh, bool) {
 	if depth >= maxMapDepth {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	opV, ok := item.Get(attrBoolOperator)
 	if !ok || opV.Kind() != step.KindEnum || opV.Str() != "DIFFERENCE" {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	first, ok := item.Ref(attrBoolFirstOperand)
 	if !ok {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	second, ok := item.Ref(attrBoolSecondOperand)
 	if !ok {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	if !isHalfSpaceSolid(second) {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	origin, normal, agreeInside, ok := halfSpacePlane(second)
 	if !ok {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	// Recurse in RAW file units (scale=1) so the plane (built from raw
 	// IfcCartesianPoint/IfcDirection values) and the mesh stay in the same
 	// unscaled frame for clipping; scale to meters once, at the end.
-	verts, tris, src := tessellateItemDepth(first, 1.0, depth+1, c)
+	m := tessellateItemDepth(first, 1.0, depth+1, c, b)
+	verts, tris := m.verts, m.tris
 	if len(verts) == 0 || len(tris) == 0 {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	// Empirically (verified against the ifcopenshell parity oracle on a real
 	// gable-end roof clip, AgreementFlag=.F.): the kept side is the one whose
@@ -80,15 +81,16 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *
 	if second.IsA("IfcPolygonalBoundedHalfSpace") {
 		verts, tris, ok = clipTrianglesByBoundedPlane(verts, tris, origin, normal, agreeInside, second)
 		if !ok {
-			return nil, nil, SourceOBB, false
+			return mesh{}, false
 		}
 	} else {
 		verts, tris = clipTrianglesByPlane(verts, tris, origin, normal, agreeInside)
 	}
 	if len(tris) == 0 {
-		return nil, nil, SourceOBB, false // fully consumed — treat as unsupported rather than empty
+		return mesh{}, false // fully consumed — treat as unsupported rather than empty
 	}
-	return scaleVerts(verts, unitScale), tris, src, true
+	m.verts, m.tris = scaleVerts(verts, unitScale), tris
+	return m, true
 }
 
 // clipTrianglesByBoundedPlane clips by DIFFERENCE(A, PolygonalBoundedHalfSpace).

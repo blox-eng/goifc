@@ -26,17 +26,17 @@ const (
 // depth bounds recursion into nested IfcMappedItem chains (see maxMapDepth) —
 // a cyclic or pathologically-nested mapped structure in an untrusted IFC
 // upload returns gracefully (ok=false) instead of overflowing the stack.
-func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache) (verts []float32, tris []uint32, src GeomSource, ok bool) {
+func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache) (mesh, bool) {
 	if depth >= maxMapDepth {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	repMap, has := item.Ref(attrMapSource)
 	if !has {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	mappedRep, has := repMap.Ref(attrMappedRep)
 	if !has {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	xform := model.Identity()
 	if origin, has := repMap.Ref(attrMapOrigin); has {
@@ -49,38 +49,36 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 		return mappedRepMesh(mappedRep, unitScale, depth, c)
 	})
 	if !local.ok {
-		return nil, nil, SourceOBB, false
+		return mesh{}, false
 	}
 	// local is already in meters; apply the (unitless-rotation + raw-translation)
 	// mapping transform, whose translation is raw units → scale it too.
 	x := scaleTransformTranslation(xform, unitScale)
 	// The cached triangles are shared by every placement; hand back a copy so
 	// what tessellateItemDepth returns is always the caller's to keep.
-	return transformVerts(local.verts, x), slices.Clone(local.tris), local.src, true
+	m := local
+	m.verts, m.tris = transformVerts(local.verts, x), slices.Clone(local.tris)
+	return m, true
 }
 
 // mappedRepMesh tessellates a mapped representation's items into one mesh in
 // the representation's own frame. It is the per-occurrence-invariant half of
 // mappedItemMesh: a representation mapped a thousand times is meshed once.
+//
+// It spends a budget of its own rather than the element's: the result is
+// cached and shared, so it must not depend on which element reached it first.
 func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *meshCache) mesh {
 	itemsV, has := mappedRep.Get(attrRepresentationItems)
 	if !has || itemsV.Kind() != step.KindList {
 		return mesh{src: SourceOBB}
 	}
-	m := mesh{src: SourceOBB}
+	var items []*step.Instance
 	for _, iv := range itemsV.List() {
-		if iv.Kind() != step.KindRef || iv.Ref() == nil {
-			continue
+		if iv.Kind() == step.KindRef && iv.Ref() != nil {
+			items = append(items, iv.Ref())
 		}
-		mv, mt, ms := tessellateItemDepth(iv.Ref(), unitScale, depth+1, c) // recurse into A/B/C in scaled meters
-		if len(mv) == 0 {
-			continue
-		}
-		appendMesh(&m.verts, &m.tris, mv, mt)
-		m.src = promoteSource(m.src, ms)
 	}
-	m.ok = len(m.tris) > 0
-	return m
+	return unionItems(items, unitScale, depth+1, c, newBudget()) // recurse into A/B/C in scaled meters
 }
 
 // transformOperator3D builds a 4x4 from IfcCartesianTransformationOperator3D.

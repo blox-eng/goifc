@@ -396,8 +396,9 @@ func openingLoopsOn(f *step.File, expressID int, unitScale float64, p Plane, out
 	}
 	var out []Loop
 	for _, op := range model.OpeningsOf(f, inst) {
-		ov, otris, src := elementMesh(f, op.ID(), unitScale, nil)
-		if src == SourceOBB || len(otris) < 3 {
+		om := elementMesh(f, op.ID(), unitScale, nil)
+		ov, otris := om.verts, om.tris
+		if om.src == SourceOBB || len(otris) < 3 {
 			// A box around the void is not its outline; drawing one would punch a
 			// rectangle where the model never had one.
 			continue

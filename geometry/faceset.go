@@ -26,7 +26,7 @@ func isIndexedPolygonalFace(inst *step.Instance) bool {
 
 // faceSetMesh tessellates an IfcTriangulatedFaceSet or IfcPolygonalFaceSet, raw
 // units. An index out of range, a referenced point that is not three numbers,
-// or a face that is not a polygon declines the whole set, because a partial
+// a face that is not a polygon, or running out of b declines the whole set, because a partial
 // mesh is smaller than the element and would under-report its bounds instead of
 // falling back to the box.
 //
@@ -34,7 +34,7 @@ func isIndexedPolygonalFace(inst *step.Instance) bool {
 // network whose every triangle is flagged invisible: it returns ok with no
 // triangles, because the spec excludes a void "without falling back on any
 // other geometry".
-func faceSetMesh(item *step.Instance) (verts []float32, tris []uint32, ok bool) {
+func faceSetMesh(item *step.Instance, b *budget) (verts []float32, tris []uint32, ok bool) {
 	coords, ok := item.Ref(attrFaceSetCoords)
 	if !ok {
 		return nil, nil, false
@@ -44,12 +44,12 @@ func faceSetMesh(item *step.Instance) (verts []float32, tris []uint32, ok bool) 
 		return nil, nil, false
 	}
 	if isTriangulatedFaceSet(item) {
-		return triangulatedMesh(item, pts)
+		return triangulatedMesh(item, pts, b)
 	}
-	return polygonalMesh(item, pts)
+	return polygonalMesh(item, pts, b)
 }
 
-func triangulatedMesh(item *step.Instance, pts []step.Value) ([]float32, []uint32, bool) {
+func triangulatedMesh(item *step.Instance, pts []step.Value, b *budget) ([]float32, []uint32, bool) {
 	pnV, _ := item.Get(attrTfsPnIndex)
 	if isIndexLists(pnV) {
 		// The original IFC4 release had NormalIndex, a list of index lists, in
@@ -61,7 +61,7 @@ func triangulatedMesh(item *step.Instance, pts []step.Value) ([]float32, []uint3
 		return nil, nil, false
 	}
 	triV, has := item.Get(attrTfsCoordIndex)
-	if !has || triV.Kind() != step.KindList || len(triV.List()) == 0 {
+	if !has || triV.Kind() != step.KindList || len(triV.List()) == 0 || !b.spend(3*len(triV.List())) {
 		return nil, nil, false
 	}
 	// A network flags each triangle: -2 is an invisible void, -1 an invisible
@@ -99,7 +99,7 @@ func triangulatedMesh(item *step.Instance, pts []step.Value) ([]float32, []uint3
 // polygonalMesh ear-clips each face's outer loop. Inner loops
 // (IfcIndexedPolygonalFaceWithVoids) are ignored, which fills the hole — an
 // over-report, the same choice brepMesh makes for inner face bounds.
-func polygonalMesh(item *step.Instance, pts []step.Value) ([]float32, []uint32, bool) {
+func polygonalMesh(item *step.Instance, pts []step.Value, b *budget) ([]float32, []uint32, bool) {
 	pnV, _ := item.Get(attrPfsPnIndex)
 	idx, ok := newFaceIndex(pnV, pts)
 	if !ok {
@@ -117,7 +117,7 @@ func polygonalMesh(item *step.Instance, pts []step.Value) ([]float32, []uint32, 
 		}
 		loopV, _ := fv.Ref().Get(attrIndexedFaceCoord)
 		corners, ok := intsOf(loopV)
-		if !ok || len(corners) < 3 {
+		if !ok || len(corners) < 3 || !b.spend(len(corners)) {
 			return nil, nil, false
 		}
 		loop := make([]v3, len(corners))
@@ -126,11 +126,15 @@ func polygonalMesh(item *step.Instance, pts []step.Value) ([]float32, []uint32, 
 				return nil, nil, false
 			}
 		}
+		faceTris, ok := triangulateFace(loop, b)
+		if !ok {
+			return nil, nil, false
+		}
 		base := uint32(len(verts) / 3)
 		for _, p := range loop {
 			verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
 		}
-		for _, off := range triangulateFace(loop) {
+		for _, off := range faceTris {
 			tris = append(tris, base+off)
 		}
 	}

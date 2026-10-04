@@ -26,7 +26,7 @@ const (
 // Used by multi-shell family instances (a door's frame/leaf/hardware, each its
 // own shell) that mix these representation types with plain IfcFacetedBrep
 // siblings in the same element.
-func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint32, ok bool) {
+func surfaceModelMesh(m *step.Instance, attr int, b *budget) (verts []float32, tris []uint32, ok bool) {
 	boundaryV, has := m.Get(attr)
 	if !has || boundaryV.Kind() != step.KindList {
 		return nil, nil, false
@@ -35,7 +35,7 @@ func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint3
 		if sv.Kind() != step.KindRef || sv.Ref() == nil {
 			return nil, nil, false
 		}
-		v, t, shellOK := brepMesh(sv.Ref())
+		v, t, shellOK := brepMesh(sv.Ref(), b)
 		if !shellOK {
 			return nil, nil, false
 		}
@@ -48,10 +48,11 @@ func surfaceModelMesh(m *step.Instance, attr int) (verts []float32, tris []uint3
 // IfcClosedShell/IfcConnectedFaceSet), raw units. Inner bounds (holes) are
 // ignored in v1 (walls solid).
 //
-// A face it cannot read declines the whole shell rather than being skipped: the
-// faces that did parse make a mesh smaller than the solid, and shipping it would
-// under-report the element's bounds where the OBB fallback over-reports them.
-func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
+// A face it cannot read or triangulate within b declines the whole shell rather
+// than being skipped: the faces that did parse make a mesh smaller than the
+// solid, and shipping it would under-report the element's bounds where the OBB
+// fallback over-reports them.
+func brepMesh(brep *step.Instance, b *budget) (verts []float32, tris []uint32, ok bool) {
 	shell := brep
 	if brep.IsA("IfcFacetedBrep") {
 		s, has := brep.Ref(attrBrepOuter)
@@ -69,15 +70,19 @@ func brepMesh(brep *step.Instance) (verts []float32, tris []uint32, ok bool) {
 			return nil, nil, false
 		}
 		loop := faceOuterLoop(fv.Ref())
-		if len(loop) < 3 {
+		if len(loop) < 3 || !b.spend(len(loop)) {
+			return nil, nil, false
+		}
+		// Ear-clip (not fan) — brep faces can be concave.
+		faceTris, ok := triangulateFace(loop, b)
+		if !ok {
 			return nil, nil, false
 		}
 		base := uint32(len(verts) / 3)
 		for _, p := range loop {
 			verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
 		}
-		// Ear-clip (not fan) — brep faces can be concave.
-		for _, off := range triangulateFace(loop) {
+		for _, off := range faceTris {
 			tris = append(tris, base+off)
 		}
 	}

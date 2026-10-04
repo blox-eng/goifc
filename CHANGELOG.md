@@ -19,6 +19,29 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- `Stats.Partial` counts elements that shipped a mesh with a representation
+  item left out (an item that meshed to nothing and had nothing to box), so
+  their bounds may be too small. Each one also gets a "partial geometry"
+  warning in `Scene.Warnings`. Previously they shipped silently, tagged with
+  their surviving items' source (#76).
+
+### Fixed
+
+- Tessellation work is bounded per element. A crafted file could stall an
+  import: a 110 KB file naming one comb-shaped face 5,000 times took 77 s.
+  Past the budget the element falls back to its box, with a warning, and the
+  same file now takes about half a second (#70).
+- Elements that share one large `IfcCartesianPointList3D` no longer each
+  re-read it when their face set falls back to a box: the list's bounds are
+  read once per `Build` (#70).
+- The ear-clipper no longer ships a partial face. Repeated points,
+  near-repeats at curve joins and zero-width spikes are dropped first, which
+  completes extrusion caps that were missing area (33 elements of the
+  IfcOpenHouse sample). A loop it still cannot cover, such as a
+  self-intersecting one, declines the face to the box instead (#70).
+
 ## v0.15.0 — 2026-09-30
 
 ### Breaking
