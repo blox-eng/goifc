@@ -19,6 +19,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- The Discord invite linked from the README, the docs and goifc.org no
+  longer expires; the old one would have stopped working on 2026-10-29 (#85).
+
 ## v0.15.1 — 2026-10-04
 
 ### Added
@@ -105,7 +110,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   tables are on the [benchmarks](https://docs.goifc.org/latest/benchmarks/)
   page.
 
-- The project now has a [Discord](https://discord.gg/mcDPQECCy), linked from
+- The project now has a [Discord](https://discord.gg/x8XSW8RD4s), linked from
   goifc.org, the docs footer and the README, for questions that are not issues.
 
 ## v0.14.0 — 2026-09-28
