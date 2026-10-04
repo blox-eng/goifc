@@ -26,9 +26,19 @@ const (
 // depth bounds recursion into nested IfcMappedItem chains (see maxMapDepth) —
 // a cyclic or pathologically-nested mapped structure in an untrusted IFC
 // upload returns gracefully (ok=false) instead of overflowing the stack.
-func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache) (mesh, bool) {
+//
+// The representation's cost is charged to b every time, cached or not, so an
+// element's work stays bounded however many shapes it maps, and the result does
+// not depend on which element meshed a shape first. An element whose budget is
+// already spent maps no further shape. One that is not takes the shape whole,
+// even when it costs more than is left: refusing it would leave the element
+// smaller than it is, and the shape's own work was bounded when it was meshed.
+func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCache, b *budget) (mesh, bool) {
 	if depth >= maxMapDepth {
 		return mesh{}, false
+	}
+	if b.exhausted() {
+		return mesh{overBudget: true}, false
 	}
 	repMap, has := item.Ref(attrMapSource)
 	if !has {
@@ -48,6 +58,7 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 	local := c.mapped(mappedRep, unitScale, depth, func() mesh {
 		return mappedRepMesh(mappedRep, unitScale, depth, c)
 	})
+	b.spend(int(local.cost))
 	if !local.ok {
 		return mesh{}, false
 	}
@@ -57,7 +68,7 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 	// The cached triangles are shared by every placement; hand back a copy so
 	// what tessellateItemDepth returns is always the caller's to keep.
 	m := local
-	m.verts, m.tris = transformVerts(local.verts, x), slices.Clone(local.tris)
+	m.verts, m.tris, m.cost = transformVerts(local.verts, x), slices.Clone(local.tris), 0
 	return m, true
 }
 
@@ -78,7 +89,10 @@ func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *me
 			items = append(items, iv.Ref())
 		}
 	}
-	return unionItems(items, unitScale, depth+1, c, newBudget()) // recurse into A/B/C in scaled meters
+	b := newBudget()
+	m := unionItems(items, unitScale, depth+1, c, b) // recurse into A/B/C in scaled meters
+	m.cost = elementBudget - b.left
+	return m
 }
 
 // transformOperator3D builds a 4x4 from IfcCartesianTransformationOperator3D.

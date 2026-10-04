@@ -262,3 +262,74 @@ func FuzzTriangulatePolygon(f *testing.F) {
 		}
 	})
 }
+
+// A profile thinner than float32 can hold still has area: collapsing it to
+// nothing must decline to the box, not ship side walls with no caps. A loop
+// with no area at all (a spike) still meshes to nothing.
+func TestTriangulatePolygonDeclinesALoopItCollapsedAway(t *testing.T) {
+	thin := [][2]float64{{0, 0}, {1, 0}, {1, 1e-10}, {0, 1e-10}}
+	if tris, ok := triangulatePolygon(thin, nil); ok {
+		t.Errorf("a 1 x 1e-10 rectangle returned ok with %d indices, want a decline", len(tris))
+	}
+	if tris, ok := triangulatePolygon([][2]float64{{0, 0}, {1, 1}, {0, 0}}, nil); !ok || len(tris) != 0 {
+		t.Errorf("a spike-only loop returned ok=%v with %d indices, want ok and nothing", ok, len(tris))
+	}
+}
+
+// mappedComb declares a shape at #(id+3) whose body is a comb-faced brep: a
+// mapped representation whose meshing costs real budget.
+func mappedComb(id, teeth int) string {
+	var d strings.Builder
+	p := comb(teeth)
+	refs := make([]string, len(p))
+	for i, q := range p {
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%g,%g,0.));\n", id+10+i, q[0], q[1])
+		refs[i] = fmt.Sprintf("#%d", id+10+i)
+	}
+	fmt.Fprintf(&d, "#%d=IFCPOLYLOOP((%s));\n#%d=IFCFACEOUTERBOUND(#%d,.T.);\n#%d=IFCFACE((#%d));\n"+
+		"#%d=IFCFACETEDBREP(#%d);\n#%d=IFCCLOSEDSHELL((#%d));\n"+
+		"#%d=IFCSHAPEREPRESENTATION($,'Body','Brep',(#%d));\n"+
+		"#%d=IFCREPRESENTATIONMAP(#%d,#%d);\n#%d=IFCMAPPEDITEM(#%d,#%d);\n",
+		id, strings.Join(refs, ","), id+1, id, id+2, id+1,
+		id+4, id+5, id+5, id+2,
+		id+6, id+4,
+		id+7, 99, id+6, id+3, id+7, 98)
+	return d.String()
+}
+
+const mappedFrame = "#97=IFCCARTESIANPOINT((0.,0.,0.));\n#99=IFCAXIS2PLACEMENT3D(#97,$,$);\n" +
+	"#98=IFCCARTESIANTRANSFORMATIONOPERATOR3D($,$,#97,$,$);\n"
+
+// A mapped shape's work is charged to every element that maps it, cached or
+// not, so an element mapping many distinct shapes stays within one budget.
+func TestMappedShapeWorkIsChargedToTheElement(t *testing.T) {
+	f := ifcFile(t, mappedFrame+mappedComb(1000, 40)+mappedComb(2000, 40))
+	a, _ := f.ByID(1003)
+	bItem, _ := f.ByID(2003)
+	for _, c := range []*meshCache{nil, {}} {
+		probe := &budget{left: elementBudget}
+		if m := tessellateItemDepth(a, 1, 0, c, probe); len(m.tris) == 0 {
+			t.Fatal("the mapped comb did not mesh")
+		}
+		cost := elementBudget - probe.left
+		if cost <= 0 {
+			t.Fatalf("cache=%v: mapping a comb shape charged %d, want its meshing cost", c != nil, cost)
+		}
+		// Room for one and a half shapes: the second is taken whole while budget
+		// remains and spends it, so the third is refused.
+		b := &budget{left: cost + cost/2}
+		first := tessellateItemDepth(a, 1, 0, c, b)
+		second := tessellateItemDepth(bItem, 1, 0, c, b)
+		third := tessellateItemDepth(a, 1, 0, c, b)
+		if len(first.tris) == 0 || len(second.tris) == 0 {
+			t.Errorf("cache=%v: a shape was refused with budget left", c != nil)
+		}
+		if !b.exhausted() {
+			t.Errorf("cache=%v: two shapes did not spend a budget of one and a half", c != nil)
+		}
+		if len(third.tris) != 0 || !third.overBudget {
+			t.Errorf("cache=%v: the third shape shipped %d indices, overBudget=%v; want it refused over budget",
+				c != nil, len(third.tris), third.overBudget)
+		}
+	}
+}

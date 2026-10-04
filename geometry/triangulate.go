@@ -18,21 +18,20 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 	if len(poly) < 3 {
 		return nil, true
 	}
-	idx := simplifyLoop(poly)
+	// Coverage is judged against the loop as given, so cleanup that collapses
+	// a thin but real profile declines instead of passing as empty. Below
+	// floor, an area is float noise: a cap that thin cannot be stored in the
+	// float32 vertices anyway.
+	ext := loopExtent(poly)
+	floor := (1e-7 * ext) * (1e-7 * ext)
+	area := math.Abs(indexedLoopArea(poly, nil))
+	idx := simplifyLoop(poly, 1e-9*ext)
 	if len(idx) < 3 {
-		return nil, true // nothing left with any area to cover
-	}
-	// Areas are taken relative to one vertex: shoelace terms at georeferenced
-	// coordinates cancel catastrophically and would fail the coverage check.
-	o := poly[idx[0]]
-	area := 0.0
-	for i := range idx {
-		area += cross2D(o, poly[idx[i]], poly[idx[(i+1)%len(idx)]]) / 2
+		return nil, area <= floor
 	}
 	// Ensure CCW so the "convex vertex" test has a consistent sign.
-	if area < 0 {
+	if indexedLoopArea(poly, idx) < 0 {
 		slices.Reverse(idx)
-		area = -area
 	}
 	var out []uint32
 	covered := 0.0
@@ -77,7 +76,7 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 		out = append(out, uint32(idx[0]), uint32(idx[1]), uint32(idx[2]))
 		covered += math.Abs(cross2D(poly[idx[0]], poly[idx[1]], poly[idx[2]])) / 2
 	}
-	if math.Abs(covered-area) > 1e-6*math.Max(covered, area) {
+	if math.Abs(covered-area) > 1e-6*math.Max(covered, area)+floor {
 		return nil, false
 	}
 	return out, true
@@ -86,10 +85,9 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 // simplifyLoop returns the indices of poly's loop without consecutive repeated
 // points or zero-width spikes (a, b, a), seam included. Exporters emit both, and
 // joined curve segments leave near-repeats (cos(π/2) is 6e-17, not 0); any of
-// them stops the ear-clipper short of the polygon's area. Points closer than a
-// billionth of the loop's extent count as one.
-func simplifyLoop(poly [][2]float64) []int {
-	eps := 1e-9 * loopExtent(poly)
+// them stops the ear-clipper short of the polygon's area. Points within eps on
+// both axes count as one.
+func simplifyLoop(poly [][2]float64, eps float64) []int {
 	same := func(i, j int) bool {
 		return math.Abs(poly[i][0]-poly[j][0]) <= eps && math.Abs(poly[i][1]-poly[j][1]) <= eps
 	}
@@ -123,6 +121,23 @@ func simplifyLoop(poly [][2]float64) []int {
 		}
 	}
 	return idx
+}
+
+// indexedLoopArea is the signed area of the loop through poly at idx (all of poly when
+// idx is nil), taken relative to its first vertex: shoelace terms at
+// georeferenced coordinates cancel catastrophically.
+func indexedLoopArea(poly [][2]float64, idx []int) float64 {
+	at := func(i int) [2]float64 { return poly[i] }
+	n := len(poly)
+	if idx != nil {
+		at = func(i int) [2]float64 { return poly[idx[i]] }
+		n = len(idx)
+	}
+	a := 0.0
+	for i := range n {
+		a += cross2D(at(0), at(i), at((i+1)%n)) / 2
+	}
+	return a
 }
 
 // loopExtent is the larger side of poly's bounding box.

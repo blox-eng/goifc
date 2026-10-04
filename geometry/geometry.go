@@ -124,7 +124,7 @@ const maxMapDepth = 8
 func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *meshCache, b *budget) mesh {
 	switch {
 	case item.IsA("IfcMappedItem"):
-		if m, ok := mappedItemMesh(item, unitScale, depth, c); ok {
+		if m, ok := mappedItemMesh(item, unitScale, depth, c, b); ok {
 			return m
 		}
 		// Deliberately do NOT fall through to obbFromItem here like every other
@@ -134,7 +134,7 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 		// the wrong location, silently corrupting the element's AABB rather
 		// than just being conservatively empty. Returning nil/OBB-tagged-empty
 		// is safer than a mis-placed box.
-		return mesh{src: SourceOBB}
+		return mesh{src: SourceOBB, overBudget: b.exhausted()}
 	case item.IsA("IfcExtrudedAreaSolid"):
 		if v, t, ok := extrudeSolid(item, b); ok {
 			return mesh{verts: scaleVerts(v, unitScale), tris: t, src: SourceExtrude, ok: true}

@@ -29,8 +29,10 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Fixed
 
-- Tessellation work is bounded per element. A crafted file could stall an
-  import: a 110 KB file naming one comb-shaped face 5,000 times took 77 s.
+- Tessellation work is bounded per element, including the shapes it maps:
+  each mapped shape's cost is charged to every element that uses it. A
+  crafted file could stall an import: a 110 KB file naming one comb-shaped
+  face 5,000 times took 77 s.
   Past the budget the element falls back to its box, with a warning, and the
   same file now takes about half a second (#70).
 - Elements that share one large `IfcCartesianPointList3D` no longer each

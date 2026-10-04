@@ -10,7 +10,8 @@ import (
 // mesh is one tessellated result, as tessellateItemDepth's callers see it.
 // partial means an item inside it meshed to nothing and was left out, so the
 // mesh can be smaller than the shape; overBudget means an item ran out of its
-// budget and was boxed.
+// budget and was boxed or refused. cost is the work a mapped representation
+// took to mesh, charged to each element that maps it.
 type mesh struct {
 	verts      []float32
 	tris       []uint32
@@ -18,6 +19,7 @@ type mesh struct {
 	ok         bool
 	partial    bool
 	overBudget bool
+	cost       int64
 }
 
 // meshCache memoizes mapped representations for one Build. IFC maps a shared
