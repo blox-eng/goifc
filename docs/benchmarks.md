@@ -219,7 +219,7 @@ tool divides them, and which elements get a mesh at all.
 | `fzk_haus` | 18,020 | 22,272 | 19,754 | even |
 | `clinic_arch` | 156,363 | 184,977 | 167,949 | even |
 | `schependomlaan` | 253,953 | 261,882 | 261,959 | even |
-| `clinic_plumbing` | 3,326,305 | 3,354,132 | 3,178,306 | even |
+| `clinic_plumbing` | 3,253,679 | 3,354,132 | 3,178,306 | even |
 | private model (30 MB) | 1,107,556 | 1,133,261 | 1,127,634 | even |
 
 #### Peak memory
@@ -332,7 +332,7 @@ openings out of walls, goifc does not. Faster here partly means doing less.
 | `fzk_haus` | 18,020 | 24,168 | 21,722 | **1.2× fewer** |
 | `clinic_arch` | 156,363 | 191,265 | 174,325 | **1.1× fewer** |
 | `schependomlaan` | 253,953 | 261,238 | 261,315 | even |
-| `clinic_plumbing` | 3,326,305 | 3,354,132 | 3,178,306 | even |
+| `clinic_plumbing` | 3,253,679 | 3,354,132 | 3,178,306 | even |
 | private model (30 MB) | 1,107,556 | 1,137,319 | 1,132,259 | even |
 
 ### Geometry agreement with IfcOpenShell's default job
