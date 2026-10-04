@@ -45,4 +45,4 @@ This site covers the things godoc cannot: how the pieces fit together, what the 
 
 How it measures up against IfcOpenShell and web-ifc on the same job and the same cores — faster and leaner, with less exact geometry — is in [benchmarks](https://docs.goifc.org/latest/benchmarks/index.md).
 
-A question that is not an issue belongs on [Discord](https://discord.gg/mcDPQECCy).
+A question that is not an issue belongs on [Discord](https://discord.gg/x8XSW8RD4s).

@@ -8,6 +8,10 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Fixed
+
+- The Discord invite linked from the README, the docs and goifc.org no longer expires; the old one would have stopped working on 2026-10-29 (#85).
+
 ## v0.15.1 — 2026-10-04
 
 ### Added
@@ -44,7 +48,7 @@ The reason is memory. A `Value` is now a 24-byte handle into slabs its `File` ow
 ### Added
 
 - A published benchmark against IfcOpenShell and web-ifc on seven models from 0.1 to 56 MB, compared on the same job (no tool cuts openings) and the same cores. On one core goifc runs the whole job 2.7–4.1× faster than web-ifc with 1.1–5× less memory, parses about level with it, and trails on geometry: it cuts no openings, and a few walls per model get loose bounding boxes. Runners, raw results and the reproduce steps are in `parity/bench`; the tables are on the [benchmarks](https://docs.goifc.org/latest/benchmarks/) page.
-- The project now has a [Discord](https://discord.gg/mcDPQECCy), linked from goifc.org, the docs footer and the README, for questions that are not issues.
+- The project now has a [Discord](https://discord.gg/x8XSW8RD4s), linked from goifc.org, the docs footer and the README, for questions that are not issues.
 
 ## v0.14.0 — 2026-09-28
 
