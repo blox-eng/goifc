@@ -48,6 +48,9 @@ type Element struct {
 	// partial: a representation item meshed to nothing and was left out, so
 	// the mesh (and its AABB) can be smaller than the element.
 	partial bool
+	// boxed: an item in the mesh is its box fallback, though Source names the
+	// real solid beside it.
+	boxed bool
 }
 
 // Scene is the assembled proxy geometry for a whole IFC model: one Element per
@@ -89,6 +92,7 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 					Placement: el.Placement,
 					Source:    m.src,
 					partial:   m.partial,
+					boxed:     m.boxed,
 				}
 				if len(m.verts) > 0 {
 					ge.BBoxMin, ge.BBoxMax = worldAABB(m.verts, el.Placement)

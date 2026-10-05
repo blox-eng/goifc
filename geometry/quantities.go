@@ -52,10 +52,11 @@ func (s *Scene) DerivedQuantities() map[string]model.Quantities {
 		}
 		// Volume only from a true tessellation. An OBB fallback is the element's
 		// bounding box, not a solid — emitting its "volume" over-reports hollow
-		// elements by up to ~70x (benchmarked vs ifcopenshell). Kept manifold-gated
+		// elements by up to ~70x (benchmarked vs ifcopenshell), and a box beside a
+		// real solid is no more its volume than a box alone. Kept manifold-gated
 		// (stricter than ifcopenshell get_volume, which is unpredictable on
 		// non-manifold meshes) to avoid emitting garbage volumes.
-		if e.Source != SourceOBB {
+		if e.Source != SourceOBB && !e.boxed {
 			if v, ok := meshVolume(e.Verts, e.Tris); ok {
 				q.Volume = pos(v)
 			}

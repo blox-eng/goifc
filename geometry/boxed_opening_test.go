@@ -1,8 +1,10 @@
 package geometry
 
 import (
+	"math"
 	"testing"
 
+	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
 )
 
@@ -63,5 +65,40 @@ func TestABoxedItemMarksAMappedOccurrence(t *testing.T) {
 				t.Errorf("cache=%v: boxed=%v src=%s, want a boxed extrude", c != nil, m.boxed, m.src)
 			}
 		}
+	}
+}
+
+// derivedVolume builds a file whose element "w" is a wall and returns its
+// derived Volume.
+func derivedVolume(t *testing.T, data string) *float64 {
+	t.Helper()
+	f := ifcFile(t, data)
+	r, err := model.Extract(f)
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	q, ok := s.DerivedQuantities()["w"]
+	if !ok {
+		t.Fatal("no derived quantities for the wall")
+	}
+	return q.Volume
+}
+
+// An element that joins a real solid with an item meshed as its box has no
+// volume to report: the box's volume is not the element's. One of real solids
+// keeps its volume.
+func TestDerivedVolumeSkipsAnElementWithABoxedItem(t *testing.T) {
+	// A swept disk is not meshed; its box is 2 x 2 x 1 from (2,0,0).
+	disk := "#20=IFCCARTESIANPOINT((2.,0.,0.));\n#21=IFCCARTESIANPOINT((4.,2.,1.));\n" +
+		"#22=IFCPOLYLINE((#20,#21));\n#23=IFCSWEPTDISKSOLID(#22,0.05,$,$,$);\n"
+	if v := derivedVolume(t, wallWith("#12,#23")+boxSolid(10)+disk); v != nil {
+		t.Errorf("Volume = %v, want none for a solid joined with a box", *v)
+	}
+	if v := derivedVolume(t, wallWith("#12")+boxSolid(10)); v == nil || math.Abs(*v-1) > 1e-9 {
+		t.Errorf("Volume = %v, want 1 for the solid alone", v)
 	}
 }

@@ -27,6 +27,10 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   have; the host is now untrusted and the opening is not drawn, as for an
   opening that is all box. Directly placed and mapped items are both covered.
   Openings made only of real solids are unchanged (#109).
+- `DerivedQuantities` no longer reports a Volume for an element that joins a
+  real solid with an item that fell back to its box. The box is wound against
+  the solid, so the reported figure was the box's volume minus the solid's;
+  it is now absent, as for an element that is all box (#109).
 
 ## v0.15.2 — 2026-10-05
 
