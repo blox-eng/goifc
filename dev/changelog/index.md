@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.15.2 — 2026-10-05
+
 ### Fixed
 
 - The Discord invite linked from the README, the docs and goifc.org no longer expires; the old one would have stopped working on 2026-10-29 (#85).
