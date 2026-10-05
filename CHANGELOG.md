@@ -19,6 +19,15 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- An opening whose representation joins a real solid with an item that fell
+  back to its box is no longer taken as its footprint. `NetAreas` deducted the
+  box as part of the void and elevations drew it as a hole the model does not
+  have; the host is now untrusted and the opening is not drawn, as for an
+  opening that is all box. Directly placed and mapped items are both covered.
+  Openings made only of real solids are unchanged (#109).
+
 ## v0.15.2 — 2026-10-05
 
 ### Fixed

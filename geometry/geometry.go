@@ -206,6 +206,7 @@ func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCac
 		if len(m.verts) == 0 {
 			continue
 		}
+		u.boxed = u.boxed || m.boxed || m.src == SourceOBB
 		if u.verts == nil {
 			// tessellateItemDepth's slices are the caller's own, so the first
 			// item's mesh becomes the union's without a copy.

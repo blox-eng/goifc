@@ -1,0 +1,78 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION((''),'2;1');
+FILE_NAME('elevation_boxed_opening.ifc','',(''),(''),'','','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#2=IFCUNITASSIGNMENT((#1));
+/* Three walls side by side along X, each 4.0 (X) long, 0.2 (Y) thick, 3.0 (Z)
+   tall, so each faces +/-Y with a 12 m2 elevational face. Each holds one
+   opening with its sill at z=1: a 1.0 x 1.0 window plus a 0.5 x 0.5 piece
+   beside it, at local x 1.0..1.5, z 0..0.5. */
+#3=IFCCARTESIANPOINT((0.,0.));
+#4=IFCAXIS2PLACEMENT2D(#3,$);
+#5=IFCRECTANGLEPROFILEDEF(.AREA.,$,#4,4.,0.2);
+#6=IFCCARTESIANPOINT((0.,0.,0.));
+#7=IFCAXIS2PLACEMENT3D(#6,$,$);
+#8=IFCDIRECTION((0.,0.,1.));
+#9=IFCEXTRUDEDAREASOLID(#5,#7,#8,3.);
+#10=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#9));
+#11=IFCPRODUCTDEFINITIONSHAPE($,$,(#10));
+/* the window: 1.0 (X) x 1.0 (Z), full thickness */
+#12=IFCRECTANGLEPROFILEDEF(.AREA.,$,#4,1.,0.2);
+#13=IFCEXTRUDEDAREASOLID(#12,#7,#8,1.);
+/* the piece beside it as a swept disk, which is not meshed and falls back to
+   the box around its directrix: x 1.0..1.5, y -0.1..0.1, z 0..0.5 */
+#14=IFCCARTESIANPOINT((1.,-0.1,0.));
+#16=IFCCARTESIANPOINT((1.5,0.1,0.5));
+#32=IFCPOLYLINE((#14,#16));
+#15=IFCSWEPTDISKSOLID(#32,0.05,$,$,$);
+/* the same piece as a real extrusion */
+#17=IFCRECTANGLEPROFILEDEF(.AREA.,$,#4,0.5,0.2);
+#18=IFCCARTESIANPOINT((1.25,0.,0.));
+#19=IFCAXIS2PLACEMENT3D(#18,$,$);
+#20=IFCEXTRUDEDAREASOLID(#17,#19,#8,0.5);
+/* wall A: the opening unions the window with the box */
+#21=IFCCARTESIANPOINT((0.,0.,0.));
+#22=IFCAXIS2PLACEMENT3D(#21,$,$);
+#23=IFCLOCALPLACEMENT($,#22);
+#24=IFCWALL('0GUIDwallA000000000024',$,'A',$,$,#23,#11,$,$);
+#25=IFCCARTESIANPOINT((0.,0.,1.));
+#26=IFCAXIS2PLACEMENT3D(#25,$,$);
+#27=IFCLOCALPLACEMENT($,#26);
+#28=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#13,#15));
+#29=IFCPRODUCTDEFINITIONSHAPE($,$,(#28));
+#30=IFCOPENINGELEMENT('0GUIDopenA000000000030',$,'Boxed',$,$,#27,#29,$,$);
+#31=IFCRELVOIDSELEMENT('0GUIDrelA00000000000031',$,$,$,#24,#30);
+/* wall B: the opening maps a representation holding the window and the box */
+#40=IFCCARTESIANPOINT((6.,0.,0.));
+#41=IFCAXIS2PLACEMENT3D(#40,$,$);
+#42=IFCLOCALPLACEMENT($,#41);
+#43=IFCWALL('0GUIDwallB000000000043',$,'B',$,$,#42,#11,$,$);
+#44=IFCCARTESIANPOINT((6.,0.,1.));
+#45=IFCAXIS2PLACEMENT3D(#44,$,$);
+#46=IFCLOCALPLACEMENT($,#45);
+#47=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#13,#15));
+#48=IFCREPRESENTATIONMAP(#7,#47);
+#49=IFCCARTESIANTRANSFORMATIONOPERATOR3D($,$,#6,$,$);
+#50=IFCMAPPEDITEM(#48,#49);
+#51=IFCSHAPEREPRESENTATION($,'Body','MappedRepresentation',(#50));
+#52=IFCPRODUCTDEFINITIONSHAPE($,$,(#51));
+#53=IFCOPENINGELEMENT('0GUIDopenB000000000053',$,'MappedBoxed',$,$,#46,#52,$,$);
+#54=IFCRELVOIDSELEMENT('0GUIDrelB00000000000054',$,$,$,#43,#53);
+/* wall C: the opening unions the window with the piece as a real solid */
+#60=IFCCARTESIANPOINT((12.,0.,0.));
+#61=IFCAXIS2PLACEMENT3D(#60,$,$);
+#62=IFCLOCALPLACEMENT($,#61);
+#63=IFCWALL('0GUIDwallC000000000063',$,'C',$,$,#62,#11,$,$);
+#64=IFCCARTESIANPOINT((12.,0.,1.));
+#65=IFCAXIS2PLACEMENT3D(#64,$,$);
+#66=IFCLOCALPLACEMENT($,#65);
+#67=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#13,#20));
+#68=IFCPRODUCTDEFINITIONSHAPE($,$,(#67));
+#69=IFCOPENINGELEMENT('0GUIDopenC000000000069',$,'Solid',$,$,#66,#68,$,$);
+#70=IFCRELVOIDSELEMENT('0GUIDrelC00000000000070',$,$,$,#63,#69);
+ENDSEC;
+END-ISO-10303-21;
