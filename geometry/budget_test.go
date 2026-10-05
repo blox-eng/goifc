@@ -31,6 +31,17 @@ func coveredArea(p [][2]float64, tris []uint32) float64 {
 	return s
 }
 
+// timeLimit scales a wall-clock bound for an instrumented run: atomic coverage,
+// as make test and CI run the suite, makes the meshing loops about five times
+// slower. The bounds separate bounded work from work that grows per reference
+// or per level, which is minutes, not seconds.
+func timeLimit(d time.Duration) time.Duration {
+	if testing.CoverMode() != "" {
+		return 5 * d
+	}
+	return d
+}
+
 func TestTriangulatePolygonStopsAtItsBudget(t *testing.T) {
 	b := &budget{left: 100_000}
 	start := time.Now()
@@ -41,7 +52,7 @@ func TestTriangulatePolygonStopsAtItsBudget(t *testing.T) {
 	if !b.exhausted() {
 		t.Error("the budget is not marked exhausted after the decline")
 	}
-	if d := time.Since(start); d > time.Second {
+	if d := time.Since(start); d > timeLimit(time.Second) {
 		t.Errorf("declining took %v; the budget does not bound the work", d)
 	}
 }
@@ -131,7 +142,7 @@ func TestElementMeshBoundsARepeatedHugeFace(t *testing.T) {
 
 	start := time.Now()
 	m := elementMesh(f, 1, 1, nil)
-	if d := time.Since(start); d > 5*time.Second {
+	if d := time.Since(start); d > timeLimit(15*time.Second) {
 		t.Fatalf("meshing took %v; the work is not bounded", d)
 	}
 	if !m.overBudget || m.src != SourceOBB {
@@ -368,7 +379,7 @@ func TestTriangulatePolygonStopsWithinAPass(t *testing.T) {
 	if _, ok := triangulatePolygon(poly, spent); ok {
 		t.Error("a spent budget triangulated a loop")
 	}
-	if d := time.Since(start); d > 50*time.Millisecond {
+	if d := time.Since(start); d > timeLimit(50*time.Millisecond) {
 		t.Errorf("a spent budget still worked for %v", d)
 	}
 }
@@ -415,7 +426,7 @@ func TestElementMeshWalksARepeatedDecliningItemOnce(t *testing.T) {
 	for _, c := range []*meshCache{nil, {}} {
 		start := time.Now()
 		m := elementMesh(f, 1, 1, c)
-		if d := time.Since(start); d > 2*time.Second {
+		if d := time.Since(start); d > timeLimit(2*time.Second) {
 			t.Errorf("cache=%v: meshing took %v; the box walk repeats per reference", c != nil, d)
 		}
 		if lo, hi := worldAABB(m.verts, model.Identity()); hi[0] != 976 || lo[0] != 0 {
@@ -444,7 +455,7 @@ func TestCollectPointsBoundsAProfileThatReferencesItsSolids(t *testing.T) {
 		solid, _ := f.ByID(10)
 		start := time.Now()
 		pts := collectPoints(solid, nil)
-		if d := time.Since(start); d > 500*time.Millisecond {
+		if d := time.Since(start); d > timeLimit(500*time.Millisecond) {
 			t.Errorf("%d solids, %d points: collectPoints took %v; the approximation ladder compounds", tc.solids, tc.points, d)
 		}
 		// Each solid contributes at most its profile's representative points,
@@ -634,7 +645,7 @@ func TestANestedMappedChainStaysNearOneBudget(t *testing.T) {
 	if !m.overBudget {
 		t.Error("a chain that spent its budget is not flagged over budget")
 	}
-	if d := time.Since(start); d > 3*time.Second {
+	if d := time.Since(start); d > timeLimit(3*time.Second) {
 		t.Errorf("an %d-level chain took %v", maxMapDepth, d)
 	}
 }
