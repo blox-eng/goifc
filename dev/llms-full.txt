@@ -713,6 +713,11 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Fixed
+
+- An opening whose representation joins a real solid with an item that fell back to its box is no longer taken as its footprint. `NetAreas` deducted the box as part of the void and elevations drew it as a hole the model does not have; the host is now untrusted and the opening is not drawn, as for an opening that is all box. Directly placed and mapped items are both covered. Openings made only of real solids are unchanged (#109).
+- `DerivedQuantities` no longer reports a Volume for an element that joins a real solid with an item that fell back to its box. The box is wound against the solid, so the reported figure was the box's volume minus the solid's; it is now absent, as for an element that is all box (#109).
+
 ## v0.15.2 — 2026-10-05
 
 ### Fixed
