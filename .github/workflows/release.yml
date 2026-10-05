@@ -79,6 +79,31 @@ jobs:
           bin: ${{ steps.semrel-bin.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the changelog section as the release notes
+        # The generated notes are one line per squash-merge title. The
+        # Unreleased section of CHANGELOG.md is the hand-written record of this
+        # release, read here before the promote step below renames it. The
+        # release already exists, so a problem with its notes warns rather than
+        # failing the job.
+        if: steps.release.outputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${RELEASE_VERSION}"
+          if ! notes="$(.github/scripts/release-notes.sh Unreleased)" || [[ -z "$notes" ]]; then
+            echo "::warning::CHANGELOG.md has no Unreleased entries; ${tag} keeps its generated notes."
+            exit 0
+          fi
+
+          git fetch --tags --quiet
+          if prev="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null)"; then
+            notes+=$'\n\n'"**Full diff**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+          fi
+
+          printf '%s\n' "$notes" > "${RUNNER_TEMP}/release-notes.md"
+          gh release edit "$tag" --notes-file "${RUNNER_TEMP}/release-notes.md" \
+            || echo "::warning::Could not set ${tag}'s notes from CHANGELOG.md."
       - name: Promote Unreleased changelog section
         # steps.release.outputs.version is only set when a new version was
         # actually released (go-semantic-release/action returns early,
