@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.3 — 2026-10-05
+
 ### Fixed
 
 - An opening whose representation joins a real solid with an item that fell
