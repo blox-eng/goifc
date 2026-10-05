@@ -11,6 +11,7 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 ### Fixed
 
 - The Discord invite linked from the README, the docs and goifc.org no longer expires; the old one would have stopped working on 2026-10-29 (#85).
+- A material that references its own parent (a layer set listing its own usage, a material list containing itself, a profile or constituent pointing back at its set) no longer overflows the stack in `model.Materials`. That was a fatal error `recover()` cannot catch, so one crafted file could take down the whole process. The cycle is skipped and the remaining materials are kept; output on well-formed files is unchanged (#104).
 
 ## v0.15.1 — 2026-10-04
 
