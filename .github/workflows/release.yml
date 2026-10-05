@@ -96,7 +96,11 @@ jobs:
             exit 0
           fi
 
-          git fetch --tags --quiet
+          # The release action created the new tag on the remote after checkout.
+          if ! git fetch --tags --quiet; then
+            echo "::warning::Could not fetch tags; ${tag} keeps its generated notes."
+            exit 0
+          fi
           if prev="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null)"; then
             notes+=$'\n\n'"**Full diff**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
           fi
