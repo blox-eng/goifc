@@ -48,6 +48,9 @@ type Element struct {
 	// partial: a representation item meshed to nothing and was left out, so
 	// the mesh (and its AABB) can be smaller than the element.
 	partial bool
+	// boxed: an item in the mesh is its box fallback, though Source names the
+	// real solid beside it.
+	boxed bool
 }
 
 // Scene is the assembled proxy geometry for a whole IFC model: one Element per
@@ -89,6 +92,7 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 					Placement: el.Placement,
 					Source:    m.src,
 					partial:   m.partial,
+					boxed:     m.boxed,
 				}
 				if len(m.verts) > 0 {
 					ge.BBoxMin, ge.BBoxMax = worldAABB(m.verts, el.Placement)
@@ -206,6 +210,7 @@ func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCac
 		if len(m.verts) == 0 {
 			continue
 		}
+		u.boxed = u.boxed || m.boxed || m.src == SourceOBB
 		if u.verts == nil {
 			// tessellateItemDepth's slices are the caller's own, so the first
 			// item's mesh becomes the union's without a copy.
