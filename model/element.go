@@ -428,107 +428,89 @@ const attrMaterialConstituents = 2
 // IfcMaterialConstituent: [Name,Description,Material,Fraction,Category]
 const attrConstituentMaterial = 2
 
+// maxMaterialDepth bounds materialLeaves' recursion. A schema-valid material
+// chain is at most four levels deep (usage -> set -> layer -> material); the
+// bound guards against a crafted acyclic but pathologically deep chain
+// overflowing the goroutine stack, which recover() cannot catch. Cycles are
+// cut separately, by the on-path set in materialLeaves.
+const maxMaterialDepth = 64
+
+// maxMaterialVisits bounds the nodes one materialLeaves call visits. The
+// on-path cycle guard lets a shared wrapper be walked once per reference (real
+// exporters list one IfcMaterialLayer on both faces of a wall), so a crafted
+// chain of lists each holding the next twice would otherwise take 2^depth
+// visits. A real element needs tens.
+const maxMaterialVisits = 4096
+
 // materialLeaves resolves m (e.g. a layer set usage / layer set / material
 // list / profile set / constituent set) down to its IfcMaterial leaves,
 // walking the declared EXPRESS LIST order rather than the forward reference
 // graph (graph-DFS order does not preserve IfcMaterialLayerSet.MaterialLayers
 // order and can return the wrong layer's material first). Mirrors
 // ifcopenshell.util.element.get_materials.
+//
+// A reference back to a wrapper already on the current path is a cycle and is
+// skipped; every other repeat is walked again, so a material reached through
+// two layers (or one layer listed twice) is listed once per reference. The walk
+// stops at maxMaterialDepth / maxMaterialVisits and returns what it collected.
 func materialLeaves(f *step.File, m *step.Instance) []*step.Instance {
-	switch {
-	case m.IsA("IfcMaterial"):
-		return []*step.Instance{m}
-
-	case m.IsA("IfcMaterialLayerSetUsage"):
-		if set, ok := m.Ref(attrForLayerSet); ok {
-			return materialLeaves(f, set)
+	var out []*step.Instance
+	onPath := map[int]bool{}
+	visits := 0
+	var walk func(m *step.Instance, depth int)
+	ref := func(m *step.Instance, idx, depth int) {
+		if r, ok := m.Ref(idx); ok { // optional/nullable on every wrapper
+			walk(r, depth+1)
 		}
-		return nil
-
-	case m.IsA("IfcMaterialLayerSet"):
-		v, ok := m.Get(attrMaterialLayers)
-		if !ok || v.Kind() != step.KindList {
-			return nil
-		}
-		var out []*step.Instance
-		for _, item := range v.List() {
-			if item.Kind() != step.KindRef || item.Ref() == nil {
-				continue
-			}
-			out = append(out, materialLeaves(f, item.Ref())...)
-		}
-		return out
-
-	case m.IsA("IfcMaterialLayer"):
-		mat, ok := m.Ref(attrLayerMaterial)
-		if !ok {
-			return nil // Material is optional/nullable
-		}
-		return materialLeaves(f, mat)
-
-	case m.IsA("IfcMaterialList"):
-		v, ok := m.Get(attrMaterialListMaterials)
-		if !ok || v.Kind() != step.KindList {
-			return nil
-		}
-		var out []*step.Instance
-		for _, item := range v.List() {
-			if item.Kind() != step.KindRef || item.Ref() == nil {
-				continue
-			}
-			out = append(out, materialLeaves(f, item.Ref())...)
-		}
-		return out
-
-	case m.IsA("IfcMaterialProfileSetUsage"):
-		if set, ok := m.Ref(attrForProfileSet); ok {
-			return materialLeaves(f, set)
-		}
-		return nil
-
-	case m.IsA("IfcMaterialProfileSet"):
-		v, ok := m.Get(attrMaterialProfiles)
-		if !ok || v.Kind() != step.KindList {
-			return nil
-		}
-		var out []*step.Instance
-		for _, item := range v.List() {
-			if item.Kind() != step.KindRef || item.Ref() == nil {
-				continue
-			}
-			out = append(out, materialLeaves(f, item.Ref())...)
-		}
-		return out
-
-	case m.IsA("IfcMaterialProfile"):
-		mat, ok := m.Ref(attrProfileMaterial)
-		if !ok {
-			return nil // Material is optional/nullable
-		}
-		return materialLeaves(f, mat)
-
-	case m.IsA("IfcMaterialConstituentSet"):
-		v, ok := m.Get(attrMaterialConstituents)
-		if !ok || v.Kind() != step.KindList {
-			return nil
-		}
-		var out []*step.Instance
-		for _, item := range v.List() {
-			if item.Kind() != step.KindRef || item.Ref() == nil {
-				continue
-			}
-			out = append(out, materialLeaves(f, item.Ref())...)
-		}
-		return out
-
-	case m.IsA("IfcMaterialConstituent"):
-		mat, ok := m.Ref(attrConstituentMaterial)
-		if !ok {
-			return nil // Material is optional/nullable
-		}
-		return materialLeaves(f, mat)
 	}
-	return nil
+	list := func(m *step.Instance, idx, depth int) {
+		v, ok := m.Get(idx)
+		if !ok || v.Kind() != step.KindList {
+			return
+		}
+		for _, item := range v.List() {
+			if item.Kind() == step.KindRef && item.Ref() != nil {
+				walk(item.Ref(), depth+1)
+			}
+		}
+	}
+	walk = func(m *step.Instance, depth int) {
+		visits++
+		if depth > maxMaterialDepth || visits > maxMaterialVisits {
+			return
+		}
+		if m.IsA("IfcMaterial") {
+			out = append(out, m)
+			return
+		}
+		if onPath[m.ID()] {
+			return
+		}
+		onPath[m.ID()] = true
+		defer delete(onPath, m.ID())
+		switch {
+		case m.IsA("IfcMaterialLayerSetUsage"):
+			ref(m, attrForLayerSet, depth)
+		case m.IsA("IfcMaterialLayerSet"):
+			list(m, attrMaterialLayers, depth)
+		case m.IsA("IfcMaterialLayer"):
+			ref(m, attrLayerMaterial, depth)
+		case m.IsA("IfcMaterialList"):
+			list(m, attrMaterialListMaterials, depth)
+		case m.IsA("IfcMaterialProfileSetUsage"):
+			ref(m, attrForProfileSet, depth)
+		case m.IsA("IfcMaterialProfileSet"):
+			list(m, attrMaterialProfiles, depth)
+		case m.IsA("IfcMaterialProfile"):
+			ref(m, attrProfileMaterial, depth)
+		case m.IsA("IfcMaterialConstituentSet"):
+			list(m, attrMaterialConstituents, depth)
+		case m.IsA("IfcMaterialConstituent"):
+			ref(m, attrConstituentMaterial, depth)
+		}
+	}
+	walk(m, 0)
+	return out
 }
 
 // IsExternal returns the tri-state *Common.IsExternal pset value: nil when no
