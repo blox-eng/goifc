@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.2 — 2026-10-05
+
 ### Fixed
 
 - The Discord invite linked from the README, the docs and goifc.org no
