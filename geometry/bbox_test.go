@@ -2,6 +2,7 @@ package geometry
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 
@@ -57,19 +58,23 @@ func TestCollectPoints_DepthBound(t *testing.T) {
 // TestCollectPointsPlacesAnExtrudedProfile proves the box walk keeps an
 // extruded solid's profile points out of the box once the solid has added its
 // placed points (#110). The profile is a thin strip along the diagonal, and
-// the solid's Position turns it onto the X axis. The raw profile points sit
-// in the profile's own frame, and they widened the Y extent to 10.
+// the solid's Position turns it onto the X axis and moves it to (100, 50). The
+// raw profile points sit in the profile's own frame, at 0..10 on both axes.
 func TestCollectPointsPlacesAnExtrudedProfile(t *testing.T) {
-	for _, tc := range []struct{ name, points string }{
-		{"exact rings", "#11,#12,#13,#14,#11"},
-		{"approximation", "#11,#13"},
+	for _, tc := range []struct {
+		name, points string
+		exact        bool
+	}{
+		{"exact rings", "#11,#12,#13,#14,#11", true},
+		// A polyline of two points is no polygon, so extrudeRings declines it.
+		{"approximation", "#11,#13", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := ifcFile(t, `#1=IFCEXTRUDEDAREASOLID(#2,#5,#8,1.);
 #2=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#3);
 #3=IFCPOLYLINE((`+tc.points+`));
 #5=IFCAXIS2PLACEMENT3D(#6,#7,#9);
-#6=IFCCARTESIANPOINT((0.,0.,0.));
+#6=IFCCARTESIANPOINT((100.,50.,0.));
 #7=IFCDIRECTION((0.,0.,1.));
 #8=IFCDIRECTION((0.,0.,1.));
 #9=IFCDIRECTION((1.,-1.,0.));
@@ -79,15 +84,20 @@ func TestCollectPointsPlacesAnExtrudedProfile(t *testing.T) {
 #14=IFCCARTESIANPOINT((9.93,10.07));
 `)
 			solid, _ := f.ByID(1)
+			if _, _, ok := extrudeRings(solid); ok != tc.exact {
+				t.Fatalf("extrudeRings ok = %v, want %v: the fixture no longer takes this path", ok, tc.exact)
+			}
 			b := pointsBox(collectPoints(solid, nil))
 			if !b.ok {
 				t.Fatal("collectPoints found no points")
 			}
-			if dx := b.hi[0] - b.lo[0]; dx < 14.1 || dx > 14.2 {
-				t.Errorf("X extent %.3f, want the strip's length 14.142", dx)
-			}
-			if dy := b.hi[1] - b.lo[1]; dy > 0.2 {
-				t.Errorf("Y extent %.3f, want under 0.2: raw profile points leaked into the box", dy)
+			// The strip is 0.14 wide across Y; the two-point approximation has no width.
+			want := pointBox{lo: v3{100, 50, 0}, hi: v3{114.142, 50, 1}}
+			for axis, tol := range [3]float64{0.01, 0.11, 0.001} {
+				if math.Abs(b.lo[axis]-want.lo[axis]) > tol || math.Abs(b.hi[axis]-want.hi[axis]) > tol {
+					t.Errorf("axis %d spans %.3f..%.3f, want %.3f..%.3f: raw profile points leaked into the box",
+						axis, b.lo[axis], b.hi[axis], want.lo[axis], want.hi[axis])
+				}
 			}
 		})
 	}
