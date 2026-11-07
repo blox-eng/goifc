@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.4 — 2026-11-07
+
 ### Fixed
 
 - An element that falls back to its box no longer boxes an extruded solid's
