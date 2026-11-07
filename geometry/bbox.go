@@ -119,7 +119,12 @@ func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx m
 		// happens to sit further up the tree. Compute the true extruded corners
 		// (profile ring at z=0 and z=depth, in the solid's own placement) so the
 		// fallback box at least spans the solid's real extent.
+		//
+		// Once the solid adds its placed points, the walk stops there: its
+		// SweptArea's points sit in the profile's own frame, without Position,
+		// and would widen the box wherever the placement moves or turns it.
 		if inst.IsA("IfcExtrudedAreaSolid") {
+			before := len(pts)
 			if _, verts, ok := extrudeRings(inst); ok {
 				for i := 0; i+2 < len(verts); i += 3 {
 					pts = append(pts, v3{float64(verts[i]), float64(verts[i+1]), float64(verts[i+2])})
@@ -132,6 +137,9 @@ func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx m
 				// never saw the depth and collapses to a sliver along the
 				// extrusion axis.
 				pts = append(pts, extrudedAreaApproxPoints(inst, ladder, c, approx)...)
+			}
+			if len(pts) > before {
+				return
 			}
 		}
 		for _, a := range inst.Args() {

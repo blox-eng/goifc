@@ -53,3 +53,42 @@ func TestCollectPoints_DepthBound(t *testing.T) {
 		t.Errorf("collectPoints found %d points, want 0 (the real point sits beyond maxWalkDepth=%d)", len(pts), maxWalkDepth)
 	}
 }
+
+// TestCollectPointsPlacesAnExtrudedProfile proves the box walk keeps an
+// extruded solid's profile points out of the box once the solid has added its
+// placed points (#110). The profile is a thin strip along the diagonal, and
+// the solid's Position turns it onto the X axis. The raw profile points sit
+// in the profile's own frame, and they widened the Y extent to 10.
+func TestCollectPointsPlacesAnExtrudedProfile(t *testing.T) {
+	for _, tc := range []struct{ name, points string }{
+		{"exact rings", "#11,#12,#13,#14,#11"},
+		{"approximation", "#11,#13"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := ifcFile(t, `#1=IFCEXTRUDEDAREASOLID(#2,#5,#8,1.);
+#2=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#3);
+#3=IFCPOLYLINE((`+tc.points+`));
+#5=IFCAXIS2PLACEMENT3D(#6,#7,#9);
+#6=IFCCARTESIANPOINT((0.,0.,0.));
+#7=IFCDIRECTION((0.,0.,1.));
+#8=IFCDIRECTION((0.,0.,1.));
+#9=IFCDIRECTION((1.,-1.,0.));
+#11=IFCCARTESIANPOINT((0.,0.));
+#12=IFCCARTESIANPOINT((0.07,-0.07));
+#13=IFCCARTESIANPOINT((10.,10.));
+#14=IFCCARTESIANPOINT((9.93,10.07));
+`)
+			solid, _ := f.ByID(1)
+			b := pointsBox(collectPoints(solid, nil))
+			if !b.ok {
+				t.Fatal("collectPoints found no points")
+			}
+			if dx := b.hi[0] - b.lo[0]; dx < 14.1 || dx > 14.2 {
+				t.Errorf("X extent %.3f, want the strip's length 14.142", dx)
+			}
+			if dy := b.hi[1] - b.lo[1]; dy > 0.2 {
+				t.Errorf("Y extent %.3f, want under 0.2: raw profile points leaked into the box", dy)
+			}
+		})
+	}
+}

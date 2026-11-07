@@ -19,6 +19,15 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- An element that falls back to its box no longer boxes an extruded solid's
+  profile in the profile's own frame. The walk added the placed rings, then
+  also the raw profile points, with no `Position` applied, so a solid that its
+  placement moves or turns boxed too large: a thin diagonal strip turned onto
+  the X axis boxed 10 units wide. The walk now stops at the solid once it adds
+  its placed points (#110).
+
 ## v0.15.3 — 2026-10-05
 
 ### Fixed
