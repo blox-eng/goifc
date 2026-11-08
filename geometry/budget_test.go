@@ -1,6 +1,7 @@
 package geometry
 
 import (
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -885,12 +886,11 @@ func corpusModel(t *testing.T, name string, private bool) (*step.File, bool) {
 		}
 		src = b
 	} else {
-		fh, err := os.Open(filepath.Join("..", "parity", "testdata", name+".ifc.gz"))
+		gz, err := os.ReadFile(filepath.Join("..", "parity", "testdata", name+".ifc.gz"))
 		if err != nil {
 			return nil, false // the module zip prunes parity/
 		}
-		defer fh.Close()
-		zr, err := gzip.NewReader(fh)
+		zr, err := gzip.NewReader(bytes.NewReader(gz))
 		if err != nil {
 			t.Fatal(err)
 		}
