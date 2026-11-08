@@ -47,7 +47,12 @@ func extrudeRings(solid *step.Instance) (poly [][2]float64, verts []float32, ok 
 	if !ok {
 		return nil, nil, false
 	}
-	poly = profilePolygon(prof)
+	return placeRings(solid, profilePolygon(prof))
+}
+
+// placeRings is extrudeRings for a profile polygon already read, so callers
+// meeting one profile under many solids can read it once.
+func placeRings(solid *step.Instance, poly [][2]float64) ([][2]float64, []float32, bool) {
 	if len(poly) < 3 {
 		return nil, nil, false
 	}
@@ -76,7 +81,7 @@ func extrudeRings(solid *step.Instance) (poly [][2]float64, verts []float32, ok 
 	for _, p := range poly {
 		local = append(local, applyMat(place, v3{p[0] + dir[0]*depth, p[1] + dir[1]*depth, dir[2] * depth}))
 	}
-	verts = make([]float32, 0, 3*len(local))
+	verts := make([]float32, 0, 3*len(local))
 	for _, p := range local {
 		verts = append(verts, float32(p[0]), float32(p[1]), float32(p[2]))
 	}

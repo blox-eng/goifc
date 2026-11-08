@@ -672,7 +672,7 @@ func TestTheApproximationKeepsAFewPointsProfileTight(t *testing.T) {
 		"#8=IFCCARTESIANPOINT((0.,0.,0.));\n#9=IFCDIRECTION((0.,0.,1.));\n#10=IFCDIRECTION((1.,-1.,0.));\n#11=IFCAXIS2PLACEMENT3D(#8,#9,#10);\n"+
 		"#12=IFCEXTRUDEDAREASOLID(#7,#11,#9,1.);\n")
 	solid, _ := f.ByID(12)
-	b := pointsBox((&boxWalk{approx: map[[2]int][]v3{}}).extrudedAreaApproxPoints(solid, 0))
+	b := pointsBox((&boxWalk{approx: map[[2]int][]v3{}, polys: map[int][][2]float64{}}).extrudedAreaApproxPoints(solid, 0))
 	if thin := min(b.hi[0]-b.lo[0], b.hi[1]-b.lo[1]); !b.ok || thin > 0.5 {
 		t.Errorf("a 14 x 0.14 strip turned onto an axis boxed to %v..%v; want one side under 0.5", b.lo, b.hi)
 	}
@@ -1096,5 +1096,92 @@ func TestBuildIsIndependentOfWorkerOrder(t *testing.T) {
 	}
 	if fmt.Sprint(s1.Warnings) != fmt.Sprint(s8.Warnings) || s1.Stats() != s8.Stats() || fmt.Sprint(t1) != fmt.Sprint(t8) {
 		t.Errorf("1 worker: %v %+v %v; 8 workers: %v %+v %v", s1.Warnings, s1.Stats(), t1, s8.Warnings, s8.Stats(), t8)
+	}
+}
+
+// Solids that cannot extrude (zero depth) still read their profile before they
+// decline: thousands of them sharing one large profile must not read it once
+// apiece for free.
+func TestSolidsSharingAProfileTheyCannotExtrudeAreBounded(t *testing.T) {
+	const k, m = 8_000, 8_000
+	var d strings.Builder
+	pts := make([]string, m)
+	for i := range m {
+		a := 2 * math.Pi * float64(i) / m
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%.6f,%.6f));\n", 100+i, math.Cos(a), math.Sin(a))
+		pts[i] = fmt.Sprintf("#%d", 100+i)
+	}
+	fmt.Fprintf(&d, "#8=IFCPOLYLINE((%s,#100));\n#9=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#8);\n#6=IFCDIRECTION((0.,0.,1.));\n", strings.Join(pts, ","))
+	solids := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(&d, "#%d=IFCEXTRUDEDAREASOLID(#9,$,#6,0.);\n", 20_000+i)
+		solids[i] = fmt.Sprintf("#%d", 20_000+i)
+	}
+	set := d.String() + fmt.Sprintf("#4=IFCGEOMETRICSET((%s));\n", strings.Join(solids, ","))
+	// Inside one boxed set, and as the wall's own items, each meshed and boxed.
+	for name, data := range map[string]string{"set": set + wallWith("#4"), "items": set + wallWith(strings.Join(solids, ","))} {
+		f := ifcFile(t, data)
+		for _, c := range []*meshCache{nil, {}} {
+			bounded(t, fmt.Sprintf("%s, cache=%v", name, c != nil), 2*time.Second, func() { elementMesh(f, 1, 1, c) })
+		}
+	}
+}
+
+// Once an element has overdrawn its budget by a second budget, unionItems
+// leaves the remaining items out without touching them: each would otherwise
+// still read its profile and be charged for it, without end.
+func TestUnionLeavesItemsOutOnceOverdrawn(t *testing.T) {
+	var d strings.Builder
+	pts := make([]string, 2_000)
+	for i := range pts {
+		a := 2 * math.Pi * float64(i) / float64(len(pts))
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%.6f,%.6f));\n", 100+i, math.Cos(a), math.Sin(a))
+		pts[i] = fmt.Sprintf("#%d", 100+i)
+	}
+	fmt.Fprintf(&d, "#8=IFCPOLYLINE((%s,#100));\n#9=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#8);\n#6=IFCDIRECTION((0.,0.,1.));\n", strings.Join(pts, ","))
+	for i := range 2_000 {
+		fmt.Fprintf(&d, "#%d=IFCEXTRUDEDAREASOLID(#9,$,#6,%d.);\n", 20_000+i, i+1)
+	}
+	f := ifcFile(t, d.String())
+	items := make([]*step.Instance, 2_000)
+	for i := range items {
+		items[i], _ = f.ByID(20_000 + i)
+	}
+	const size = 100_000
+	b := sizedBudget(size)
+	m := unionItems(items, 1, 0, nil, b)
+	if !m.partial || !m.overBudget {
+		t.Errorf("partial=%v overBudget=%v, want both", m.partial, m.overBudget)
+	}
+	if b.spent() > 3*size {
+		t.Errorf("spent %d on a %d budget: items past the overdraw were still meshed", b.spent(), size)
+	}
+}
+
+// A box is refused once the budget is overdrawn by a second budget, even for
+// an item that reaches obbFromItem directly.
+func TestNoBoxPastTheOverdraw(t *testing.T) {
+	f := ifcFile(t, "#1=IFCCARTESIANPOINT((1.,2.,3.));\n")
+	item, _ := f.ByID(1)
+	b := sizedBudget(100)
+	b.spend(250)
+	if m := tessellateItemDepth(item, 1, 0, nil, b); len(m.verts) != 0 || !m.overBudget {
+		t.Errorf("shipped %d vertices, overBudget=%v; want no box past the overdraw", len(m.verts)/3, m.overBudget)
+	}
+}
+
+// A walk that ran past maxBoxWalk saw only part of the item: its box is never
+// shipped, cached or not.
+func TestAnOverWalkShipsNoBox(t *testing.T) {
+	f := ifcFile(t, "#1=IFCCARTESIANPOINT((1.,2.,3.));\n")
+	item, _ := f.ByID(1)
+	c := &meshCache{}
+	c.itemBox(item, 1, func() (v3, v3, bool, int64, bool) { return v3{}, v3{1, 1, 1}, true, 7, true })
+	b := sizedBudget(1_000)
+	if v, _ := obbFromItem(item, 1, c, b); v != nil {
+		t.Error("an over walk shipped its partial box")
+	}
+	if b.spent() != 7 {
+		t.Errorf("charged %d, want the walk's cost 7", b.spent())
 	}
 }

@@ -42,7 +42,7 @@ const maxBoxWalk = elementBudget
 // over means the cost passed maxBoxWalk and the walk stopped short: its points
 // are incomplete and must not be boxed.
 func collectPoints(item *step.Instance, c *meshCache) (pts []v3, cost int64, over bool) {
-	w := &boxWalk{c: c, approx: map[[2]int][]v3{}}
+	w := &boxWalk{c: c, approx: map[[2]int][]v3{}, polys: map[int][][2]float64{}}
 	pts = w.points(item, 0)
 	return pts, w.cost, w.cost > maxBoxWalk
 }
@@ -52,7 +52,20 @@ func collectPoints(item *step.Instance, c *meshCache) (pts []v3, cost int64, ove
 type boxWalk struct {
 	c      *meshCache
 	approx map[[2]int][]v3
+	polys  map[int][][2]float64
 	cost   int64
+}
+
+// profile returns prof's polygon, read once per walk: thousands of solids may
+// share one large profile, and reading it is as much work as its size whether
+// or not the solid then extrudes.
+func (w *boxWalk) profile(prof *step.Instance) [][2]float64 {
+	poly, done := w.polys[prof.ID()]
+	if !done {
+		poly = profilePolygon(prof)
+		w.polys[prof.ID()] = poly
+	}
+	return poly
 }
 
 func (w *boxWalk) over() bool { return w.cost > maxBoxWalk }
@@ -151,7 +164,11 @@ func (w *boxWalk) points(item *step.Instance, ladder int) []v3 {
 		// and would widen the box wherever the placement moves or turns it.
 		if inst.IsA("IfcExtrudedAreaSolid") {
 			before := len(pts)
-			if _, verts, ok := extrudeRings(inst); ok {
+			var poly [][2]float64
+			if prof, ok := inst.Ref(attrSweptArea); ok {
+				poly = w.profile(prof)
+			}
+			if _, verts, ok := placeRings(inst, poly); ok {
 				// Solids sharing one large profile each extrude its rings: charge
 				// them, and keep only their box's corners, so K solids hold 8K
 				// points and not 2nK.

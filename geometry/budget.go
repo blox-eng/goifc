@@ -7,7 +7,10 @@ package geometry
 // It keeps the heaviest corpus element 16 times inside it and the heaviest
 // mapped shape 4 times inside its ninth, as
 // TestCorpusElementsKeepSixteenfoldHeadroom checks. Past it items are boxed or
-// left out.
+// left out. A mapped shape costs about twice its own cost at each placement
+// (its build, then its clone), so one element holds about
+// elementBudget / (2 × shape cost) placements of a shape: about 23 of the
+// heaviest corpus shape.
 const elementBudget = 1 << 23
 
 // budget bounds the work one element's tessellation may do. A nil *budget is
