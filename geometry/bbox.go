@@ -28,12 +28,34 @@ const maxWalkDepth = 4096
 // maxWalkDepth walk into an overflow of its own.
 const maxApproxLadder = 8
 
+// maxBoxWalk caps one item's box walk at one element budget. A walk unit costs
+// about 70 ns and 70 bytes, so a cap of 1<<26 cost a hostile element 5 s and
+// 5 GiB; real box walks in the corpus cost a few hundred units.
+const maxBoxWalk = elementBudget
+
 // collectPoints returns every IfcCartesianPoint coordinate reachable from item
 // (walking the forward-reference subgraph), in raw file units. A point list
 // contributes the corners of its box, read once per Build through c.
-func collectPoints(item *step.Instance, c *meshCache) []v3 {
-	return collectPointsLadder(item, 0, c, map[[2]int][]v3{})
+//
+// cost is the walk's work: every value it steps over and every point it adds.
+// The walk from one item is the same whoever starts it, so its cost is too.
+// over means the cost passed maxBoxWalk and the walk stopped short: its points
+// are incomplete and must not be boxed.
+func collectPoints(item *step.Instance, c *meshCache) (pts []v3, cost int64, over bool) {
+	w := &boxWalk{c: c, approx: map[[2]int][]v3{}}
+	pts = w.points(item, 0)
+	return pts, w.cost, w.cost > maxBoxWalk
 }
+
+// boxWalk is one collectPoints call: the work it has done and the
+// approximation hops it has memoised.
+type boxWalk struct {
+	c      *meshCache
+	approx map[[2]int][]v3
+	cost   int64
+}
+
+func (w *boxWalk) over() bool { return w.cost > maxBoxWalk }
 
 // pointBox is the box around a set of points; ok is false when there are none
 // or a whole axis is NaN.
@@ -42,18 +64,22 @@ type pointBox struct {
 	ok     bool
 }
 
-// collectPointsLadder is collectPoints with the extrude-approximation ladder
-// depth threaded through, so the collectPoints <-> extrudedAreaApproxPoints
-// recursion is bounded (see maxApproxLadder).
-func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx map[[2]int][]v3) []v3 {
+// points is one hop of the walk: the points reachable from item, with the
+// extrude-approximation ladder depth threaded through, so the walk <->
+// extrudedAreaApproxPoints recursion is bounded (see maxApproxLadder).
+func (w *boxWalk) points(item *step.Instance, ladder int) []v3 {
 	var pts []v3
 	if ladder > maxApproxLadder {
 		return pts
 	}
+	add := func(p ...v3) {
+		w.cost += int64(len(p))
+		pts = append(pts, p...)
+	}
 	seen := map[int]bool{}
 	var walk func(inst *step.Instance, depth int)
 	walk = func(inst *step.Instance, depth int) {
-		if inst == nil || seen[inst.ID()] || depth > maxWalkDepth {
+		if inst == nil || seen[inst.ID()] || depth > maxWalkDepth || w.over() {
 			return
 		}
 		seen[inst.ID()] = true
@@ -88,16 +114,16 @@ func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx m
 		if inst.IsA("IfcCartesianPoint") {
 			c := floatsOf(inst, attrCoordinates)
 			if len(c) >= 3 {
-				pts = append(pts, v3{c[0], c[1], c[2]})
+				add(v3{c[0], c[1], c[2]})
 			} else if len(c) == 2 {
-				pts = append(pts, v3{c[0], c[1], 0})
+				add(v3{c[0], c[1], 0})
 			}
 		}
 		// A conic's only point is its centre, so a declined arc's box would stop
 		// short of the arc by up to its radius. The corners of the square (or
 		// rectangle) around the whole conic reach any arc of it.
 		if inst.IsA("IfcCircle") || inst.IsA("IfcEllipse") {
-			pts = append(pts, conicCorners(inst)...)
+			add(conicCorners(inst)...)
 		}
 		// Tessellated face sets keep their points in a list, not as
 		// IfcCartesianPoint entities. Without this a declined face set's element
@@ -106,8 +132,8 @@ func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx m
 		// Its eight corners stand in for the entries, so a box built from them
 		// (even under a further transform) still contains every point.
 		if inst.IsA("IfcCartesianPointList3D") {
-			if lo, hi, ok := c.pointListBounds(inst); ok {
-				pts = append(pts, boxCorners(lo, hi)...)
+			if lo, hi, ok := w.c.pointListBounds(inst); ok {
+				add(boxCorners(lo, hi)...)
 			}
 		}
 		// IfcExtrudedAreaSolid stores its Z extent as a scalar Depth, not a
@@ -126,9 +152,18 @@ func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx m
 		if inst.IsA("IfcExtrudedAreaSolid") {
 			before := len(pts)
 			if _, verts, ok := extrudeRings(inst); ok {
+				// Solids sharing one large profile each extrude its rings: charge
+				// them, and keep only their box's corners, so K solids hold 8K
+				// points and not 2nK.
+				ring := make([]v3, 0, len(verts)/3)
 				for i := 0; i+2 < len(verts); i += 3 {
-					pts = append(pts, v3{float64(verts[i]), float64(verts[i+1]), float64(verts[i+2])})
+					ring = append(ring, v3{float64(verts[i]), float64(verts[i+1]), float64(verts[i+2])})
 				}
+				w.cost += int64(len(ring))
+				if b := pointsBox(ring); len(ring) > 8 && b.ok {
+					ring = boxCorners(b.lo, b.hi)
+				}
+				pts = append(pts, ring...)
 			} else {
 				// profilePolygon couldn't build a full ordered polygon (e.g. a
 				// composite-curve profile with an elliptical or B-spline segment).
@@ -136,14 +171,17 @@ func collectPointsLadder(item *step.Instance, ladder int, c *meshCache, approx m
 				// handful, their box), conic corners included, to z=0 and z=depth — an envelope beats a box that
 				// never saw the depth and collapses to a sliver along the
 				// extrusion axis.
-				pts = append(pts, extrudedAreaApproxPoints(inst, ladder, c, approx)...)
+				add(w.extrudedAreaApproxPoints(inst, ladder)...)
 			}
 			if len(pts) > before {
 				return
 			}
 		}
+		// Every value stepped over is charged, references already seen
+		// included: a list naming one point a million times is a million steps.
 		for _, a := range inst.Args() {
 			a.Walk(func(vv step.Value) {
+				w.cost++
 				if vv.Kind() == step.KindRef && vv.Ref() != nil {
 					walk(vv.Ref(), depth+1)
 				}
@@ -197,17 +235,17 @@ func conicCorners(conic *step.Instance) []v3 {
 // collectPoints call. A profile that lists solids built on itself would
 // otherwise be walked again for every solid at every hop, and each walk's
 // output would feed the next.
-func extrudedAreaApproxPoints(solid *step.Instance, ladder int, c *meshCache, approx map[[2]int][]v3) []v3 {
+func (w *boxWalk) extrudedAreaApproxPoints(solid *step.Instance, ladder int) []v3 {
 	prof, ok := solid.Ref(attrSweptArea)
 	if !ok {
 		return nil
 	}
 	key := [2]int{prof.ID(), ladder + 1}
-	reps, done := approx[key]
+	reps, done := w.approx[key]
 	if !done {
-		approx[key] = nil // a profile reached again mid-walk adds nothing
-		reps = representativePoints(collectPointsLadder(prof, ladder+1, c, approx))
-		approx[key] = reps
+		w.approx[key] = nil // a profile reached again mid-walk adds nothing
+		reps = representativePoints(w.points(prof, ladder+1))
+		w.approx[key] = reps
 	}
 	if len(reps) == 0 {
 		return nil

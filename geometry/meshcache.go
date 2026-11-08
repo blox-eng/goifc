@@ -36,7 +36,7 @@ type mesh struct {
 type meshCache struct {
 	m      sync.Map // mapKey -> *cachedMesh
 	bounds sync.Map // point list instance id -> *cachedBounds
-	boxes  sync.Map // boxKey -> *cachedBounds
+	boxes  sync.Map // boxKey -> *cachedBox
 }
 
 // boxKey includes scale because a box is built in scaled units.
@@ -135,12 +135,28 @@ func listBounds(list *step.Instance) (lo, hi v3, ok bool) {
 	return lo, hi, ok
 }
 
-// itemBox returns the OBB-fallback box of item, walked once per Build: many
-// elements, or many references within one, can share an item whose walk is
-// large even when its meshing declined at once.
-func (c *meshCache) itemBox(item *step.Instance, scale float64, walk func() (lo, hi v3, ok bool)) (lo, hi v3, ok bool) {
+// itemBox returns the OBB-fallback box of item and what its walk cost, walked
+// once per Build: many elements, or many references within one, can share an
+// item whose walk is large even when its meshing declined at once. Every caller
+// is charged the cost, so an element's budget does not depend on who walked
+// the item first.
+func (c *meshCache) itemBox(item *step.Instance, scale float64, walk func() (lo, hi v3, ok bool, cost int64, over bool)) (lo, hi v3, ok bool, cost int64, over bool) {
 	if c == nil {
 		return walk()
 	}
-	return onceBounds(&c.boxes, boxKey{item.ID(), scale}, walk)
+	e, found := c.boxes.Load(boxKey{item.ID(), scale})
+	if !found {
+		e, _ = c.boxes.LoadOrStore(boxKey{item.ID(), scale}, &cachedBox{})
+	}
+	cb := e.(*cachedBox)
+	cb.once.Do(func() { cb.lo, cb.hi, cb.ok, cb.cost, cb.over = walk() })
+	return cb.lo, cb.hi, cb.ok, cb.cost, cb.over
+}
+
+type cachedBox struct {
+	once   sync.Once
+	lo, hi v3
+	ok     bool
+	cost   int64
+	over   bool
 }

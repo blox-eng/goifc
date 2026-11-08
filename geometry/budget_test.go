@@ -36,13 +36,14 @@ func coveredArea(p [][2]float64, tris []uint32) float64 {
 	return s
 }
 
-// timeLimit scales a wall-clock bound for an instrumented run: atomic coverage,
-// as make test and CI run the suite, makes the meshing loops about five times
-// slower. The bounds separate bounded work from work that grows per reference
-// or per level, which is minutes, not seconds.
+// timeLimit scales a wall-clock bound for an instrumented run: atomic coverage
+// over ./..., as make test and CI run the suite, and -race make the meshing
+// loops up to about fifteen times slower (the box walk's hub ladder: 0.8 s
+// plain, 11 s covered). The bounds separate bounded work from work that grows
+// per reference or per level, which is minutes, not seconds.
 func timeLimit(d time.Duration) time.Duration {
-	if testing.CoverMode() != "" {
-		return 5 * d
+	if raceBuild || testing.CoverMode() != "" {
+		return 15 * d
 	}
 	return d
 }
@@ -459,7 +460,7 @@ func TestCollectPointsBoundsAProfileThatReferencesItsSolids(t *testing.T) {
 		f := ifcFile(t, d.String())
 		solid, _ := f.ByID(10)
 		start := time.Now()
-		pts := collectPoints(solid, nil)
+		pts, _, _ := collectPoints(solid, nil)
 		if d := time.Since(start); d > timeLimit(500*time.Millisecond) {
 			t.Errorf("%d solids, %d points: collectPoints took %v; the approximation ladder compounds", tc.solids, tc.points, d)
 		}
@@ -572,27 +573,34 @@ func TestBooleanClipChargesItsBudget(t *testing.T) {
 }
 
 // The box walk is cached per item and scale across elements: two elements
-// boxing one item share one walk, and a different scale gets its own box.
+// boxing one item share one walk, a different scale gets its own box, and a
+// cached walk reports the same cost as a fresh one, so every element is
+// charged alike whoever walked first.
 func TestItemBoxIsSharedAcrossElementsPerScale(t *testing.T) {
 	f := ifcFile(t, "#1=IFCCARTESIANPOINT((2.,4.,6.));\n#2=IFCBOOLEANRESULT(.UNION.,#1,#1);\n")
 	item, _ := f.ByID(2)
 	c := &meshCache{}
 	walks := 0
-	walk := func(scale float64) func() (v3, v3, bool) {
-		return func() (v3, v3, bool) {
+	walk := func(scale float64) func() (v3, v3, bool, int64, bool) {
+		return func() (v3, v3, bool, int64, bool) {
 			walks++
-			b := pointsBox(collectPoints(item, c))
-			return scaleV3(b.lo, scale), scaleV3(b.hi, scale), b.ok
+			pts, cost, over := collectPoints(item, c)
+			b := pointsBox(pts)
+			return scaleV3(b.lo, scale), scaleV3(b.hi, scale), b.ok, cost, over
 		}
 	}
-	_, hi1, _ := c.itemBox(item, 1, walk(1))
-	c.itemBox(item, 1, walk(1))
-	_, hi2, _ := c.itemBox(item, 0.001, walk(0.001))
-	if walks != 2 {
-		t.Errorf("walked %d times for two lookups at scale 1 and one at 0.001, want 2", walks)
+	_, hi1, _, cold, _ := c.itemBox(item, 1, walk(1))
+	_, _, _, warm, _ := c.itemBox(item, 1, walk(1))
+	_, hi2, _, _, _ := c.itemBox(item, 0.001, walk(0.001))
+	_, _, _, fresh, _ := (*meshCache)(nil).itemBox(item, 1, walk(1))
+	if walks != 3 {
+		t.Errorf("walked %d times for two lookups at scale 1, one at 0.001 and one uncached, want 3", walks)
 	}
 	if hi1 != (v3{2, 4, 6}) || hi2 != (v3{0.002, 0.004, 0.006}) {
 		t.Errorf("boxes %v and %v, want the item at scale 1 and at 0.001", hi1, hi2)
+	}
+	if cold <= 0 || warm != cold || fresh != cold {
+		t.Errorf("walk cost cold %d, warm %d, uncached %d; want one positive figure", cold, warm, fresh)
 	}
 }
 
@@ -663,7 +671,7 @@ func TestTheApproximationKeepsAFewPointsProfileTight(t *testing.T) {
 		"#8=IFCCARTESIANPOINT((0.,0.,0.));\n#9=IFCDIRECTION((0.,0.,1.));\n#10=IFCDIRECTION((1.,-1.,0.));\n#11=IFCAXIS2PLACEMENT3D(#8,#9,#10);\n"+
 		"#12=IFCEXTRUDEDAREASOLID(#7,#11,#9,1.);\n")
 	solid, _ := f.ByID(12)
-	b := pointsBox(extrudedAreaApproxPoints(solid, 0, nil, map[[2]int][]v3{}))
+	b := pointsBox((&boxWalk{approx: map[[2]int][]v3{}}).extrudedAreaApproxPoints(solid, 0))
 	if thin := min(b.hi[0]-b.lo[0], b.hi[1]-b.lo[1]); !b.ok || thin > 0.5 {
 		t.Errorf("a 14 x 0.14 strip turned onto an axis boxed to %v..%v; want one side under 0.5", b.lo, b.hi)
 	}
@@ -717,10 +725,12 @@ func TestTriangulatePolygonChargesTheLoopUpFront(t *testing.T) {
 	}
 }
 
-// allocLimit bounds what one hostile element may allocate while it meshes: a
-// bounded run ships at most about three budgets of output, 12 bytes a unit,
-// plus the copies on the way.
-const allocLimit = 64 * elementBudget
+// allocLimit bounds what one hostile element may allocate while it meshes.
+// Measured at elementBudget 1<<23: the heaviest bounded fixture (solids sharing
+// a large profile) allocates 614 MiB, and the lightest of these fixtures on the
+// unbudgeted code allocated 3,845 MiB. 1.5 GiB keeps 2.5 times the first and
+// under half the second; re-measure if elementBudget changes.
+const allocLimit = 1536 << 20
 
 // bounded runs fn and fails t if it took longer than d (scaled by timeLimit)
 // or allocated more than allocLimit bytes.
@@ -939,5 +949,152 @@ func TestCorpusElementsKeepSixteenfoldHeadroom(t *testing.T) {
 		if limit := int64(elementBudget / (maxMapDepth + 1) / 4); shape > limit {
 			t.Errorf("%s: a mapped shape spends %d, more than a quarter of its budget (%d)", md.name, shape, limit)
 		}
+	}
+}
+
+// shell50k declares #5, a closed shell whose faceted brep declines before any
+// triangulation, over a 50k-point loop spanning x 0..976.
+func shell50k(d *strings.Builder) {
+	pts := make([]string, 50_000)
+	for i := range pts {
+		fmt.Fprintf(d, "#%d=IFCCARTESIANPOINT((%d.,%d.,0.));\n", 100+i, i%977, i/977)
+		pts[i] = fmt.Sprintf("#%d", 100+i)
+	}
+	fmt.Fprintf(d, "#10=IFCPOLYLOOP((%s));\n#11=IFCFACEOUTERBOUND(#10,.T.);\n#12=IFCFACE((#11));\n", strings.Join(pts, ","))
+	d.WriteString("#13=IFCFACEOUTERBOUND(#14,.T.);\n#14=IFCEDGELOOP(());\n#15=IFCFACE((#13));\n#5=IFCCLOSEDSHELL((#15,#12));\n")
+}
+
+// wrappers declares n distinct faceted breps over #5 from id on.
+func wrappers(d *strings.Builder, id, n int) []string {
+	refs := make([]string, n)
+	for i := range n {
+		fmt.Fprintf(d, "#%d=IFCFACETEDBREP(#5);\n", id+i)
+		refs[i] = fmt.Sprintf("#%d", id+i)
+	}
+	return refs
+}
+
+// Distinct wrappers over one shared shell each walk it for their box: each
+// must pay for its walk, or 2,000 of them take 20 s in one element.
+func TestDistinctWrappersAreEachChargedTheirWalk(t *testing.T) {
+	var d strings.Builder
+	shell50k(&d)
+	d.WriteString(wallWith(strings.Join(wrappers(&d, 200_000, 2_000), ",")))
+	f := ifcFile(t, d.String())
+	checkBoundedOverBudget(t, f)
+	m := elementMesh(f, 1, 1, &meshCache{})
+	if lo, hi := worldAABB(m.verts, model.Identity()); lo[0] != 0 || hi[0] != 976 {
+		t.Errorf("box x %v..%v, want 0..976", lo[0], hi[0])
+	}
+}
+
+// hubLadder declares k solids, each on its own composite profile that lists
+// one hub, and the hub lists every solid again (plus one point).
+func hubLadder(d *strings.Builder, k int) []string {
+	solids := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(d, "#%d=IFCCOMPOSITEPROFILEDEF(.AREA.,$,(#6),$);\n#%d=IFCEXTRUDEDAREASOLID(#%d,$,$,1.);\n", 10_000+i, 20_000+i, 10_000+i)
+		solids[i] = fmt.Sprintf("#%d", 20_000+i)
+	}
+	fmt.Fprintf(d, "#7=IFCCARTESIANPOINT((1.,2.));\n#6=IFCCOMPOSITEPROFILEDEF(.AREA.,$,(%s,#7),$);\n", strings.Join(solids, ","))
+	return solids
+}
+
+// Each solid's approximation re-walks the hub at every hop: about 9·K² visits
+// from an O(K) file unless the walk is charged per visit.
+func TestASharedHubLadderIsBounded(t *testing.T) {
+	var d strings.Builder
+	d.WriteString(wallWith(strings.Join(hubLadder(&d, 2_000), ",")))
+	checkBoundedOverBudget(t, ifcFile(t, d.String()))
+}
+
+// One boxed wrapper over K solids sharing one valid M-point profile: each solid
+// extrudes the profile's rings again, 2·M points apiece.
+func TestSolidsSharingALargeProfileAreChargedTheirRings(t *testing.T) {
+	const k, m = 8_000, 8_000
+	var d strings.Builder
+	pts := make([]string, m)
+	for i := range m {
+		a := 2 * math.Pi * float64(i) / m
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%.6f,%.6f));\n", 100+i, math.Cos(a), math.Sin(a))
+		pts[i] = fmt.Sprintf("#%d", 100+i)
+	}
+	fmt.Fprintf(&d, "#8=IFCPOLYLINE((%s,#100));\n#9=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#8);\n#6=IFCDIRECTION((0.,0.,1.));\n", strings.Join(pts, ","))
+	solids := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(&d, "#%d=IFCEXTRUDEDAREASOLID(#9,$,#6,%d.);\n", 20_000+i, i+1)
+		solids[i] = fmt.Sprintf("#%d", 20_000+i)
+	}
+	fmt.Fprintf(&d, "#4=IFCGEOMETRICSET((%s));\n", strings.Join(solids, ","))
+	d.WriteString(wallWith("#4"))
+	checkBoundedOverBudget(t, ifcFile(t, d.String()))
+}
+
+// A box is the conservative fallback: a face set that declines still ships
+// its box even when the walk costs more than the budget it ran out of, and it
+// still pays for the walk.
+func TestALargeDecliningFaceSetStillBoxes(t *testing.T) {
+	var d strings.Builder
+	d.WriteString("#4=IFCCARTESIANPOINTLIST3D((")
+	for i := range 5_000 {
+		if i > 0 {
+			d.WriteString(",")
+		}
+		fmt.Fprintf(&d, "(%d.,%d.,0.)", i%100, i/100)
+	}
+	d.WriteString("));\n#5=IFCTRIANGULATEDFACESET(#4,$,$,(")
+	for i := range 400 {
+		if i > 0 {
+			d.WriteString(",")
+		}
+		fmt.Fprintf(&d, "(%d,%d,%d)", 3*i+1, 3*i+2, 3*i+3)
+	}
+	d.WriteString("),$);\n")
+	f := ifcFile(t, d.String())
+	item, _ := f.ByID(5)
+	const size = 1_000
+	b := sizedBudget(size)
+	m := unionItems([]*step.Instance{item}, 1, 0, nil, b)
+	if m.src != SourceOBB || len(m.tris) != 36 {
+		t.Fatalf("src=%s with %d indices, want the face set's box", m.src, len(m.tris))
+	}
+	if b.spent() < 5_000 {
+		t.Errorf("a box walk over 5,000 points charged %d in all", b.spent())
+	}
+}
+
+// A build of many elements sharing hostile geometry gives the same result
+// whatever order the workers reach the shared items in.
+func TestBuildIsIndependentOfWorkerOrder(t *testing.T) {
+	var d strings.Builder
+	shell50k(&d)
+	refs := strings.Join(wrappers(&d, 200_000, 400), ",")
+	r := &model.Result{UnitScale: 1}
+	for i := range 8 {
+		id := 1_000 + 10*i
+		fmt.Fprintf(&d, "#%d=IFCWALL('w%d',$,$,$,$,$,#%d,$,$);\n#%d=IFCPRODUCTDEFINITIONSHAPE($,$,(#%d));\n#%d=IFCSHAPEREPRESENTATION($,'Body','Brep',(%s));\n",
+			id, i, id+1, id+1, id+2, id+2, refs)
+		r.Elements = append(r.Elements, model.Element{GlobalID: fmt.Sprintf("w%d", i), ExpressID: id, Placement: model.Identity()})
+	}
+	f := ifcFile(t, d.String())
+	run := func(procs int) (*Scene, []int) {
+		defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(procs))
+		s, err := Build(f, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tris := make([]int, len(s.Elements))
+		for i, e := range s.Elements {
+			tris[i] = len(e.Tris)
+		}
+		return s, tris
+	}
+	s1, t1 := run(1)
+	s8, t8 := run(8)
+	if !budgetWarned(s1, "w0") {
+		t.Fatalf("Warnings = %q, want the shared wrappers over budget", s1.Warnings)
+	}
+	if fmt.Sprint(s1.Warnings) != fmt.Sprint(s8.Warnings) || s1.Stats() != s8.Stats() || fmt.Sprint(t1) != fmt.Sprint(t8) {
+		t.Errorf("1 worker: %v %+v %v; 8 workers: %v %+v %v", s1.Warnings, s1.Stats(), t1, s8.Warnings, s8.Stats(), t8)
 	}
 }
