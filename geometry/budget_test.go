@@ -1,8 +1,13 @@
 package geometry
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -328,7 +333,7 @@ func TestMappedShapeWorkIsChargedToTheElement(t *testing.T) {
 		}
 		// Room for one and a half shapes: the second is taken whole while budget
 		// remains and spends it, so the third is refused.
-		b := &budget{left: cost + cost/2}
+		b := sizedBudget(cost + cost/2)
 		first := tessellateItemDepth(a, 1, 0, c, b)
 		second := tessellateItemDepth(bItem, 1, 0, c, b)
 		third := tessellateItemDepth(a, 1, 0, c, b)
@@ -709,5 +714,230 @@ func TestTriangulatePolygonChargesTheLoopUpFront(t *testing.T) {
 	b := &budget{left: int64(len(sq)) - 1}
 	if _, ok := triangulatePolygon(sq, b); ok || b.left != -1 {
 		t.Errorf("a %d-unit budget on a %d-point loop: ok=%v, left=%d; want a decline at -1 before any ear test", len(sq)-1, len(sq), ok, b.left)
+	}
+}
+
+// allocLimit bounds what one hostile element may allocate while it meshes: a
+// bounded run ships at most about three budgets of output, 12 bytes a unit,
+// plus the copies on the way.
+const allocLimit = 64 * elementBudget
+
+// bounded runs fn and fails t if it took longer than d (scaled by timeLimit)
+// or allocated more than allocLimit bytes.
+func bounded(t *testing.T, name string, d time.Duration, fn func()) {
+	t.Helper()
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	fn()
+	took := time.Since(start)
+	runtime.ReadMemStats(&after)
+	alloc := after.TotalAlloc - before.TotalAlloc
+	if took > timeLimit(d) || alloc > allocLimit {
+		t.Errorf("%s: took %v (limit %v), allocated %d MiB (limit %d MiB)", name, took, timeLimit(d), alloc>>20, allocLimit>>20)
+	}
+}
+
+// buildWall builds data, whose #1 is a wall "w", as a one-element scene.
+func buildWall(t *testing.T, f *step.File) *Scene {
+	t.Helper()
+	r := &model.Result{UnitScale: 1, Elements: []model.Element{{GlobalID: "w", ExpressID: 1, Placement: model.Identity()}}}
+	s, err := Build(f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func budgetWarned(s *Scene, gid string) bool {
+	return strings.Contains(strings.Join(s.Warnings, "\n"), "tessellation budget exceeded for "+gid)
+}
+
+// mappedReps declares a representation map at #rmap over items, framed by
+// mappedFrame.
+func mappedRep(d *strings.Builder, rep, rmap int, items []string) {
+	fmt.Fprintf(d, "#%d=IFCSHAPEREPRESENTATION($,'Body','Brep',(%s));\n#%d=IFCREPRESENTATIONMAP(#99,#%d);\n",
+		rep, strings.Join(items, ","), rmap, rep)
+}
+
+// mapItems declares n mapped items of #rmap from id on and returns their refs.
+func mapItems(d *strings.Builder, id, n, rmap int) []string {
+	refs := make([]string, n)
+	for i := range n {
+		fmt.Fprintf(d, "#%d=IFCMAPPEDITEM(#%d,#98);\n", id+i, rmap)
+		refs[i] = fmt.Sprintf("#%d", id+i)
+	}
+	return refs
+}
+
+func checkBoundedOverBudget(t *testing.T, f *step.File) {
+	t.Helper()
+	var s *Scene
+	bounded(t, "Build", 2*time.Second, func() { s = buildWall(t, f) })
+	if !budgetWarned(s, "w") {
+		t.Errorf("Warnings = %q, want a budget warning for w", s.Warnings)
+	}
+	e := s.Elements[0]
+	if out := len(e.Tris)/3 + len(e.Verts)/3; out > 3*elementBudget {
+		t.Errorf("the element shipped %d output units, more than three budgets", out)
+	}
+	var m mesh
+	bounded(t, "elementMesh without a cache", 2*time.Second, func() { m = elementMesh(f, 1, 1, nil) })
+	if !m.overBudget {
+		t.Error("without a cache the element is not flagged over budget")
+	}
+}
+
+// A shape made only of box fallbacks used to cost nothing, so mapping it
+// cloned its whole mesh for free at every placement: 48M triangles here.
+func TestMappedBoxClonesAreChargedBySize(t *testing.T) {
+	var d strings.Builder
+	d.WriteString(mappedFrame)
+	a := make([]string, 1_000)
+	for i := range a {
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%d.,0.,0.));\n", 10_000+i, i)
+		a[i] = fmt.Sprintf("#%d", 10_000+i)
+	}
+	mappedRep(&d, 20, 21, a)
+	mappedRep(&d, 30, 31, mapItems(&d, 20_000, 1_000, 21))
+	d.WriteString(wallWith(strings.Join(mapItems(&d, 40, 4, 31), ",")))
+	checkBoundedOverBudget(t, ifcFile(t, d.String()))
+}
+
+// rects declares n distinct 1x1x1 extrusions over one profile from id on.
+func rects(d *strings.Builder, id, n int) []string {
+	d.WriteString("#5=IFCRECTANGLEPROFILEDEF(.AREA.,$,$,1.,1.);\n#6=IFCDIRECTION((0.,0.,1.));\n")
+	refs := make([]string, n)
+	for i := range n {
+		fmt.Fprintf(d, "#%d=IFCEXTRUDEDAREASOLID(#5,$,#6,1.);\n", id+i)
+		refs[i] = fmt.Sprintf("#%d", id+i)
+	}
+	return refs
+}
+
+// A rectangle extrusion costs 9 units of work but emits 8 vertices and 12
+// triangles. On a budget its work alone fits in, its output must not.
+func TestExtrusionOutputIsChargedToTheElement(t *testing.T) {
+	var d strings.Builder
+	refs := rects(&d, 1_000, 10_000)
+	f := ifcFile(t, d.String())
+	items := make([]*step.Instance, len(refs))
+	for i := range refs {
+		items[i], _ = f.ByID(1_000 + i)
+	}
+	const size = 100_000
+	m := unionItems(items, 1, 0, nil, sizedBudget(size))
+	if !m.overBudget {
+		t.Error("10,000 rectangles on a 100k budget are not flagged over budget")
+	}
+	if out := len(m.tris)/3 + len(m.verts)/3; out > 3*size {
+		t.Errorf("shipped %d output units on a %d budget", out, size)
+	}
+}
+
+// Nested maps of one rectangle multiply its output: a few thousand lines
+// build millions of boxes unless every clone is charged its size.
+func TestNestedRectMapsWarnThroughBuild(t *testing.T) {
+	var d strings.Builder
+	d.WriteString(mappedFrame)
+	mappedRep(&d, 20, 21, rects(&d, 1_000, 1))
+	mappedRep(&d, 30, 31, mapItems(&d, 20_000, 1_000, 21))
+	d.WriteString(wallWith(strings.Join(mapItems(&d, 100_000, 2*elementBudget/50_000, 31), ",")))
+	checkBoundedOverBudget(t, ifcFile(t, d.String()))
+}
+
+func TestUnionChargesEachItemsSize(t *testing.T) {
+	f := ifcFile(t, boxSolid(10))
+	item, _ := f.ByID(12)
+	b := newBudget()
+	if m := unionItems([]*step.Instance{item}, 1, 0, nil, b); len(m.tris) != 36 {
+		t.Fatalf("the box meshed %d indices, want 36", len(m.tris))
+	}
+	if b.spent() < 8+12 {
+		t.Errorf("a box that emits 8 vertices and 12 triangles charged %d", b.spent())
+	}
+}
+
+// corpusModel parses a corpus model: a public one from the parity fixtures, a
+// private one from $GOIFC_PRIVATE_CORPUS. ok is false when it is not present.
+func corpusModel(t *testing.T, name string, private bool) (*step.File, bool) {
+	t.Helper()
+	var src []byte
+	if private {
+		dir := os.Getenv("GOIFC_PRIVATE_CORPUS")
+		if dir == "" {
+			return nil, false
+		}
+		b, err := os.ReadFile(filepath.Join(dir, name+".ifc"))
+		if err != nil {
+			return nil, false
+		}
+		src = b
+	} else {
+		fh, err := os.Open(filepath.Join("..", "parity", "testdata", name+".ifc.gz"))
+		if err != nil {
+			return nil, false // the module zip prunes parity/
+		}
+		defer fh.Close()
+		zr, err := gzip.NewReader(fh)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if src, err = io.ReadAll(zr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f, err := step.ParseBytes(src)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
+	}
+	return f, true
+}
+
+// Every real element stays sixteen times inside the budget, and every mapped
+// shape four times inside its own (a ninth of an element's), so the budget
+// cannot box or drop real geometry. private_a's heaviest shape (183,080 units)
+// is what holds the budget at 1<<23.
+func TestCorpusElementsKeepSixteenfoldHeadroom(t *testing.T) {
+	models := []struct {
+		name    string
+		private bool
+	}{{"ifcopenhouse", false}, {"duplex_a", false}, {"fzk_haus", false}, {"private_a", true}, {"office_a", true}}
+	for _, md := range models {
+		f, ok := corpusModel(t, md.name, md.private)
+		if !ok {
+			t.Logf("%s: not present, skipped", md.name)
+			continue
+		}
+		r, err := model.Extract(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := &meshCache{}
+		var heaviest int64
+		var heaviestID string
+		for _, e := range r.Elements {
+			b := newBudget()
+			m := unionItems(representationItems(f, e.ExpressID), r.UnitScale, 0, c, b)
+			if m.overBudget {
+				t.Errorf("%s: element %s went over budget", md.name, e.GlobalID)
+			}
+			if b.spent() > heaviest {
+				heaviest, heaviestID = b.spent(), e.GlobalID
+			}
+		}
+		var shape int64
+		c.m.Range(func(_, v any) bool {
+			shape = max(shape, v.(*cachedMesh).mesh.cost)
+			return true
+		})
+		t.Logf("%s: heaviest element %s spends %d, heaviest mapped shape %d", md.name, heaviestID, heaviest, shape)
+		if heaviest > elementBudget/16 {
+			t.Errorf("%s: element %s spends %d, more than a sixteenth of the budget (%d)", md.name, heaviestID, heaviest, elementBudget/16)
+		}
+		if limit := int64(elementBudget / (maxMapDepth + 1) / 4); shape > limit {
+			t.Errorf("%s: a mapped shape spends %d, more than a quarter of its budget (%d)", md.name, shape, limit)
+		}
 	}
 }
