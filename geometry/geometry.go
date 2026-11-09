@@ -242,13 +242,13 @@ func obbFromItem(item *step.Instance, unitScale float64, c *meshCache, b *budget
 	if !b.canOverdraw() {
 		return nil, nil
 	}
-	lo, hi, ok, cost, over := c.itemBox(item, unitScale, func() (v3, v3, bool, int64, bool) {
-		pts, cost, over := collectPoints(item, c)
+	lo, hi, ok, cost := c.itemBox(item, unitScale, func() (v3, v3, bool, int64) {
+		pts, cost := collectPoints(item, c)
 		bx := pointsBox(pts)
-		return scaleV3(bx.lo, unitScale), scaleV3(bx.hi, unitScale), bx.ok, cost, over
+		return scaleV3(bx.lo, unitScale), scaleV3(bx.hi, unitScale), bx.ok, cost
 	})
 	b.spend(cost)
-	if over || !ok {
+	if cost > maxBoxWalk || !ok {
 		return nil, nil
 	}
 	return boxMesh(lo, hi)

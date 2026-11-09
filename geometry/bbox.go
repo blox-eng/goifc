@@ -29,8 +29,11 @@ const maxWalkDepth = 4096
 const maxApproxLadder = 8
 
 // maxBoxWalk caps one item's box walk at one element budget. A walk unit costs
-// about 70 ns and 70 bytes, so a cap of 1<<26 cost a hostile element 5 s and
-// 5 GiB; real box walks in the corpus cost a few hundred units.
+// about 70 ns and 70 bytes, so a walk to the cap takes about 0.6 s and 0.6 GiB;
+// real box walks in the corpus cost a few hundred units. A face set is charged
+// by its points, so it keeps its box well past the size at which meshing
+// declines. A faceted brep's walk costs about 14 units a face, so a brep too
+// large to mesh (about 1.4M faces) gets no box either.
 const maxBoxWalk = elementBudget
 
 // collectPoints returns every IfcCartesianPoint coordinate reachable from item
@@ -39,12 +42,11 @@ const maxBoxWalk = elementBudget
 //
 // cost is the walk's work: every value it steps over and every point it adds.
 // The walk from one item is the same whoever starts it, so its cost is too.
-// over means the cost passed maxBoxWalk and the walk stopped short: its points
-// are incomplete and must not be boxed.
-func collectPoints(item *step.Instance, c *meshCache) (pts []v3, cost int64, over bool) {
+// A cost past maxBoxWalk means the walk stopped short: its points are
+// incomplete and must not be boxed.
+func collectPoints(item *step.Instance, c *meshCache) (pts []v3, cost int64) {
 	w := &boxWalk{c: c, approx: map[[2]int][]v3{}, polys: map[int][][2]float64{}}
-	pts = w.points(item, 0)
-	return pts, w.cost, w.cost > maxBoxWalk
+	return w.points(item, 0), w.cost
 }
 
 // boxWalk is one collectPoints call: the work it has done and the
@@ -143,11 +145,27 @@ func (w *boxWalk) points(item *step.Instance, ladder int) []v3 {
 		// found no points, got no box, and vanished. Every well-formed entry
 		// counts: a box over them all is a superset of whatever the set meshes.
 		// Its eight corners stand in for the entries, so a box built from them
-		// (even under a further transform) still contains every point.
+		// (even under a further transform) still contains every point. The list
+		// holds only numbers, so the walk charges its points and goes no deeper.
 		if inst.IsA("IfcCartesianPointList3D") {
+			if v, ok := inst.Get(attrPointListCoords); ok && v.Kind() == step.KindList {
+				w.cost += int64(len(v.List()))
+			}
 			if lo, hi, ok := w.c.pointListBounds(inst); ok {
 				add(boxCorners(lo, hi)...)
 			}
+			return
+		}
+		// A face set's box is its point list's: its index lists and indexed faces
+		// add no points. Stepping over them would charge the walk about 6 units a
+		// triangle, more than the 3 a triangle at which meshing declines, so a
+		// face set too large to mesh would also be too large to box, and would
+		// ship nothing.
+		if isTriangulatedFaceSet(inst) || inst.IsA("IfcPolygonalFaceSet") {
+			if coords, ok := inst.Ref(attrFaceSetCoords); ok {
+				walk(coords, depth+1)
+			}
+			return
 		}
 		// IfcExtrudedAreaSolid stores its Z extent as a scalar Depth, not a
 		// CartesianPoint — a plain point-walk never sees the extruded top ring.

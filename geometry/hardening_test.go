@@ -38,7 +38,7 @@ END-ISO-10303-21;
 	}
 	// Must return (not stack-overflow); a self-referential solid carries no
 	// CartesianPoints, so the collected set is empty.
-	if pts, _, _ := collectPoints(solid, nil); len(pts) != 0 {
+	if pts, _ := collectPoints(solid, nil); len(pts) != 0 {
 		t.Errorf("collectPoints on a self-referential solid returned %d points, want 0", len(pts))
 	}
 }

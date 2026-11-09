@@ -28,8 +28,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   triangles cost nothing, and the box fallback walked shared subgraphs without
   limit (20 s and 20 GB for 2,000 wrappers over one shell). The budget now
   charges every item's output and every box walk, and a box walk stops past
-  one budget. An element over budget still boxes what it can, then leaves the
-  rest out with the "tessellation budget exceeded" warning. The budget drops
+  one budget. A face set's walk is charged by its points, not its triangles,
+  so a face set too large to mesh still gets its box. A faceted brep too large
+  to mesh (about 1.4M faces) gets no box. An element over budget still boxes what it
+  can, then leaves the rest out with the "tessellation budget exceeded"
+  warning. The budget drops
   from 1<<26 to 1<<23 units: the heaviest corpus element stays 16 times inside
   it and the heaviest mapped shape 4 times inside its share (#108).
 - An element that falls back to its box no longer boxes an extruded solid's

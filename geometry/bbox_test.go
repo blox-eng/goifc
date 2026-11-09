@@ -45,7 +45,7 @@ func TestCollectPoints_DepthBound(t *testing.T) {
 		t.Fatal("root instance #1 missing")
 	}
 
-	pts, _, _ := collectPoints(root, nil)
+	pts, _ := collectPoints(root, nil)
 
 	// The point past maxWalkDepth must NOT be reached — proves the bound
 	// actually stopped the walk (rather than the chain just happening to be
@@ -87,7 +87,7 @@ func TestCollectPointsPlacesAnExtrudedProfile(t *testing.T) {
 			if _, _, ok := extrudeRings(solid); ok != tc.exact {
 				t.Fatalf("extrudeRings ok = %v, want %v: the fixture no longer takes this path", ok, tc.exact)
 			}
-			pts, _, _ := collectPoints(solid, nil)
+			pts, _ := collectPoints(solid, nil)
 			b := pointsBox(pts)
 			if !b.ok {
 				t.Fatal("collectPoints found no points")

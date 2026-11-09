@@ -88,18 +88,13 @@ func (c *meshCache) pointListBounds(list *step.Instance) (lo, hi v3, ok bool) {
 	if c == nil {
 		return listBounds(list)
 	}
-	return onceBounds(&c.bounds, list.ID(), func() (v3, v3, bool) { return listBounds(list) })
-}
-
-// onceBounds returns m[key]'s bounds, computing them with walk the first time.
-// Every worker asking for one key waits on the first to compute it.
-func onceBounds(m *sync.Map, key any, walk func() (lo, hi v3, ok bool)) (lo, hi v3, ok bool) {
-	e, found := m.Load(key)
+	// Every worker asking for one list waits on the first to read it.
+	e, found := c.bounds.Load(list.ID())
 	if !found {
-		e, _ = m.LoadOrStore(key, &cachedBounds{})
+		e, _ = c.bounds.LoadOrStore(list.ID(), &cachedBounds{})
 	}
 	cb := e.(*cachedBounds)
-	cb.once.Do(func() { cb.lo, cb.hi, cb.ok = walk() })
+	cb.once.Do(func() { cb.lo, cb.hi, cb.ok = listBounds(list) })
 	return cb.lo, cb.hi, cb.ok
 }
 
@@ -111,6 +106,11 @@ func listBounds(list *step.Instance) (lo, hi v3, ok bool) {
 	lo = v3{math.Inf(1), math.Inf(1), math.Inf(1)}
 	hi = v3{math.Inf(-1), math.Inf(-1), math.Inf(-1)}
 	for _, pv := range listV.List() {
+		// The walk charges one unit an entry, so an entry is read only when it
+		// can be a point: a long one would be work the charge never saw.
+		if pv.Kind() != step.KindList || len(pv.List()) != 3 {
+			continue
+		}
 		c, isPoint := numbersOf(pv)
 		if !isPoint || len(c) != 3 {
 			continue
@@ -140,7 +140,7 @@ func listBounds(list *step.Instance) (lo, hi v3, ok bool) {
 // item whose walk is large even when its meshing declined at once. Every caller
 // is charged the cost, so an element's budget does not depend on who walked
 // the item first.
-func (c *meshCache) itemBox(item *step.Instance, scale float64, walk func() (lo, hi v3, ok bool, cost int64, over bool)) (lo, hi v3, ok bool, cost int64, over bool) {
+func (c *meshCache) itemBox(item *step.Instance, scale float64, walk func() (lo, hi v3, ok bool, cost int64)) (lo, hi v3, ok bool, cost int64) {
 	if c == nil {
 		return walk()
 	}
@@ -149,8 +149,8 @@ func (c *meshCache) itemBox(item *step.Instance, scale float64, walk func() (lo,
 		e, _ = c.boxes.LoadOrStore(boxKey{item.ID(), scale}, &cachedBox{})
 	}
 	cb := e.(*cachedBox)
-	cb.once.Do(func() { cb.lo, cb.hi, cb.ok, cb.cost, cb.over = walk() })
-	return cb.lo, cb.hi, cb.ok, cb.cost, cb.over
+	cb.once.Do(func() { cb.lo, cb.hi, cb.ok, cb.cost = walk() })
+	return cb.lo, cb.hi, cb.ok, cb.cost
 }
 
 type cachedBox struct {
@@ -158,5 +158,4 @@ type cachedBox struct {
 	lo, hi v3
 	ok     bool
 	cost   int64
-	over   bool
 }

@@ -461,7 +461,7 @@ func TestCollectPointsBoundsAProfileThatReferencesItsSolids(t *testing.T) {
 		f := ifcFile(t, d.String())
 		solid, _ := f.ByID(10)
 		start := time.Now()
-		pts, _, _ := collectPoints(solid, nil)
+		pts, _ := collectPoints(solid, nil)
 		if d := time.Since(start); d > timeLimit(500*time.Millisecond) {
 			t.Errorf("%d solids, %d points: collectPoints took %v; the approximation ladder compounds", tc.solids, tc.points, d)
 		}
@@ -582,18 +582,18 @@ func TestItemBoxIsSharedAcrossElementsPerScale(t *testing.T) {
 	item, _ := f.ByID(2)
 	c := &meshCache{}
 	walks := 0
-	walk := func(scale float64) func() (v3, v3, bool, int64, bool) {
-		return func() (v3, v3, bool, int64, bool) {
+	walk := func(scale float64) func() (v3, v3, bool, int64) {
+		return func() (v3, v3, bool, int64) {
 			walks++
-			pts, cost, over := collectPoints(item, c)
+			pts, cost := collectPoints(item, c)
 			b := pointsBox(pts)
-			return scaleV3(b.lo, scale), scaleV3(b.hi, scale), b.ok, cost, over
+			return scaleV3(b.lo, scale), scaleV3(b.hi, scale), b.ok, cost
 		}
 	}
-	_, hi1, _, cold, _ := c.itemBox(item, 1, walk(1))
-	_, _, _, warm, _ := c.itemBox(item, 1, walk(1))
-	_, hi2, _, _, _ := c.itemBox(item, 0.001, walk(0.001))
-	_, _, _, fresh, _ := (*meshCache)(nil).itemBox(item, 1, walk(1))
+	_, hi1, _, cold := c.itemBox(item, 1, walk(1))
+	_, _, _, warm := c.itemBox(item, 1, walk(1))
+	_, hi2, _, _ := c.itemBox(item, 0.001, walk(0.001))
+	_, _, _, fresh := (*meshCache)(nil).itemBox(item, 1, walk(1))
 	if walks != 3 {
 		t.Errorf("walked %d times for two lookups at scale 1, one at 0.001 and one uncached, want 3", walks)
 	}
@@ -912,11 +912,22 @@ func corpusModel(t *testing.T, name string, private bool) (*step.File, bool) {
 	return f, true
 }
 
+// The private corpus's heaviest element and mapped shape (private_a), as
+// measured with GOIFC_PRIVATE_CORPUS set. CI runs without it, so the figures
+// that hold the budget at 1<<23 are checked here too.
+const privateHeaviestElement, privateHeaviestShape = 256_312, 183_080
+
 // Every real element stays sixteen times inside the budget, and every mapped
-// shape four times inside its own (a ninth of an element's), so the budget
-// cannot box or drop real geometry. private_a's heaviest shape (183,080 units)
-// is what holds the budget at 1<<23.
+// shape four times inside its own share (elementBudget / (maxMapDepth+1)), so
+// the budget cannot box or drop real geometry.
 func TestCorpusElementsKeepSixteenfoldHeadroom(t *testing.T) {
+	shapeLimit := int64(elementBudget / (maxMapDepth + 1) / 4)
+	if privateHeaviestElement > elementBudget/16 || privateHeaviestShape > shapeLimit {
+		t.Errorf("recorded private figures %d and %d break the headroom (%d, %d)", privateHeaviestElement, privateHeaviestShape, elementBudget/16, shapeLimit)
+	}
+	if os.Getenv("GOIFC_PRIVATE_CORPUS") == "" {
+		t.Log("GOIFC_PRIVATE_CORPUS unset: the private models are checked by their recorded figures only")
+	}
 	models := []struct {
 		name    string
 		private bool
@@ -950,11 +961,14 @@ func TestCorpusElementsKeepSixteenfoldHeadroom(t *testing.T) {
 			return true
 		})
 		t.Logf("%s: heaviest element %s spends %d, heaviest mapped shape %d", md.name, heaviestID, heaviest, shape)
+		if md.name == "private_a" && (heaviest > privateHeaviestElement || shape > privateHeaviestShape) {
+			t.Errorf("private_a now spends %d and %d, past the recorded %d and %d: re-record them", heaviest, shape, privateHeaviestElement, privateHeaviestShape)
+		}
 		if heaviest > elementBudget/16 {
 			t.Errorf("%s: element %s spends %d, more than a sixteenth of the budget (%d)", md.name, heaviestID, heaviest, elementBudget/16)
 		}
-		if limit := int64(elementBudget / (maxMapDepth + 1) / 4); shape > limit {
-			t.Errorf("%s: a mapped shape spends %d, more than a quarter of its budget (%d)", md.name, shape, limit)
+		if shape > shapeLimit {
+			t.Errorf("%s: a mapped shape spends %d, more than a quarter of its budget (%d)", md.name, shape, shapeLimit)
 		}
 	}
 }
@@ -1015,6 +1029,55 @@ func TestASharedHubLadderIsBounded(t *testing.T) {
 	checkBoundedOverBudget(t, ifcFile(t, d.String()))
 }
 
+// A real walk past maxBoxWalk reports it, and its partial box is not shipped.
+func TestCollectPointsReportsAnOverWalk(t *testing.T) {
+	var d strings.Builder
+	fmt.Fprintf(&d, "#4=IFCGEOMETRICSET((%s));\n", strings.Join(hubLadder(&d, 2_000), ","))
+	set, _ := ifcFile(t, d.String()).ByID(4)
+	if _, cost := collectPoints(set, nil); cost <= maxBoxWalk {
+		t.Fatalf("walk cost %d, want past maxBoxWalk (%d)", cost, maxBoxWalk)
+	}
+	if v, _ := obbFromItem(set, 1, nil, nil); v != nil {
+		t.Error("an over walk shipped its partial box")
+	}
+}
+
+// A ring of more than eight points is kept as its box's corners: the same box,
+// placed, in eight points.
+func TestACompactedRingKeepsItsBox(t *testing.T) {
+	f := ifcFile(t, `#1=IFCEXTRUDEDAREASOLID(#2,#5,#8,2.);
+#2=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#3);
+#3=IFCPOLYLINE((#11,#12,#13,#14,#15,#11));
+#5=IFCAXIS2PLACEMENT3D(#6,$,$);
+#6=IFCCARTESIANPOINT((100.,50.,0.));
+#8=IFCDIRECTION((0.,0.,1.));
+#11=IFCCARTESIANPOINT((0.,0.));
+#12=IFCCARTESIANPOINT((4.,0.));
+#13=IFCCARTESIANPOINT((5.,3.));
+#14=IFCCARTESIANPOINT((2.,6.));
+#15=IFCCARTESIANPOINT((-1.,3.));
+`)
+	solid, _ := f.ByID(1)
+	pts, _ := collectPoints(solid, nil)
+	if b := pointsBox(pts); len(pts) != 8 || b.lo != (v3{99, 50, 0}) || b.hi != (v3{105, 56, 2}) {
+		t.Errorf("%d points boxed %v..%v; want the 8 corners of 99,50,0..105,56,2", len(pts), b.lo, b.hi)
+	}
+}
+
+// An item may still be meshed or boxed until the budget is overdrawn by a
+// whole second budget, and not once it is.
+func TestCanOverdrawStopsAtASecondBudget(t *testing.T) {
+	b := sizedBudget(100)
+	b.spend(199)
+	if !b.canOverdraw() {
+		t.Error("refused at 99 past the budget")
+	}
+	b.spend(1)
+	if b.canOverdraw() {
+		t.Error("still allowed at a whole budget past it")
+	}
+}
+
 // One boxed wrapper over K solids sharing one valid M-point profile: each solid
 // extrudes the profile's rings again, 2·M points apiece.
 func TestSolidsSharingALargeProfileAreChargedTheirRings(t *testing.T) {
@@ -1067,6 +1130,80 @@ func TestALargeDecliningFaceSetStillBoxes(t *testing.T) {
 	}
 	if b.spent() < 5_000 {
 		t.Errorf("a box walk over 5,000 points charged %d in all", b.spent())
+	}
+}
+
+// A face set's box walk is charged by its points, not its index lists: the
+// box comes from the point list's cached bounds. Meshing charges 3 units per
+// triangle, so a walk charged by the triangle would pass maxBoxWalk before
+// meshing declines, and a face set too large to mesh would ship nothing.
+func TestAFaceSetsWalkIsChargedByItsPoints(t *testing.T) {
+	const n, tris = 100, 20_000
+	var d strings.Builder
+	d.WriteString("#4=IFCCARTESIANPOINTLIST3D((")
+	for i := range n {
+		if i > 0 {
+			d.WriteString(",")
+		}
+		fmt.Fprintf(&d, "(%d.,%d.,0.)", i%10, i/10)
+	}
+	idx := make([]string, tris)
+	for i := range idx {
+		a := i%(n-2) + 1
+		idx[i] = fmt.Sprintf("(%d,%d,%d)", a, a+1, a+2)
+	}
+	d.WriteString("));\n")
+	fmt.Fprintf(&d, "#5=IFCTRIANGULATEDFACESET(#4,$,$,(%s),$);\n", strings.Join(idx, ","))
+	faces := make([]string, tris)
+	for i := range faces {
+		fmt.Fprintf(&d, "#%d=IFCINDEXEDPOLYGONALFACE(%s);\n", 10_000+i, idx[i])
+		faces[i] = fmt.Sprintf("#%d", 10_000+i)
+	}
+	fmt.Fprintf(&d, "#6=IFCPOLYGONALFACESET(#4,$,(%s),$);\n", strings.Join(faces, ","))
+	f := ifcFile(t, d.String())
+	for _, id := range []int{5, 6} {
+		item, _ := f.ByID(id)
+		pts, cost := collectPoints(item, nil)
+		if b := pointsBox(pts); !b.ok || b.lo != (v3{0, 0, 0}) || b.hi != (v3{9, 9, 0}) {
+			t.Errorf("#%d: box %v..%v, want 0,0,0..9,9,0", id, b.lo, b.hi)
+		}
+		if cost < n || cost > 2*n+64 {
+			t.Errorf("#%d: walk over %d points and %d triangles cost %d, want about %d", id, n, tris, cost, n)
+		}
+	}
+}
+
+// A face set far too large to mesh declines without charging the meshing it
+// never did, so the budget is not overdrawn past the box and the set still
+// ships its box, with the budget warning.
+func TestAFaceSetFarTooLargeToMeshStillBoxes(t *testing.T) {
+	const size, tris = 1_000, 1_000 // meshing would cost 3,000: past two budgets
+	var d strings.Builder
+	d.WriteString("#4=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(4.,0.,0.),(0.,5.,6.)));\n")
+	idx := make([]string, tris)
+	for i := range idx {
+		idx[i] = "(1,2,3)"
+	}
+	fmt.Fprintf(&d, "#5=IFCTRIANGULATEDFACESET(#4,$,$,(%s),$);\n", strings.Join(idx, ","))
+	item, _ := ifcFile(t, d.String()).ByID(5)
+	m := unionItems([]*step.Instance{item}, 1, 0, nil, sizedBudget(size))
+	if m.src != SourceOBB || len(m.tris) != 36 || !m.overBudget {
+		t.Fatalf("src=%s with %d indices, overBudget=%v; want the face set's box, over budget", m.src, len(m.tris), m.overBudget)
+	}
+}
+
+// One indexed face listing far more corners than the budget declines without
+// charging them, so its polygonal face set still ships its box.
+func TestAFaceFarTooLargeToMeshStillBoxes(t *testing.T) {
+	const size = 1_000
+	corners := make([]string, 3*size) // past two budgets, over three points
+	for i := range corners {
+		corners[i] = fmt.Sprint(i%3 + 1)
+	}
+	item, _ := ifcFile(t, fmt.Sprintf("#4=IFCCARTESIANPOINTLIST3D(((0.,0.,0.),(4.,0.,0.),(0.,5.,6.)));\n#6=IFCINDEXEDPOLYGONALFACE((%s));\n#5=IFCPOLYGONALFACESET(#4,$,(#6),$);\n", strings.Join(corners, ","))).ByID(5)
+	m := unionItems([]*step.Instance{item}, 1, 0, nil, sizedBudget(size))
+	if m.src != SourceOBB || len(m.tris) != 36 || !m.overBudget {
+		t.Fatalf("src=%s with %d indices, overBudget=%v; want the face set's box, over budget", m.src, len(m.tris), m.overBudget)
 	}
 }
 
@@ -1185,12 +1322,13 @@ func TestAnOverWalkShipsNoBox(t *testing.T) {
 	f := ifcFile(t, "#1=IFCCARTESIANPOINT((1.,2.,3.));\n")
 	item, _ := f.ByID(1)
 	c := &meshCache{}
-	c.itemBox(item, 1, func() (v3, v3, bool, int64, bool) { return v3{}, v3{1, 1, 1}, true, 7, true })
+	const cost = maxBoxWalk + 1
+	c.itemBox(item, 1, func() (v3, v3, bool, int64) { return v3{}, v3{1, 1, 1}, true, cost })
 	b := sizedBudget(1_000)
 	if v, _ := obbFromItem(item, 1, c, b); v != nil {
 		t.Error("an over walk shipped its partial box")
 	}
-	if b.spent() != 7 {
-		t.Errorf("charged %d, want the walk's cost 7", b.spent())
+	if b.spent() != cost {
+		t.Errorf("charged %d, want the walk's cost %d", b.spent(), int64(cost))
 	}
 }
