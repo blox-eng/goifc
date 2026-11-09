@@ -727,15 +727,22 @@ func TestTriangulatePolygonChargesTheLoopUpFront(t *testing.T) {
 }
 
 // allocLimit bounds what one hostile element may allocate while it meshes.
-// Measured at elementBudget 1<<23: the heaviest bounded fixture (solids sharing
-// a large profile) allocates 614 MiB, and the lightest of these fixtures on the
-// unbudgeted code allocated 3,845 MiB. 1.5 GiB keeps 2.5 times the first and
-// under half the second; re-measure if elementBudget changes.
+// Measured at elementBudget 1<<23: the heaviest bounded fixture (zero-depth
+// solids sharing a large profile, as the wall's items) allocates 827 MiB, and
+// the lightest of these fixtures on the unbudgeted code allocated 1,988 MiB.
+// 1.5 GiB keeps 1.8 times the first and under four fifths of the second;
+// re-measure if elementBudget changes.
 const allocLimit = 1536 << 20
 
-// bounded runs fn and fails t if it took longer than d (scaled by timeLimit)
-// or allocated more than allocLimit bytes.
-func bounded(t *testing.T, name string, d time.Duration, fn func()) {
+// boundedTime is 4 to 100 times what the bounded fixtures take on an idle
+// machine (0.04 to 1.2 s), so a loaded machine still passes. Every blow-up on
+// the unbudgeted code still fails a bound: by time (the hub ladder ran past 10
+// minutes) or by allocLimit (the others allocated 3,845 to 24,368 MiB).
+const boundedTime = 5 * time.Second
+
+// bounded runs fn and fails t if it took longer than boundedTime (scaled by
+// timeLimit) or allocated more than allocLimit bytes.
+func bounded(t *testing.T, name string, fn func()) {
 	t.Helper()
 	var before, after runtime.MemStats
 	runtime.GC()
@@ -745,8 +752,8 @@ func bounded(t *testing.T, name string, d time.Duration, fn func()) {
 	took := time.Since(start)
 	runtime.ReadMemStats(&after)
 	alloc := after.TotalAlloc - before.TotalAlloc
-	if took > timeLimit(d) || alloc > allocLimit {
-		t.Errorf("%s: took %v (limit %v), allocated %d MiB (limit %d MiB)", name, took, timeLimit(d), alloc>>20, allocLimit>>20)
+	if took > timeLimit(boundedTime) || alloc > allocLimit {
+		t.Errorf("%s: took %v (limit %v), allocated %d MiB (limit %d MiB)", name, took, timeLimit(boundedTime), alloc>>20, allocLimit>>20)
 	}
 }
 
@@ -785,7 +792,7 @@ func mapItems(d *strings.Builder, id, n, rmap int) []string {
 func checkBoundedOverBudget(t *testing.T, f *step.File) {
 	t.Helper()
 	var s *Scene
-	bounded(t, "Build", 2*time.Second, func() { s = buildWall(t, f) })
+	bounded(t, "Build", func() { s = buildWall(t, f) })
 	if !budgetWarned(s, "w") {
 		t.Errorf("Warnings = %q, want a budget warning for w", s.Warnings)
 	}
@@ -794,7 +801,7 @@ func checkBoundedOverBudget(t *testing.T, f *step.File) {
 		t.Errorf("the element shipped %d output units, more than three budgets", out)
 	}
 	var m mesh
-	bounded(t, "elementMesh without a cache", 2*time.Second, func() { m = elementMesh(f, 1, 1, nil) })
+	bounded(t, "elementMesh without a cache", func() { m = elementMesh(f, 1, 1, nil) })
 	if !m.overBudget {
 		t.Error("without a cache the element is not flagged over budget")
 	}
@@ -1119,10 +1126,12 @@ func TestSolidsSharingAProfileTheyCannotExtrudeAreBounded(t *testing.T) {
 	}
 	set := d.String() + fmt.Sprintf("#4=IFCGEOMETRICSET((%s));\n", strings.Join(solids, ","))
 	// Inside one boxed set, and as the wall's own items, each meshed and boxed.
+	// As items, about a thousand walks each read the profile before the two
+	// budgets run out.
 	for name, data := range map[string]string{"set": set + wallWith("#4"), "items": set + wallWith(strings.Join(solids, ","))} {
 		f := ifcFile(t, data)
 		for _, c := range []*meshCache{nil, {}} {
-			bounded(t, fmt.Sprintf("%s, cache=%v", name, c != nil), 2*time.Second, func() { elementMesh(f, 1, 1, c) })
+			bounded(t, fmt.Sprintf("%s, cache=%v", name, c != nil), func() { elementMesh(f, 1, 1, c) })
 		}
 	}
 }
