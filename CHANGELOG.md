@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.5 — 2026-11-09
+
 ### Fixed
 
 - One crafted element can no longer make `Build` take minutes or tens of
