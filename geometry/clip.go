@@ -79,6 +79,10 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *
 	// AgreementFlag itself — i.e. keep the >=0 side when AgreementFlag is
 	// TRUE, the <=0 side when FALSE.
 	if second.IsA("IfcPolygonalBoundedHalfSpace") {
+		// Every clip reads its boundary, and clips may share one: reserved first.
+		if boundary, has := second.Ref(attrHSPolygonBoundary); !has || !b.reserve(curveSize(boundary)) {
+			return mesh{}, false
+		}
 		verts, tris, ok = clipTrianglesByBoundedPlane(verts, tris, origin, normal, agreeInside, second)
 		if !ok {
 			return mesh{}, false

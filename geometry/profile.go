@@ -2,6 +2,9 @@ package geometry
 
 import (
 	"math"
+	"runtime"
+	"sync"
+	"weak"
 
 	"github.com/blox-eng/goifc/model"
 	"github.com/blox-eng/goifc/step"
@@ -90,14 +93,18 @@ func curvePoints(curve *step.Instance) [][2]float64 {
 		return nil
 	}
 	var out [][2]float64
+	// A closed profile traces each parent curve once. A curve naming one again
+	// retraces it, and would build segments × points from a few bytes each.
+	parents := map[int]bool{}
 	for _, sv := range segsV.List() {
 		if sv.Kind() != step.KindRef || sv.Ref() == nil || !sv.Ref().IsA("IfcCompositeCurveSegment") {
 			return nil
 		}
 		parent, ok := sv.Ref().Ref(attrSegmentParentCurve)
-		if !ok {
+		if !ok || parents[parent.ID()] {
 			return nil
 		}
+		parents[parent.ID()] = true
 		var pts [][2]float64
 		if parent.IsA("IfcTrimmedCurve") {
 			pts = arcPoints(parent)
@@ -126,6 +133,36 @@ func curvePoints(curve *step.Instance) [][2]float64 {
 		out = out[:n-1]
 	}
 	return out
+}
+
+// curveSize is how many points curvePoints may read from curve: a polyline's
+// length, summed over a composite curve's segments, with a few for an arc
+// (trimAngle declines a trim of more than two selects, and planeAngleScale
+// looks the unit up once per file).
+func curveSize(curve *step.Instance) int64 {
+	size := func(c *step.Instance) int64 {
+		if v, ok := c.Get(attrPolylinePoints); ok && c.IsA("IfcPolyline") && v.Kind() == step.KindList {
+			return int64(len(v.List()))
+		}
+		return circleSegments + 2
+	}
+	if !curve.IsA("IfcCompositeCurve") {
+		return size(curve)
+	}
+	segsV, ok := curve.Get(attrCompositeSegments)
+	if !ok || segsV.Kind() != step.KindList {
+		return 1
+	}
+	var n int64 = 1
+	for _, sv := range segsV.List() {
+		n++
+		if sv.Kind() == step.KindRef && sv.Ref() != nil {
+			if parent, ok := sv.Ref().Ref(attrSegmentParentCurve); ok {
+				n += size(parent)
+			}
+		}
+	}
+	return n
 }
 
 // polylinePoints reads an IfcPolyline's 2D points. nil for any other curve
@@ -226,8 +263,9 @@ func arcPoints(trimmed *step.Instance) [][2]float64 {
 // missing other. A parameter is a plane angle in the file's unit, so it cannot
 // be read in a file that declares none.
 func trimAngle(trimmed *step.Instance, attr int, m model.Mat4) (float64, bool) {
+	// A trim is a set of at most two selects; curveSize charges an arc on that.
 	v, ok := trimmed.Get(attr)
-	if !ok || v.Kind() != step.KindList {
+	if !ok || v.Kind() != step.KindList || len(v.List()) > 2 {
 		return 0, false
 	}
 	var point *step.Instance
@@ -252,7 +290,7 @@ func trimAngle(trimmed *step.Instance, attr int, m model.Mat4) (float64, bool) {
 	if !hasParam {
 		return 0, false
 	}
-	scale, ok := model.PlaneAngleScale(trimmed.File())
+	scale, ok := planeAngleScale(trimmed.File())
 	if !ok {
 		return 0, false
 	}
@@ -289,4 +327,27 @@ func scalarAt(inst *step.Instance, attr int) float64 {
 		return float64(v.Int())
 	}
 	return 0
+}
+
+// planeAngleScales caches model.PlaneAngleScale per file. An arc trimmed by
+// parameters reads the scale at every arc, and the lookup scans the file's
+// units, which a file may list any number of times.
+var planeAngleScales sync.Map // weak.Pointer[step.File] -> angleScale
+
+type angleScale struct {
+	scale float64
+	ok    bool
+}
+
+func planeAngleScale(f *step.File) (float64, bool) {
+	key := weak.Make(f)
+	if v, found := planeAngleScales.Load(key); found {
+		s := v.(angleScale)
+		return s.scale, s.ok
+	}
+	scale, ok := model.PlaneAngleScale(f)
+	if _, loaded := planeAngleScales.LoadOrStore(key, angleScale{scale, ok}); !loaded {
+		runtime.AddCleanup(f, func(k weak.Pointer[step.File]) { planeAngleScales.Delete(k) }, key)
+	}
+	return scale, ok
 }

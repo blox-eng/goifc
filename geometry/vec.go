@@ -32,9 +32,12 @@ func reverseV3(p []v3) {
 	}
 }
 
+// floatsOf reads a point's or direction's coordinates. nil for more than
+// three: no schema allows them, and reading a list of any length at every
+// reference would cost its length each time.
 func floatsOf(inst *step.Instance, attr int) []float64 {
 	v, ok := inst.Get(attr)
-	if !ok || v.Kind() != step.KindList {
+	if !ok || v.Kind() != step.KindList || len(v.List()) > 3 {
 		return nil
 	}
 	out := make([]float64, 0, len(v.List()))

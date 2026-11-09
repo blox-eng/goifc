@@ -112,7 +112,7 @@ func listBounds(list *step.Instance) (lo, hi v3, ok bool) {
 			continue
 		}
 		c, isPoint := numbersOf(pv)
-		if !isPoint || len(c) != 3 {
+		if !isPoint {
 			continue
 		}
 		ok = true

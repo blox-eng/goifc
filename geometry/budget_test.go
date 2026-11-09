@@ -50,7 +50,7 @@ func timeLimit(d time.Duration) time.Duration {
 }
 
 func TestTriangulatePolygonStopsAtItsBudget(t *testing.T) {
-	b := &budget{left: 100_000}
+	b := sizedBudget(100_000)
 	start := time.Now()
 	tris, ok := triangulatePolygon(comb(2_000), b)
 	if ok || tris != nil {
@@ -259,7 +259,7 @@ func FuzzTriangulatePolygon(f *testing.F) {
 		for i := 0; i+1 < len(b) && len(p) < 256; i += 2 {
 			p = append(p, [2]float64{fuzzCoord(b[i]), fuzzCoord(b[i+1])})
 		}
-		bud := &budget{left: 50_000}
+		bud := sizedBudget(50_000)
 		tris, ok := triangulatePolygon(p, bud)
 		if bud.left < -int64(len(p))*int64(len(p)+1) {
 			t.Fatalf("overspent by %d: one pass costs at most n(n+1)", -bud.left)
@@ -371,7 +371,7 @@ func arcBand(m int) [][2]float64 {
 // it overshoots by at most one ear test, and a spent budget clips nothing.
 func TestTriangulatePolygonStopsWithinAPass(t *testing.T) {
 	poly := arcBand(20_000)
-	b := &budget{left: 1_000_000}
+	b := sizedBudget(1_000_000)
 	if _, ok := triangulatePolygon(poly, b); ok {
 		t.Fatal("an arc band on a 1M budget returned ok, want a decline")
 	}
@@ -381,7 +381,8 @@ func TestTriangulatePolygonStopsWithinAPass(t *testing.T) {
 	if over := -b.left; over > int64(len(poly))+1 {
 		t.Errorf("overshot the budget by %d units, more than one ear test (%d)", over, len(poly)+1)
 	}
-	spent := &budget{left: -1}
+	spent := sizedBudget(0)
+	spent.spend(1)
 	start := time.Now()
 	if _, ok := triangulatePolygon(poly, spent); ok {
 		t.Error("a spent budget triangulated a loop")
@@ -537,7 +538,7 @@ func TestBuildBoxesEveryElementSharingAPointList(t *testing.T) {
 
 func TestFaceSetsDeclineOverBudgetAndOnUncoverableFaces(t *testing.T) {
 	tri := faceSetItem(t, unitCubePoints+"#61=IFCTRIANGULATEDFACESET(#60,$,$,((1,2,3),(1,3,4)),$);\n")
-	if _, _, ok := faceSetMesh(tri, &budget{left: 1}); ok {
+	if _, _, ok := faceSetMesh(tri, sizedBudget(1)); ok {
 		t.Error("a triangulated set meshed past its budget")
 	}
 	bowtie := faceSetItem(t, unitCubePoints+
@@ -567,7 +568,7 @@ func TestBooleanClipChargesItsBudget(t *testing.T) {
 	if _, ok := clipMeshByDifference(item, 1, 0, nil, nil); !ok {
 		t.Fatal("the clip declined on an unlimited budget; the fixture is wrong")
 	}
-	b := &budget{left: 13}
+	b := sizedBudget(13)
 	if _, ok := clipMeshByDifference(item, 1, 0, nil, b); ok || !b.exhausted() {
 		t.Errorf("a clip on a 13-unit budget returned ok=%v, exhausted=%v; want a budget decline", ok, b.exhausted())
 	}
@@ -711,7 +712,7 @@ func TestTriangulatePolygonChargesReflexCorners(t *testing.T) {
 		poly = append(poly, [2]float64{x, 2 * math.Sin(math.Pi*x/10)})
 	}
 	poly = append(poly, [2]float64{10, 0}, [2]float64{10, 10}, [2]float64{0, 10}, [2]float64{0, 0})
-	b := &budget{left: int64(len(poly)) + k/2}
+	b := sizedBudget(int64(len(poly)) + k/2)
 	if _, ok := triangulatePolygon(poly, b); ok || b.left != -1 {
 		t.Errorf("ok=%v, left=%d; want a decline at -1 on a reflex candidate", ok, b.left)
 	}
@@ -720,7 +721,7 @@ func TestTriangulatePolygonChargesReflexCorners(t *testing.T) {
 // The loop's own size is charged before any ear test.
 func TestTriangulatePolygonChargesTheLoopUpFront(t *testing.T) {
 	sq := [][2]float64{{0, 0}, {1, 0}, {1, 1}, {0, 1}}
-	b := &budget{left: int64(len(sq)) - 1}
+	b := sizedBudget(int64(len(sq)) - 1)
 	if _, ok := triangulatePolygon(sq, b); ok || b.left != -1 {
 		t.Errorf("a %d-unit budget on a %d-point loop: ok=%v, left=%d; want a decline at -1 before any ear test", len(sq)-1, len(sq), ok, b.left)
 	}
@@ -734,7 +735,7 @@ func TestTriangulatePolygonChargesTheLoopUpFront(t *testing.T) {
 // re-measure if elementBudget changes.
 const allocLimit = 1536 << 20
 
-// boundedTime is 4 to 100 times what the bounded fixtures take on an idle
+// boundedTime is 4 to 125 times what the bounded fixtures take on an idle
 // machine (0.04 to 1.2 s), so a loaded machine still passes. Every blow-up on
 // the unbudgeted code still fails a bound: by time (the hub ladder ran past 10
 // minutes) or by allocLimit (the others allocated 3,845 to 24,368 MiB).
@@ -797,6 +798,7 @@ func checkBoundedOverBudget(t *testing.T, f *step.File) {
 		t.Errorf("Warnings = %q, want a budget warning for w", s.Warnings)
 	}
 	e := s.Elements[0]
+	// One budget, one budget of overdraw, and the last item, which ships whole.
 	if out := len(e.Tris)/3 + len(e.Verts)/3; out > 3*elementBudget {
 		t.Errorf("the element shipped %d output units, more than three budgets", out)
 	}
@@ -861,6 +863,9 @@ func TestNestedRectMapsWarnThroughBuild(t *testing.T) {
 	d.WriteString(mappedFrame)
 	mappedRep(&d, 20, 21, rects(&d, 1_000, 1))
 	mappedRep(&d, 30, 31, mapItems(&d, 20_000, 1_000, 21))
+	// A placement of #31 clones 1,000 rects of 20 output units each, charged
+	// inside the map and again as the clone: about 40k units, rounded up to
+	// 50k. Two budgets of placements run past the overdraw.
 	d.WriteString(wallWith(strings.Join(mapItems(&d, 100_000, 2*elementBudget/50_000, 31), ",")))
 	checkBoundedOverBudget(t, ifcFile(t, d.String()))
 }
@@ -915,7 +920,7 @@ func corpusModel(t *testing.T, name string, private bool) (*step.File, bool) {
 // The private corpus's heaviest element and mapped shape (private_a), as
 // measured with GOIFC_PRIVATE_CORPUS set. CI runs without it, so the figures
 // that hold the budget at 1<<23 are checked here too.
-const privateHeaviestElement, privateHeaviestShape = 256_312, 183_080
+const privateHeaviestElement, privateHeaviestShape = 274_620, 201_388
 
 // Every real element stays sixteen times inside the budget, and every mapped
 // shape four times inside its own share (elementBudget / (maxMapDepth+1)), so
@@ -1331,4 +1336,188 @@ func TestAnOverWalkShipsNoBox(t *testing.T) {
 	if b.spent() != cost {
 		t.Errorf("charged %d, want the walk's cost %d", b.spent(), int64(cost))
 	}
+}
+
+// A clip reserves its triangles before clipping them: a clip far too large to
+// finish declines without spending them, so its operand's box still ships.
+func TestAClipFarTooLargeToFinishStillBoxes(t *testing.T) {
+	f := ifcFile(t, boxSolid(10)+
+		"#20=IFCCARTESIANPOINT((0.,0.,0.5));\n#21=IFCDIRECTION((0.,0.,1.));\n#22=IFCAXIS2PLACEMENT3D(#20,#21,$);\n"+
+		"#23=IFCPLANE(#22);\n#24=IFCHALFSPACESOLID(#23,.F.);\n#25=IFCBOOLEANCLIPPINGRESULT(.DIFFERENCE.,#12,#24);\n")
+	item, _ := f.ByID(25)
+	// The operand spends 9 of 10 units; its 12 triangles cannot be reserved.
+	m := unionItems([]*step.Instance{item}, 1, 0, nil, sizedBudget(10))
+	if m.src != SourceOBB || len(m.tris) != 36 || !m.overBudget {
+		t.Errorf("src=%v with %d indices, overBudget=%v; want the clip's box, over budget", m.src, len(m.tris), m.overBudget)
+	}
+}
+
+// fatCoords is a coordinate list of m zeros: a point no IFC schema allows,
+// since a point or direction has at most three coordinates.
+func fatCoords(m int) string {
+	return "(" + strings.TrimSuffix(strings.Repeat("0.,", m), ",") + ")"
+}
+
+// setItems names the face sets #100.. as a wall's n items.
+func setItems(n int) string {
+	refs := make([]string, n)
+	for i := range n {
+		refs[i] = fmt.Sprintf("#%d", 100+i)
+	}
+	return strings.Join(refs, ",")
+}
+
+// A point is read only when it has at most three coordinates. One point with 200,000
+// coordinates, named thousands of times, must not be read in full each time.
+func TestAPointWithTooManyCoordinatesIsNotReadPerReference(t *testing.T) {
+	const m, l = 200_000, 2_000
+	refs := strings.TrimSuffix(strings.Repeat("#10,", l), ",")
+	brep := fmt.Sprintf("#10=IFCCARTESIANPOINT(%s);\n#11=IFCPOLYLOOP((%s));\n#12=IFCFACEOUTERBOUND(#11,.T.);\n"+
+		"#13=IFCFACE((#12));\n#14=IFCCLOSEDSHELL((#13));\n#15=IFCFACETEDBREP(#14);\n", fatCoords(m), refs)
+	// Face sets sharing one point list each decline at the point, then box.
+	var sets strings.Builder
+	fmt.Fprintf(&sets, "#10=IFCCARTESIANPOINTLIST3D((%s));\n", fatCoords(m))
+	for i := range l {
+		fmt.Fprintf(&sets, "#%d=IFCTRIANGULATEDFACESET(#10,$,$,((1,1,1)),$);\n", 100+i)
+	}
+	for name, data := range map[string]string{"brep loop": brep + wallWith("#15"), "face sets": sets.String() + wallWith(setItems(l))} {
+		f := ifcFile(t, data)
+		bounded(t, name, func() { elementMesh(f, 1, 1, &meshCache{}) })
+	}
+}
+
+// Only a face's outer bound shapes its mesh, so inner bounds are not read:
+// a face naming one large loop as a thousand holes costs its outer bound.
+func TestAFacesInnerBoundsAreNotRead(t *testing.T) {
+	const l, holes, faces = 10_000, 1_000, 10
+	var d strings.Builder
+	pts := make([]string, l)
+	for i := range l {
+		a := 2 * math.Pi * float64(i) / l
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%.6f,%.6f,0.));\n", 100+i, math.Cos(a), math.Sin(a))
+		pts[i] = fmt.Sprintf("#%d", 100+i)
+	}
+	fmt.Fprintf(&d, "#20=IFCPOLYLOOP((%s));\n#21=IFCFACEBOUND(#20,.T.);\n", strings.Join(pts, ","))
+	d.WriteString("#30=IFCCARTESIANPOINT((0.,0.,0.));\n#31=IFCCARTESIANPOINT((1.,0.,0.));\n#32=IFCCARTESIANPOINT((0.,1.,0.));\n" +
+		"#22=IFCPOLYLOOP((#30,#31,#32));\n#23=IFCFACEOUTERBOUND(#22,.T.);\n")
+	fmt.Fprintf(&d, "#24=IFCFACE((%s#23));\n", strings.Repeat("#21,", holes))
+	fmt.Fprintf(&d, "#14=IFCCLOSEDSHELL((%s));\n#15=IFCFACETEDBREP(#14);\n", strings.TrimSuffix(strings.Repeat("#24,", faces), ","))
+	f := ifcFile(t, d.String()+wallWith("#15"))
+	var m mesh
+	bounded(t, "elementMesh", func() { m = elementMesh(f, 1, 1, &meshCache{}) })
+	if m.src == SourceOBB || m.overBudget {
+		t.Errorf("src=%v, overBudget=%v; want the faces meshed within budget", m.src, m.overBudget)
+	}
+}
+
+// A composite curve that names one parent curve again retraces it: no closed
+// profile does that. Ten thousand segments over one 10,000-point polyline
+// must not build a hundred million points.
+func TestACompositeCurveRepeatingAParentIsNotBuilt(t *testing.T) {
+	const l, k = 10_000, 10_000
+	var d strings.Builder
+	pts := make([]string, l)
+	for i := range l {
+		a := 2 * math.Pi * float64(i) / l
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%.6f,%.6f));\n", 100_000+i, math.Cos(a), math.Sin(a))
+		pts[i] = fmt.Sprintf("#%d", 100_000+i)
+	}
+	fmt.Fprintf(&d, "#40=IFCPOLYLINE((%s));\n", strings.Join(pts, ","))
+	segs := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(&d, "#%d=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#40);\n", 200_000+i)
+		segs[i] = fmt.Sprintf("#%d", 200_000+i)
+	}
+	fmt.Fprintf(&d, "#50=IFCCOMPOSITECURVE((%s),.F.);\n#51=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#50);\n"+
+		"#6=IFCDIRECTION((0.,0.,1.));\n#15=IFCEXTRUDEDAREASOLID(#51,$,#6,1.);\n", strings.Join(segs, ","))
+	f := ifcFile(t, d.String()+wallWith("#15"))
+	bounded(t, "elementMesh", func() { elementMesh(f, 1, 1, &meshCache{}) })
+	prof, _ := f.ByID(51)
+	if poly := profilePolygon(prof); poly != nil {
+		t.Errorf("profilePolygon built %d points; want the retracing curve declined", len(poly))
+	}
+}
+
+// A face's bounds are charged each time a shell names the face: one face with
+// thousands of holes, named thousands of times, runs out of budget instead of
+// walking every bound at every reference.
+func TestAFacesBoundsAreChargedPerReference(t *testing.T) {
+	const holes, faces = 40_000, 5_000
+	var d strings.Builder
+	d.WriteString("#30=IFCCARTESIANPOINT((0.,0.,0.));\n#31=IFCCARTESIANPOINT((1.,0.,0.));\n#32=IFCCARTESIANPOINT((0.,1.,0.));\n" +
+		"#20=IFCPOLYLOOP((#30,#31,#32));\n#21=IFCFACEBOUND(#20,.T.);\n#23=IFCFACEOUTERBOUND(#20,.T.);\n")
+	fmt.Fprintf(&d, "#24=IFCFACE((%s#23));\n", strings.Repeat("#21,", holes))
+	fmt.Fprintf(&d, "#14=IFCCLOSEDSHELL((%s));\n#15=IFCFACETEDBREP(#14);\n", strings.TrimSuffix(strings.Repeat("#24,", faces), ","))
+	f := ifcFile(t, d.String()+wallWith("#15"))
+	var m mesh
+	bounded(t, "elementMesh", func() { m = elementMesh(f, 1, 1, &meshCache{}) })
+	if !m.overBudget {
+		t.Errorf("src=%v, overBudget=false; want the repeated bounds charged past the budget", m.src)
+	}
+}
+
+// A bounded half-space's boundary is charged on every clip that reads it:
+// distinct clips sharing one long boundary run out of budget.
+func TestAClipsBoundaryIsChargedPerClip(t *testing.T) {
+	const n, k = 20_000, 1_000
+	var d strings.Builder
+	d.WriteString(boxSolid(10) + "#20=IFCCARTESIANPOINT((0.,0.,0.5));\n#21=IFCDIRECTION((0.,0.,1.));\n" +
+		"#22=IFCAXIS2PLACEMENT3D(#20,#21,$);\n#23=IFCPLANE(#22);\n#30=IFCCARTESIANPOINT((0.,0.));\n")
+	fmt.Fprintf(&d, "#31=IFCPOLYLINE((%s));\n#32=IFCPOLYGONALBOUNDEDHALFSPACE(#23,.F.,#22,#31);\n",
+		strings.TrimSuffix(strings.Repeat("#30,", n), ","))
+	clips := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(&d, "#%d=IFCBOOLEANCLIPPINGRESULT(.DIFFERENCE.,#12,#32);\n", 1_000+i)
+		clips[i] = fmt.Sprintf("#%d", 1_000+i)
+	}
+	f := ifcFile(t, d.String()+wallWith(strings.Join(clips, ",")))
+	var m mesh
+	bounded(t, "elementMesh", func() { m = elementMesh(f, 1, 1, &meshCache{}) })
+	if !m.overBudget {
+		t.Errorf("src=%v, overBudget=false; want the shared boundary charged past the budget", m.src)
+	}
+}
+
+// A trim is a set of at most two selects. A trim naming one point a hundred
+// thousand times is declined, not read at every arc that uses it.
+func TestAnArcTrimLongerThanTwoIsDeclined(t *testing.T) {
+	const n, k = 100_000, 500
+	var d strings.Builder
+	d.WriteString("#30=IFCCARTESIANPOINT((0.,0.));\n#31=IFCAXIS2PLACEMENT2D(#30,$);\n#32=IFCCIRCLE(#31,1.);\n" +
+		"#33=IFCCARTESIANPOINT((1.,0.));\n#34=IFCCARTESIANPOINT((-1.,0.));\n")
+	fmt.Fprintf(&d, "#35=IFCTRIMMEDCURVE(#32,(%s),(#34),.T.,.CARTESIAN.);\n", strings.TrimSuffix(strings.Repeat("#33,", n), ","))
+	d.WriteString("#36=IFCTRIMMEDCURVE(#32,(#34),(#33),.T.,.CARTESIAN.);\n" +
+		"#37=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#35);\n#38=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#36);\n" +
+		"#39=IFCCOMPOSITECURVE((#37,#38),.F.);\n#40=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#39);\n#6=IFCDIRECTION((0.,0.,1.));\n")
+	solids := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(&d, "#%d=IFCEXTRUDEDAREASOLID(#40,$,#6,1.);\n", 1_000+i)
+		solids[i] = fmt.Sprintf("#%d", 1_000+i)
+	}
+	f := ifcFile(t, d.String()+wallWith(strings.Join(solids, ",")))
+	bounded(t, "elementMesh", func() { elementMesh(f, 1, 1, &meshCache{}) })
+	arc, _ := f.ByID(35)
+	if pts := arcPoints(arc); pts != nil {
+		t.Errorf("arcPoints read a %d-entry trim; want it declined", n)
+	}
+}
+
+// An arc trimmed by parameters reads the file's plane angle unit. The lookup
+// scans the file's units, so it is made once per file, not at every arc.
+func TestThePlaneAngleUnitIsLookedUpOncePerFile(t *testing.T) {
+	const units, k = 200_000, 600
+	var d strings.Builder
+	fmt.Fprintf(&d, "#90=IFCPROJECT('p',$,$,$,$,$,$,$,#91);\n#92=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n#91=IFCUNITASSIGNMENT((%s));\n",
+		strings.TrimSuffix(strings.Repeat("#92,", units), ","))
+	d.WriteString("#30=IFCCARTESIANPOINT((0.,0.));\n#31=IFCAXIS2PLACEMENT2D(#30,$);\n#32=IFCCIRCLE(#31,1.);\n" +
+		"#35=IFCTRIMMEDCURVE(#32,(IFCPARAMETERVALUE(0.)),(IFCPARAMETERVALUE(3.)),.T.,.PARAMETER.);\n" +
+		"#37=IFCCOMPOSITECURVESEGMENT(.CONTINUOUS.,.T.,#35);\n" +
+		"#39=IFCCOMPOSITECURVE((#37),.F.);\n#40=IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#39);\n#6=IFCDIRECTION((0.,0.,1.));\n")
+	solids := make([]string, k)
+	for i := range k {
+		fmt.Fprintf(&d, "#%d=IFCEXTRUDEDAREASOLID(#40,$,#6,1.);\n", 1_000+i)
+		solids[i] = fmt.Sprintf("#%d", 1_000+i)
+	}
+	f := ifcFile(t, d.String()+wallWith(strings.Join(solids, ",")))
+	bounded(t, "elementMesh", func() { elementMesh(f, 1, 1, &meshCache{}) })
 }

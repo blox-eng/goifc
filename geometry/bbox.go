@@ -32,8 +32,9 @@ const maxApproxLadder = 8
 // about 70 ns and 70 bytes, so a walk to the cap takes about 0.6 s and 0.6 GiB;
 // real box walks in the corpus cost a few hundred units. A face set is charged
 // by its points, so it keeps its box well past the size at which meshing
-// declines. A faceted brep's walk costs about 14 units a face, so a brep too
-// large to mesh (about 1.4M faces) gets no box either.
+// declines (about 1.4M points), up to about 8.4M points. A faceted brep's walk
+// costs about 14 units a face, so a brep that declines to mesh gets no box past
+// about 600k faces.
 const maxBoxWalk = elementBudget
 
 // collectPoints returns every IfcCartesianPoint coordinate reachable from item
@@ -42,8 +43,8 @@ const maxBoxWalk = elementBudget
 //
 // cost is the walk's work: every value it steps over and every point it adds.
 // The walk from one item is the same whoever starts it, so its cost is too.
-// A cost past maxBoxWalk means the walk stopped short: its points are
-// incomplete and must not be boxed.
+// A cost past maxBoxWalk means the walk did more work than one budget allows
+// and may have stopped short, so its box is not used.
 func collectPoints(item *step.Instance, c *meshCache) (pts []v3, cost int64) {
 	w := &boxWalk{c: c, approx: map[[2]int][]v3{}, polys: map[int][][2]float64{}}
 	return w.points(item, 0), w.cost
@@ -126,6 +127,8 @@ func (w *boxWalk) points(item *step.Instance, ladder int) []v3 {
 		if isHalfSpaceSolid(inst) {
 			return
 		}
+		// A point with more than three coordinates is invalid and adds nothing,
+		// so the box of an item that declined on it may not reach it.
 		if inst.IsA("IfcCartesianPoint") {
 			c := floatsOf(inst, attrCoordinates)
 			if len(c) >= 3 {

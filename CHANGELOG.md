@@ -29,10 +29,16 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   limit (20 s and 20 GB for 2,000 wrappers over one shell). The budget now
   charges every item's output and every box walk, and a box walk stops past
   one budget. A face set's walk is charged by its points, not its triangles,
-  so a face set too large to mesh still gets its box. A faceted brep too large
-  to mesh (about 1.4M faces) gets no box. An element over budget still boxes what it
-  can, then leaves the rest out with the "tessellation budget exceeded"
-  warning. The budget drops
+  so a face set too large to mesh still gets its box, up to about 8.4M points.
+  A faceted brep that declines to mesh gets no box past about 600k faces. An
+  element over budget still boxes what it can, then leaves the rest out with
+  the "tessellation budget exceeded" warning. Reads that grew with a file's
+  repeats, not its size, are bounded too: a point with more than three
+  coordinates is not read, a face's inner bounds are not read and its bounds
+  are charged each time a shell names it, a clip's boundary is charged on
+  every clip, a composite curve that names one parent curve twice is declined,
+  an arc trim of more than two selects is declined, and the plane angle unit
+  is looked up once per file. The budget drops
   from 1<<26 to 1<<23 units: the heaviest corpus element stays 16 times inside
   it and the heaviest mapped shape 4 times inside its share (#108).
 - An element that falls back to its box no longer boxes an extruded solid's

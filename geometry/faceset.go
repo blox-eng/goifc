@@ -173,7 +173,9 @@ func (x faceIndex) point(i int64) (v3, bool) {
 		}
 		i = x.pn[i-1]
 	}
-	if i < 1 || i > int64(len(x.pts)) {
+	// A point is checked for three entries before it is read: sets sharing one
+	// list would otherwise each read a long entry in full.
+	if i < 1 || i > int64(len(x.pts)) || x.pts[i-1].Kind() != step.KindList || len(x.pts[i-1].List()) != 3 {
 		return v3{}, false
 	}
 	c, ok := numbersOf(x.pts[i-1])
