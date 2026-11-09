@@ -70,7 +70,7 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *
 	// unscaled frame for clipping; scale to meters once, at the end.
 	m := tessellateItemDepth(first, 1.0, depth+1, c, b)
 	verts, tris := m.verts, m.tris
-	if len(verts) == 0 || len(tris) == 0 || !b.spend(int64(len(tris))) {
+	if len(verts) == 0 || len(tris) == 0 || !b.reserve(int64(len(tris))) {
 		return mesh{}, false
 	}
 	// Empirically (verified against the ifcopenshell parity oracle on a real
@@ -79,6 +79,10 @@ func clipMeshByDifference(item *step.Instance, unitScale float64, depth int, c *
 	// AgreementFlag itself — i.e. keep the >=0 side when AgreementFlag is
 	// TRUE, the <=0 side when FALSE.
 	if second.IsA("IfcPolygonalBoundedHalfSpace") {
+		// Every clip reads its boundary, and clips may share one: reserved first.
+		if boundary, has := second.Ref(attrHSPolygonBoundary); !has || !b.reserve(curveSize(boundary)) {
+			return mesh{}, false
+		}
 		verts, tris, ok = clipTrianglesByBoundedPlane(verts, tris, origin, normal, agreeInside, second)
 		if !ok {
 			return mesh{}, false

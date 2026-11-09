@@ -182,7 +182,7 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 			return m
 		}
 	}
-	v, t := obbFromItem(item, unitScale, c)
+	v, t := obbFromItem(item, unitScale, c, b)
 	return mesh{verts: v, tris: t, src: SourceOBB, ok: len(t) > 0, overBudget: b.exhausted()}
 }
 
@@ -193,8 +193,9 @@ func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) m
 	return unionItems(representationItems(f, expressID), unitScale, 0, c, newBudget())
 }
 
-// unionItems meshes items into one mesh. An item that comes back empty is left
-// out, and marks the union partial unless it was authored empty.
+// unionItems meshes items into one mesh, charging each item's output to b. An
+// item that comes back empty is left out, and marks the union partial unless it
+// was authored empty; once b is overdrawn the remaining items are left out.
 func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCache, b *budget) mesh {
 	u := mesh{src: SourceOBB}
 	seen := make(map[int]bool, len(items))
@@ -204,12 +205,20 @@ func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCac
 			continue
 		}
 		seen[item.ID()] = true
+		if !b.canOverdraw() {
+			u.partial, u.overBudget = true, true
+			break
+		}
 		m := tessellateItemDepth(item, unitScale, depth, c, b)
 		u.partial = u.partial || m.partial || (len(m.verts) == 0 && !m.ok)
 		u.overBudget = u.overBudget || m.overBudget
 		if len(m.verts) == 0 {
 			continue
 		}
+		// Output is charged too: a shape cheap to mesh may still be large, and a
+		// mapped clone is as large as its shape at every placement. An item whose
+		// output overspends shipped whole, so this alone flags nothing.
+		b.spend(int64(len(m.verts)/3 + len(m.tris)/3))
 		u.boxed = u.boxed || m.boxed || m.src == SourceOBB
 		if u.verts == nil {
 			// tessellateItemDepth's slices are the caller's own, so the first
@@ -227,12 +236,19 @@ func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCac
 	return u
 }
 
-func obbFromItem(item *step.Instance, unitScale float64, c *meshCache) ([]float32, []uint32) {
-	lo, hi, ok := c.itemBox(item, unitScale, func() (v3, v3, bool) {
-		b := pointsBox(collectPoints(item, c))
-		return scaleV3(b.lo, unitScale), scaleV3(b.hi, unitScale), b.ok
+// obbFromItem returns item's box, charging its walk to b. An item whose walk
+// ran past maxBoxWalk, or that arrives once b is overdrawn, gets no box.
+func obbFromItem(item *step.Instance, unitScale float64, c *meshCache, b *budget) ([]float32, []uint32) {
+	if !b.canOverdraw() {
+		return nil, nil
+	}
+	lo, hi, ok, cost := c.itemBox(item, unitScale, func() (v3, v3, bool, int64) {
+		pts, cost := collectPoints(item, c)
+		bx := pointsBox(pts)
+		return scaleV3(bx.lo, unitScale), scaleV3(bx.hi, unitScale), bx.ok, cost
 	})
-	if !ok {
+	b.spend(cost)
+	if cost > maxBoxWalk || !ok {
 		return nil, nil
 	}
 	return boxMesh(lo, hi)

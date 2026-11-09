@@ -69,6 +69,12 @@ func brepMesh(brep *step.Instance, b *budget) (verts []float32, tris []uint32, o
 		if fv.Kind() != step.KindRef || fv.Ref() == nil || !fv.Ref().IsA("IfcFace") {
 			return nil, nil, false
 		}
+		// A face's bounds are walked each time a shell names it; reserved first,
+		// so a face with many holes named many times runs out of budget.
+		boundsV, _ := fv.Ref().Get(attrFaceBounds)
+		if boundsV.Kind() != step.KindList || !b.reserve(int64(len(boundsV.List()))) {
+			return nil, nil, false
+		}
 		loop := faceOuterLoop(fv.Ref())
 		if len(loop) < 3 || !b.spend(int64(len(loop))) {
 			return nil, nil, false
@@ -91,14 +97,16 @@ func brepMesh(brep *step.Instance, b *budget) (verts []float32, tris []uint32, o
 
 // faceOuterLoop returns the polygon of a face's outer bound (first IfcFaceOuterBound,
 // else first bound). Points are IfcPolyLoop.Polygon coordinates, raw units. nil
-// when any bound is unreadable: skipping an unreadable outer bound would promote
-// a hole to the face's outline.
+// when any bound is not a poly loop, or the outer one is unreadable: skipping an
+// unreadable outer bound would promote a hole to the face's outline.
 func faceOuterLoop(face *step.Instance) []v3 {
 	boundsV, ok := face.Get(attrFaceBounds)
 	if !ok || boundsV.Kind() != step.KindList {
 		return nil
 	}
-	var fallback []v3
+	// Only the outer bound is read: inner bounds do not shape the mesh, and a
+	// face may name one large loop as any number of holes.
+	var outer *step.Instance
 	for _, bv := range boundsV.List() {
 		if bv.Kind() != step.KindRef || bv.Ref() == nil {
 			return nil
@@ -107,27 +115,25 @@ func faceOuterLoop(face *step.Instance) []v3 {
 		if !ok || !loop.IsA("IfcPolyLoop") {
 			return nil
 		}
-		pts := loopPoints(loop)
-		if pts == nil {
-			return nil
-		}
-		// IfcFaceBound.Orientation=.F. means the loop vertices run opposite to the
-		// face normal (IFC spec); reverse them so the loop winding — which
-		// triangulateFace derives the facet normal from via Newell's method —
-		// matches the intended outward facing. Ignoring this ships those facets
-		// inside-out (inward normals / backface-culled), and the AABB cross-check
-		// is blind to it since the vertex set is identical.
-		if o, ok := bv.Ref().Get(attrBoundOrientation); ok && o.Kind() == step.KindBool && !o.Bool() {
-			reverseV3(pts)
-		}
-		if bv.Ref().IsA("IfcFaceOuterBound") {
-			return pts
-		}
-		if fallback == nil {
-			fallback = pts
+		if outer == nil || (bv.Ref().IsA("IfcFaceOuterBound") && !outer.IsA("IfcFaceOuterBound")) {
+			outer = bv.Ref()
 		}
 	}
-	return fallback
+	if outer == nil {
+		return nil
+	}
+	loop, _ := outer.Ref(attrBoundLoop)
+	pts := loopPoints(loop)
+	// IfcFaceBound.Orientation=.F. means the loop vertices run opposite to the
+	// face normal (IFC spec); reverse them so the loop winding — which
+	// triangulateFace derives the facet normal from via Newell's method —
+	// matches the intended outward facing. Ignoring this ships those facets
+	// inside-out (inward normals / backface-culled), and the AABB cross-check
+	// is blind to it since the vertex set is identical.
+	if o, ok := outer.Get(attrBoundOrientation); ok && o.Kind() == step.KindBool && !o.Bool() {
+		reverseV3(pts)
+	}
+	return pts
 }
 
 // loopPoints returns an IfcPolyLoop's points, or nil if any is not a 3D point.

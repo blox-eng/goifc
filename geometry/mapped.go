@@ -80,8 +80,11 @@ func mappedItemMesh(item *step.Instance, unitScale float64, depth int, c *meshCa
 // It spends a budget of its own rather than the element's: the result is
 // cached and shared, so it must not depend on which element reached it first.
 // That budget is a share of an element's, so that a chain of representations
-// mapping one another (up to maxMapDepth deep) costs an element at most about
-// two budgets, however each link is filled.
+// mapping one another (up to maxMapDepth deep) does at most about two budgets
+// of meshing work, however each link is filled, plus box walks of up to
+// maxBoxWalk each. The charge can be larger: each link's output is charged
+// inside it and again as its parent's clone, which only stops the element
+// sooner.
 func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *meshCache) mesh {
 	itemsV, has := mappedRep.Get(attrRepresentationItems)
 	if !has || itemsV.Kind() != step.KindList {
