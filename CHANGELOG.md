@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.6 — 2026-11-10
+
 ### Fixed
 
 - Finding an element's container, parent or type no longer scans the whole
