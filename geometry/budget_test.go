@@ -735,6 +735,14 @@ func TestTriangulatePolygonChargesTheLoopUpFront(t *testing.T) {
 // re-measure if elementBudget changes.
 const allocLimit = 1536 << 20
 
+// buildAllocLimit bounds what one Build of a hostile file may allocate. The
+// Build budget lets the elements of a small file mesh about one element budget
+// between them, and box as much again. Measured: the heaviest shared-shape
+// fixture allocates 1,755 MiB, and the same fixture allocated 8.5 GiB before
+// the Build budget (#106). 3 GiB keeps 1.7 times the first and about a third of
+// the second.
+const buildAllocLimit = 3 << 30
+
 // boundedTime is 4 to 125 times what the bounded fixtures take on an idle
 // machine (0.04 to 1.2 s), so a loaded machine still passes. Every blow-up on
 // the unbudgeted code still fails a bound: by time (the hub ladder ran past 10
@@ -745,6 +753,12 @@ const boundedTime = 5 * time.Second
 // timeLimit) or allocated more than allocLimit bytes.
 func bounded(t *testing.T, name string, fn func()) {
 	t.Helper()
+	boundedWithin(t, name, allocLimit, fn)
+}
+
+// boundedWithin is bounded with an allocation limit of limit bytes.
+func boundedWithin(t *testing.T, name string, limit uint64, fn func()) {
+	t.Helper()
 	var before, after runtime.MemStats
 	runtime.GC()
 	runtime.ReadMemStats(&before)
@@ -753,8 +767,8 @@ func bounded(t *testing.T, name string, fn func()) {
 	took := time.Since(start)
 	runtime.ReadMemStats(&after)
 	alloc := after.TotalAlloc - before.TotalAlloc
-	if took > timeLimit(boundedTime) || alloc > allocLimit {
-		t.Errorf("%s: took %v (limit %v), allocated %d MiB (limit %d MiB)", name, took, timeLimit(boundedTime), alloc>>20, allocLimit>>20)
+	if took > timeLimit(boundedTime) || alloc > limit {
+		t.Errorf("%s: took %v (limit %v), allocated %d MiB (limit %d MiB)", name, took, timeLimit(boundedTime), alloc>>20, limit>>20)
 	}
 }
 

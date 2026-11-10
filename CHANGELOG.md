@@ -50,6 +50,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   warning gives both counts. Which elements are boxed is settled in element
   order, so it is the same on every run. The corpus spends at most 30 per
   instance.
+- A face or profile that many elements name is triangulated once per `Build`
+  (#106). 2,000 elements whose breps share one 2,000-point face each clipped
+  it again, and past the Build budget about half of them lost their geometry;
+  now every one keeps its mesh. Each element is still charged the
+  triangulation's cost against its own budget, so no mesh changes.
 - Finding an element's container, parent or type no longer scans the whole
   relation for each element (#126). Each element of an N-element relation
   scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one

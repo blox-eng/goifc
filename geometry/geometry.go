@@ -3,6 +3,7 @@ package geometry
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"sync/atomic"
 
 	"github.com/blox-eng/goifc/internal/par"
@@ -105,8 +106,9 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 	pool.Store(size)
 	meshes := make([]mesh, len(r.Elements))
 	states := make([]buildState, len(r.Elements))
-	costs := make([]int64, len(r.Elements))
-	walks := make([][]itemWalk, len(r.Elements))
+	owns := make([]int64, len(r.Elements))
+	shares := make([][]sharedWork, len(r.Elements))
+	var claimed sync.Map
 	workers := min(runtime.GOMAXPROCS(0), len(r.Elements))
 	var next atomic.Int64
 	var g par.Group
@@ -118,42 +120,35 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 					return
 				}
 				states[i] = stateFor(size - pool.Load())
-				meshes[i], costs[i], walks[i] = meshAs(f, r.Elements[i].ExpressID, r.UnitScale, c, states[i])
-				pool.Add(-costs[i])
+				meshes[i], owns[i], shares[i] = meshAs(f, r.Elements[i].ExpressID, r.UnitScale, c, states[i])
+				pool.Add(-poolCost(owns[i], shares[i], func(id int) bool {
+					_, taken := claimed.LoadOrStore(id, true)
+					return !taken
+				}))
 			}
 		})
 	}
 	g.Wait()
 
-	// The parallel pass may have meshed an element that, in element order,
-	// starts past the budget: settle each element in order. An element that is
-	// meshed in order was meshed by the pass too, since every element before
-	// it was, at the same cost; only boxes and left-out elements are redone.
-	//
-	// A box reads each item's box from the cache, so in order an item's walk
-	// is charged once, to the first box that reads it, and each later read
-	// costs 1. The parallel pass charged every walk in full: never less.
+	// The parallel pass charged shared work to whichever worker claimed it
+	// first, so it may have meshed, boxed or left out an element that in
+	// element order starts elsewhere: settle each element in order, and redo
+	// those whose state differs. Shared work is charged once, to the first
+	// element in order that does it.
 	var spent int64
 	boxed, leftOut := 0, 0
-	walked := map[int]bool{}
+	charged := map[int]bool{}
 	for i := range r.Elements {
 		want := stateFor(spent)
 		if want != states[i] {
 			states[i] = want
-			meshes[i], costs[i], walks[i] = meshAs(f, r.Elements[i].ExpressID, r.UnitScale, c, want)
+			meshes[i], owns[i], shares[i] = meshAs(f, r.Elements[i].ExpressID, r.UnitScale, c, want)
 		}
-		if want == stateBoxed {
-			costs[i] = int64(len(meshes[i].verts)/3 + len(meshes[i].tris)/3)
-			for _, w := range walks[i] {
-				if walked[w.item] {
-					costs[i]++
-					continue
-				}
-				walked[w.item] = true
-				costs[i] += w.cost
-			}
-		}
-		spent += costs[i]
+		spent += poolCost(owns[i], shares[i], func(id int) bool {
+			first := !charged[id]
+			charged[id] = true
+			return first
+		})
 		switch want {
 		case stateBoxed:
 			boxed++
@@ -203,29 +198,39 @@ const (
 	stateLeftOut                   // past it twice over: no geometry
 )
 
-// meshAs meshes one element in state st, and returns what it cost. A box
-// also returns the item walks it read.
-func meshAs(f *step.File, expressID int, unitScale float64, c *meshCache, st buildState) (mesh, int64, []itemWalk) {
+// meshAs meshes one element in state st. It returns the work the element did
+// on its own, and the shared work it read from the cache.
+func meshAs(f *step.File, expressID int, unitScale float64, c *meshCache, st buildState) (mesh, int64, []sharedWork) {
 	switch st {
 	case stateLeftOut:
 		return mesh{src: SourceOBB}, 0, nil
 	case stateBoxed:
 		m, walks := elementBox(representationItems(f, expressID), unitScale, c)
-		cost := int64(len(m.verts)/3 + len(m.tris)/3)
-		for _, w := range walks {
-			cost += w.cost
-		}
-		return m, cost, walks
+		return m, int64(len(m.verts)/3 + len(m.tris)/3), walks
 	}
 	b := newBudget()
+	b.cache = c
 	m := unionItems(representationItems(f, expressID), unitScale, 0, c, b)
-	return m, b.spent(), nil
+	own := b.spent()
+	for _, w := range b.shared {
+		own -= w.cost
+	}
+	return m, own, b.shared
 }
 
-// itemWalk is one item's box walk, and what it cost the first time.
-type itemWalk struct {
-	item int
-	cost int64
+// poolCost is what one element costs the Build budget: its own work, and each
+// piece of shared work in full where first reports that this element is the
+// first to be charged it, and 1 where it is not.
+func poolCost(own int64, shared []sharedWork, first func(id int) bool) int64 {
+	cost := own
+	for _, w := range shared {
+		if first(w.id) {
+			cost += w.cost
+		} else {
+			cost++
+		}
+	}
+	return cost
 }
 
 // maxMapDepth bounds IfcMappedItem recursion. Real IFC mapped items nest 0-2
@@ -301,7 +306,9 @@ func tessellateItemDepth(item *step.Instance, unitScale float64, depth int, c *m
 // each representation item via tessellateItemDepth (extrude/brep/mapped/OBB
 // fallback), all of them sharing one budget.
 func elementMesh(f *step.File, expressID int, unitScale float64, c *meshCache) mesh {
-	return unionItems(representationItems(f, expressID), unitScale, 0, c, newBudget())
+	b := newBudget()
+	b.cache = c
+	return unionItems(representationItems(f, expressID), unitScale, 0, c, b)
 }
 
 // unionItems meshes items into one mesh, charging each item's output to b. An
@@ -351,12 +358,12 @@ func unionItems(items []*step.Instance, unitScale float64, depth int, c *meshCac
 // as recorded the first time any element walked it: the same whoever walked
 // it first. The walks stop at one element budget. A mapped item is left out:
 // its box is in its own frame (see tessellateItemDepth).
-func elementBox(items []*step.Instance, unitScale float64, c *meshCache) (mesh, []itemWalk) {
+func elementBox(items []*step.Instance, unitScale float64, c *meshCache) (mesh, []sharedWork) {
 	m := mesh{src: SourceOBB}
 	var lo, hi v3
 	have := false
 	var cost int64
-	var walks []itemWalk
+	var walks []sharedWork
 	seen := make(map[int]bool, len(items))
 	for _, item := range items {
 		if seen[item.ID()] {
@@ -369,7 +376,7 @@ func elementBox(items []*step.Instance, unitScale float64, c *meshCache) (mesh, 
 		}
 		l, h, ok, walked := itemBoxOf(item, unitScale, c)
 		cost += walked
-		walks = append(walks, itemWalk{item.ID(), walked})
+		walks = append(walks, sharedWork{item.ID(), walked})
 		if !ok || walked > maxBoxWalk {
 			m.partial = true
 			continue
@@ -409,6 +416,7 @@ func obbFromItem(item *step.Instance, unitScale float64, c *meshCache, b *budget
 	}
 	lo, hi, ok, cost := itemBoxOf(item, unitScale, c)
 	b.spend(cost)
+	b.share(item.ID(), cost)
 	if cost > maxBoxWalk || !ok {
 		return nil, nil
 	}

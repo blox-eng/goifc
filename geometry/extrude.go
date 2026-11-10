@@ -20,7 +20,8 @@ func extrudeSolid(solid *step.Instance, b *budget) (verts []float32, tris []uint
 	// Caps: ear-clip the 2D profile polygon ONCE (handles concave footprints —
 	// a naive fan inverts on L-shaped walls/slabs), emit bottom (reversed
 	// winding, downward normal) and top rings from the same triangulation.
-	capTris, ok := triangulatePolygon(poly, b)
+	prof, _ := solid.Ref(attrSweptArea)
+	capTris, ok := b.triangulated(prof.ID(), func(b *budget) ([]uint32, bool) { return triangulatePolygon(poly, b) })
 	if !ok {
 		return nil, nil, false
 	}

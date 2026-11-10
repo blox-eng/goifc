@@ -37,6 +37,43 @@ type meshCache struct {
 	m      sync.Map // mapKey -> *cachedMesh
 	bounds sync.Map // point list instance id -> *cachedBounds
 	boxes  sync.Map // boxKey -> *cachedBox
+	tris   sync.Map // loop instance id -> *cachedTris
+}
+
+type cachedTris struct {
+	once sync.Once
+	tris []uint32
+	ok   bool
+	cost int64
+}
+
+// triangulated returns the triangulation of the loop instance id: a face or a
+// profile. triangulate computes it within the budget it is given, and its
+// result must depend on the loop alone. With b's cache it runs once per Build,
+// within a whole element budget, and b is charged what it cost: the same for
+// every element that names the loop, whoever ran it first. A loop that costs
+// more than b has left is refused, as if it had run out.
+//
+// The triangles are shared and must not be changed.
+func (b *budget) triangulated(id int, triangulate func(*budget) ([]uint32, bool)) ([]uint32, bool) {
+	if b == nil || b.cache == nil {
+		return triangulate(b)
+	}
+	e, found := b.cache.tris.Load(id)
+	if !found {
+		e, _ = b.cache.tris.LoadOrStore(id, &cachedTris{})
+	}
+	ct := e.(*cachedTris)
+	ct.once.Do(func() {
+		run := newBudget()
+		ct.tris, ct.ok = triangulate(run)
+		ct.cost = run.spent()
+	})
+	if !b.reserve(ct.cost) {
+		return nil, false
+	}
+	b.share(id, ct.cost)
+	return ct.tris, ct.ok
 }
 
 // boxKey includes scale because a box is built in scaled units.

@@ -18,7 +18,29 @@ const elementBudget = 1 << 23
 // budget bounds the work one element's tessellation may do. A nil *budget is
 // unlimited, for callers meshing trusted input in isolation; a box walk still
 // stops at maxBoxWalk.
-type budget struct{ left, size int64 }
+//
+// cache, when set, holds the loop triangulations of the Build, and shared
+// records each piece of cached work charged here, so that the Build budget can
+// charge work many elements share once.
+type budget struct {
+	left, size int64
+	cache      *meshCache
+	shared     []sharedWork
+}
+
+// sharedWork is work many elements may share, an item's box walk or a loop's
+// triangulation, keyed by the instance it reads, and what it costs.
+type sharedWork struct {
+	id   int
+	cost int64
+}
+
+// share records that cost units already charged here were shared work.
+func (b *budget) share(id int, cost int64) {
+	if b != nil {
+		b.shared = append(b.shared, sharedWork{id, cost})
+	}
+}
 
 func newBudget() *budget { return sizedBudget(elementBudget) }
 
