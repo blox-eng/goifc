@@ -4,6 +4,7 @@ import (
 	"math"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/blox-eng/goifc/model"
 )
@@ -764,5 +765,35 @@ func TestFootprintOnOpenMeshIsDirectionDependent(t *testing.T) {
 	}
 	if away[0].Role != LoopSilhouette {
 		t.Fatalf("N=-Z: role = %q, want %q — the fallback is indistinguishable by Role", away[0].Role, LoopSilhouette)
+	}
+}
+
+// One element of many small disjoint solids cuts into as many rings. Nesting
+// tests every ring against every other: rings × points, minutes at this size.
+// Past maxNestWork the rings are kept as outlines, not nested.
+func TestFootprintOfManyDisjointSolidsIsBounded(t *testing.T) {
+	const solids = 40_000
+	var w []v3
+	var tris []uint32
+	for i := range solids {
+		x, y := float64(2*(i%200)), float64(2*(i/200))
+		bw, bt := boxMeshWorld(v3{x, y, 0}, v3{x + 1, y + 1, 1})
+		base := uint32(len(w))
+		w = append(w, bw...)
+		for _, k := range bt {
+			tris = append(tris, base+k)
+		}
+	}
+	e := Element{Placement: model.Identity(), BBoxMin: [3]float64{0, 0, 0}, BBoxMax: [3]float64{400, 400, 1}, Tris: tris}
+	for _, p := range w {
+		e.Verts = append(e.Verts, float32(p[0]), float32(p[1]), float32(p[2]))
+	}
+	start := time.Now()
+	loops := Footprint(e, 0.5)
+	if d := time.Since(start); d > timeLimit(2*time.Second) {
+		t.Fatalf("cutting %d solids took %v, want under %v: every ring is tested against every other", solids, d, timeLimit(2*time.Second))
+	}
+	if len(loops) != solids {
+		t.Fatalf("got %d loops, want one per solid, %d", len(loops), solids)
 	}
 }

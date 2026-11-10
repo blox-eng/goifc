@@ -225,6 +225,11 @@ func Footprint(e Element, cutZ float64) []Loop {
 	return FootprintOn(e, HorizontalPlane(cutZ))
 }
 
+// maxNestWork bounds nestEvenOdd's rings × points. The corpus cuts at most 35
+// rings at once, a few thousand points, so this is several hundredfold above
+// any real cut.
+const maxNestWork = 1 << 24
+
 // nestEvenOdd classifies each ring by containment depth and emits Loops: a ring
 // contained by an odd number of others is a HOLE (wound CW, negative area); an
 // even-depth ring stays an outer boundary (CCW). Rings arrive CCW from
@@ -237,8 +242,22 @@ func Footprint(e Element, cutZ float64) []Loop {
 // (pointInPolygon). A ring's centroid is deliberately NOT used: concentric
 // rings (outer + inner of a hollow section) share a centroid that lands in the
 // hole, which would misclassify the outer ring as contained.
+//
+// Nesting costs about rings × points. Past maxNestWork the rings are kept as
+// given, each an outer boundary: a cut of many disjoint solids then still
+// draws each one, and only a hole among them is drawn filled.
 func nestEvenOdd(rings [][][2]float64, role LoopRole) []Loop {
 	out := make([]Loop, 0, len(rings))
+	points := 0
+	for _, r := range rings {
+		points += len(r)
+	}
+	if len(rings)*points > maxNestWork {
+		for _, r := range rings {
+			out = append(out, Loop{Role: role, Points: r})
+		}
+		return out
+	}
 	for i, r := range rings {
 		c := representativePoint(r)
 		depth := 0
