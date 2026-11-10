@@ -25,7 +25,14 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   relation for each element (#126). Each element of an N-element relation
   scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one
   type, took from 11 s to over a minute. Membership now comes from the
-  inverse index, in milliseconds.
+  inverse index.
+- Finding each element's storey no longer reads a shared parent's references
+  again for each element (#126). 80,000 walls aggregated into one assembly,
+  each through a relation of its own, took 14 s to extract; each container is
+  now found once per extract.
+- A placement point or direction with an unset or non-numeric coordinate is
+  no longer read (#126). Dropping the entry shifted the rest, so a location
+  (1,$,5) placed at (1,5,0); it now places at the origin.
 - A placement point with more than 3 coordinates is no longer read (#126). It
   was read in full for each element using it: 2,000 walls sharing one point
   of 2M coordinates allocated 30 GiB. Such a point now places at the origin,

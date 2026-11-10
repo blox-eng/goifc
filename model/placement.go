@@ -184,7 +184,9 @@ func orthogonalize(x, z []float64) []float64 {
 
 // coords reads a point's or direction's coordinates. nil for more than three:
 // no schema allows them, and a placement is read once per element that uses
-// it, so a list of any length would cost its length each time.
+// it, so a list of any length would cost its length each time. nil too when an
+// entry is not a number: skipping it would shift the rest, so (1,$,5) would
+// read as (1,5).
 func coords(inst *step.Instance) []float64 {
 	v, ok := inst.Get(attrCoordinates)
 	if !ok || v.Kind() != step.KindList || len(v.List()) > 3 {
@@ -197,6 +199,8 @@ func coords(inst *step.Instance) []float64 {
 			out = append(out, e.Float())
 		case step.KindInt:
 			out = append(out, float64(e.Int()))
+		default:
+			return nil
 		}
 	}
 	return out

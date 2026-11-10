@@ -296,16 +296,59 @@ func memberOf(f *step.File, inst *step.Instance, class string, memberAttr, relat
 // resolves door→(filled_void)→opening→(voided_element)→wall→(contained)→
 // storey. depth guards against malformed/cyclic IFC.
 func containerOf(f *step.File, inst *step.Instance, depth int) *step.Instance {
+	return newContainers(f).of(inst, depth)
+}
+
+// containers remembers each instance's container for one pass over a file.
+// Many elements can climb to one parent, and finding the parent's container
+// reads all of its references: without the memo, N children of one parent
+// cost N².
+type containers struct {
+	f    *step.File
+	memo map[int]climb
+}
+
+// climb is a container found hops parents above an instance, or the end of
+// its parent chain hops parents above it when c is nil.
+type climb struct {
+	c    *step.Instance
+	hops int
+}
+
+func newContainers(f *step.File) *containers {
+	return &containers{f: f, memo: map[int]climb{}}
+}
+
+func (r *containers) of(inst *step.Instance, depth int) *step.Instance {
+	c, _ := r.climb(inst, depth)
+	return c
+}
+
+// climb returns inst's container and whether the result holds at any depth
+// greater than the hops it took. A result cut short by depth, as in a cycle,
+// is not remembered: a call with more depth could see further.
+func (r *containers) climb(inst *step.Instance, depth int) (*step.Instance, bool) {
 	if depth <= 0 {
-		return nil
+		return nil, false
 	}
-	if s := memberOf(f, inst, "IfcRelContainedInSpatialStructure", attrRel4, attrRel5); s != nil { // RelatingStructure
-		return s
+	if m, ok := r.memo[inst.ID()]; ok && m.hops < depth {
+		return m.c, true
 	}
-	if p := getParent(f, inst); p != nil {
-		return containerOf(f, p, depth-1)
+	if s := memberOf(r.f, inst, "IfcRelContainedInSpatialStructure", attrRel4, attrRel5); s != nil { // RelatingStructure
+		r.memo[inst.ID()] = climb{c: s}
+		return s, true
 	}
-	return nil
+	p := getParent(r.f, inst)
+	if p == nil {
+		r.memo[inst.ID()] = climb{}
+		return nil, true
+	}
+	c, whole := r.climb(p, depth-1)
+	if !whole {
+		return nil, false
+	}
+	r.memo[inst.ID()] = climb{c: c, hops: r.memo[p.ID()].hops + 1}
+	return c, true
 }
 
 // Storey ports decompose._storey: resolves inst's enclosing IfcBuildingStorey
@@ -313,12 +356,16 @@ func containerOf(f *step.File, inst *step.Instance, depth int) *step.Instance {
 // nesting/filled-void/voiding when inst isn't directly contained), climbing
 // up to 8 hops.
 func Storey(f *step.File, inst *step.Instance) string {
-	c := containerOf(f, inst, 32)
+	return newContainers(f).storey(inst)
+}
+
+func (r *containers) storey(inst *step.Instance) string {
+	c := r.of(inst, 32)
 	for i := 0; i < 8 && c != nil; i++ {
 		if c.IsA("IfcBuildingStorey") {
 			return strVal(c, attrName)
 		}
-		c = containerOf(f, c, 32)
+		c = r.of(c, 32)
 	}
 	return ""
 }
