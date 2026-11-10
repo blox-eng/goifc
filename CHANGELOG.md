@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.7 — 2026-11-10
+
 ### Fixed
 
 - `Qto.Perimeter` from geometry is now the same on every run (#129). It summed
