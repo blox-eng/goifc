@@ -49,31 +49,9 @@ func Psets(f *step.File, inst *step.Instance, qtosOnly bool) map[string]map[stri
 // RelatingType=attr5). Covers both IFC4 IsTypedBy and IFC2X3
 // IfcRelDefinesByType — both are the same entity. nil when inst has no type.
 func GetType(f *step.File, inst *step.Instance) *step.Instance {
-	for _, rel := range f.Inverse(inst) {
-		if !rel.IsA("IfcRelDefinesByType") {
-			continue
-		}
-		// RelatedObjects is attr4 for IfcRelDefinesByType (unlike IfcRelAggregates,
-		// where it's attr5 — see instInRelatedObjects). Check membership directly.
-		v, ok := rel.Get(attrRel4)
-		if !ok || v.Kind() != step.KindList {
-			continue
-		}
-		member := false
-		for _, item := range v.List() {
-			if item.Kind() == step.KindRef && item.Ref() != nil && item.Ref().ID() == inst.ID() {
-				member = true
-				break
-			}
-		}
-		if !member {
-			continue
-		}
-		if t, ok := rel.Ref(attrRel5); ok { // RelatingType
-			return t
-		}
-	}
-	return nil
+	// RelatedObjects is attr4 for IfcRelDefinesByType (unlike IfcRelAggregates,
+	// where it's attr5).
+	return memberOf(f, inst, "IfcRelDefinesByType", attrRel4, attrRel5) // RelatingType
 }
 
 // TypeIdentity returns the identity of inst's IfcTypeObject: its GlobalId, its
@@ -192,27 +170,13 @@ func Container(f *step.File, inst *step.Instance) *step.Instance {
 // Without the RelatedObjects membership check, the parent would resolve to
 // itself — a self-cycle.
 func getAggregate(f *step.File, inst *step.Instance) *step.Instance {
-	for _, rel := range f.Inverse(inst) {
-		if rel.IsA("IfcRelAggregates") && instInList(rel, attrRel5, inst) {
-			if p, ok := rel.Ref(attrRel4); ok { // RelatingObject is at index 4 for IfcRelAggregates
-				return p
-			}
-		}
-	}
-	return nil
+	return memberOf(f, inst, "IfcRelAggregates", attrRel5, attrRel4) // RelatingObject
 }
 
 // getNest returns inst's IfcRelNests parent: IfcRelNests(...,RelatingObject=4,
 // RelatedObjects=5) — same attribute layout as IfcRelAggregates.
 func getNest(f *step.File, inst *step.Instance) *step.Instance {
-	for _, rel := range f.Inverse(inst) {
-		if rel.IsA("IfcRelNests") && instInList(rel, attrRel5, inst) {
-			if p, ok := rel.Ref(attrRel4); ok { // RelatingObject
-				return p
-			}
-		}
-	}
-	return nil
+	return memberOf(f, inst, "IfcRelNests", attrRel5, attrRel4) // RelatingObject
 }
 
 // getFilledVoid returns the IfcOpeningElement inst (a building element, e.g.
@@ -308,21 +272,21 @@ func getParent(f *step.File, inst *step.Instance) *step.Instance {
 	return nil
 }
 
-// instInList reports whether inst appears (by reference) in rel's list-valued
-// attribute at attrIdx — e.g. RelatedObjects (attr5) for IfcRelAggregates/
-// IfcRelNests, or RelatedElements (attr4) for
-// IfcRelContainedInSpatialStructure.
-func instInList(rel *step.Instance, attrIdx int, inst *step.Instance) bool {
-	v, ok := rel.Get(attrIdx)
-	if !ok || v.Kind() != step.KindList {
-		return false
-	}
-	for _, item := range v.List() {
-		if item.Kind() == step.KindRef && item.Ref() != nil && item.Ref().ID() == inst.ID() {
-			return true
+// memberOf returns the relating side of the first relation of class that
+// names inst in its related list at memberAttr and has a relating side at
+// relatingAttr. The inverse index records the attribute of each reference, so
+// membership is not a scan of the list: every member of an N-member relation
+// scanning it would cost N².
+func memberOf(f *step.File, inst *step.Instance, class string, memberAttr, relatingAttr int) *step.Instance {
+	for _, r := range f.InverseIndices(inst) {
+		if r.AttrIndex != memberAttr || !r.From.IsA(class) {
+			continue
+		}
+		if relating, ok := r.From.Ref(relatingAttr); ok {
+			return relating
 		}
 	}
-	return false
+	return nil
 }
 
 // containerOf ports ifcopenshell.util.element.get_container (recursive): if
@@ -335,12 +299,8 @@ func containerOf(f *step.File, inst *step.Instance, depth int) *step.Instance {
 	if depth <= 0 {
 		return nil
 	}
-	for _, rel := range f.Inverse(inst) {
-		if rel.IsA("IfcRelContainedInSpatialStructure") && instInList(rel, attrRel4, inst) {
-			if s, ok := rel.Ref(attrRel5); ok { // RelatingStructure
-				return s
-			}
-		}
+	if s := memberOf(f, inst, "IfcRelContainedInSpatialStructure", attrRel4, attrRel5); s != nil { // RelatingStructure
+		return s
 	}
 	if p := getParent(f, inst); p != nil {
 		return containerOf(f, p, depth-1)

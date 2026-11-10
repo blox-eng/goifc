@@ -182,10 +182,12 @@ func orthogonalize(x, z []float64) []float64 {
 	return sub(fallback, scale(z, dot(fallback, z)))
 }
 
-// coords extracts the float list from an IfcCartesianPoint / IfcDirection.
+// coords reads a point's or direction's coordinates. nil for more than three:
+// no schema allows them, and a placement is read once per element that uses
+// it, so a list of any length would cost its length each time.
 func coords(inst *step.Instance) []float64 {
 	v, ok := inst.Get(attrCoordinates)
-	if !ok || v.Kind() != step.KindList {
+	if !ok || v.Kind() != step.KindList || len(v.List()) > 3 {
 		return nil
 	}
 	out := make([]float64, 0, len(v.List()))

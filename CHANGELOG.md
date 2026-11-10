@@ -21,6 +21,15 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Fixed
 
+- Finding an element's container, parent or type no longer scans the whole
+  relation for each element (#126). Each element of an N-element relation
+  scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one
+  type, took from 11 s to over a minute. Membership now comes from the
+  inverse index, in milliseconds.
+- A placement point with more than 3 coordinates is no longer read (#126). It
+  was read in full for each element using it: 2,000 walls sharing one point
+  of 2M coordinates allocated 30 GiB. Such a point now places at the origin,
+  as the geometry package already treats it.
 - One crafted element can no longer make `Build` take minutes or tens of
   gigabytes. The per-element budget from v0.15.1 (#70) counted only input work,
   so three things escaped it: mapping a shape made of box fallbacks cloned it
