@@ -187,3 +187,64 @@ func TestACachedLoopIsChargedAsIfTriangulatedHere(t *testing.T) {
 		}
 	}
 }
+
+// TestARefusedTriangulationRunsWithinWhatTheCallerHasLeft: a cached loop is
+// triangulated within what its caller can still pay, and is cached only when
+// it completes. A full-size run for a caller that cannot pay for it would be
+// work no budget charges.
+func TestARefusedTriangulationRunsWithinWhatTheCallerHasLeft(t *testing.T) {
+	p := comb(100)
+	loop := make([]v3, len(p))
+	for i, q := range p {
+		loop[i] = v3{q[0], q[1], 0}
+	}
+	c := &meshCache{}
+	var ran int64
+	triangulate := func(run *budget) ([]uint32, bool) {
+		tris, ok := triangulateFace(loop, run)
+		ran = run.spent()
+		return tris, ok
+	}
+	poor := sizedBudget(1000)
+	poor.cache = c
+	// The budget stops a clip within one ear test, which reads at most every
+	// point of the loop.
+	if _, ok := poor.triangulated(12, triangulate); ok || ran > 1000+int64(len(loop)) || !poor.exhausted() {
+		t.Fatalf("a 1,000-unit caller: ok=%v after %d units of work, exhausted=%v; want a refusal within its 1,000 and one ear test", ok, ran, poor.exhausted())
+	}
+	rich := newBudget()
+	rich.cache = c
+	if tris, ok := rich.triangulated(12, triangulate); !ok || len(tris) == 0 {
+		t.Fatalf("a full budget after a refused one: ok=%v with %d indices, want the face", ok, len(tris))
+	}
+}
+
+// TestSharedWorkOfOneInstanceIsChargedPerKind: a face named as an item is box
+// walked, and named by a brep is triangulated. The Build budget charges both,
+// not the second as a reuse of the first.
+func TestSharedWorkOfOneInstanceIsChargedPerKind(t *testing.T) {
+	var d strings.Builder
+	p := comb(100)
+	refs := make([]string, len(p))
+	for i, q := range p {
+		fmt.Fprintf(&d, "#%d=IFCCARTESIANPOINT((%g,%g,0.));\n", 1000+i, q[0], q[1])
+		refs[i] = fmt.Sprintf("#%d", 1000+i)
+	}
+	fmt.Fprintf(&d, "#10=IFCPOLYLOOP((%s));\n#11=IFCFACEOUTERBOUND(#10,.T.);\n#12=IFCFACE((#11));\n", strings.Join(refs, ","))
+	d.WriteString("#20=IFCCLOSEDSHELL((#12));\n#21=IFCFACETEDBREP(#20);\n" + wallWith("#12,#21"))
+	f := ifcFile(t, d.String())
+	_, own, shared := meshAs(f, 1, 1, &meshCache{}, stateMeshed)
+	if len(shared) != 2 {
+		t.Fatalf("%d pieces of shared work, want the face's box walk and its triangulation", len(shared))
+	}
+	full := own + shared[0].cost + shared[1].cost
+	charged := map[sharedKey]bool{}
+	got := poolCost(own, shared, func(k sharedKey) bool {
+		first := !charged[k]
+		charged[k] = true
+		return first
+	})
+	if got != full {
+		t.Errorf("the Build budget charged %d, want %d: one kind of work passed as a reuse of the other", got, full)
+	}
+}

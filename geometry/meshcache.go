@@ -40,8 +40,11 @@ type meshCache struct {
 	tris   sync.Map // loop instance id -> *cachedTris
 }
 
+// cachedTris holds a loop's triangulation once a run completes. A run that
+// ran out of its caller's budget is not kept, so mu, not a sync.Once, guards it.
 type cachedTris struct {
-	once sync.Once
+	mu   sync.Mutex
+	done bool
 	tris []uint32
 	ok   bool
 	cost int64
@@ -49,10 +52,12 @@ type cachedTris struct {
 
 // triangulated returns the triangulation of the loop instance id: a face or a
 // profile. triangulate computes it within the budget it is given, and its
-// result must depend on the loop alone. With b's cache it runs once per Build,
-// within a whole element budget, and b is charged what it cost: the same for
-// every element that names the loop, whoever ran it first. A loop that costs
-// more than b has left is refused, as if it had run out.
+// result must depend on the loop alone. With b's cache a run is bounded by what
+// b has left and kept once it completes, so a loop is triangulated in full once
+// per Build. b is charged what the triangulation cost: the same for every
+// element that names the loop, whoever ran it first. A loop that costs more
+// than b has left is refused, as if it had run out; a run that ran out is
+// charged to b, as it would be with no cache.
 //
 // The triangles are shared and must not be changed.
 func (b *budget) triangulated(id int, triangulate func(*budget) ([]uint32, bool)) ([]uint32, bool) {
@@ -64,15 +69,22 @@ func (b *budget) triangulated(id int, triangulate func(*budget) ([]uint32, bool)
 		e, _ = b.cache.tris.LoadOrStore(id, &cachedTris{})
 	}
 	ct := e.(*cachedTris)
-	ct.once.Do(func() {
-		run := newBudget()
-		ct.tris, ct.ok = triangulate(run)
-		ct.cost = run.spent()
-	})
+	ct.mu.Lock()
+	if !ct.done {
+		run := sizedBudget(max(b.left, 0))
+		tris, ok := triangulate(run)
+		if run.exhausted() {
+			ct.mu.Unlock()
+			b.spend(run.spent())
+			return nil, false
+		}
+		ct.tris, ct.ok, ct.cost, ct.done = tris, ok, run.spent(), true
+	}
+	ct.mu.Unlock()
 	if !b.reserve(ct.cost) {
 		return nil, false
 	}
-	b.share(id, ct.cost)
+	b.share(sharedKey{kind: sharedTriangulation, id: id}, ct.cost)
 	return ct.tris, ct.ok
 }
 

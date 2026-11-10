@@ -29,16 +29,32 @@ type budget struct {
 }
 
 // sharedWork is work many elements may share, an item's box walk or a loop's
-// triangulation, keyed by the instance it reads, and what it costs.
+// triangulation, and what it costs.
 type sharedWork struct {
-	id   int
+	key  sharedKey
 	cost int64
 }
 
+// sharedKey names one piece of shared work: what kind it is, the instance it
+// reads, and for a box walk the scale it is built in, as the cache keys it.
+// One instance can be both box walked and triangulated, in a hostile file.
+type sharedKey struct {
+	kind  sharedKind
+	id    int
+	scale float64
+}
+
+type sharedKind uint8
+
+const (
+	sharedBoxWalk sharedKind = iota
+	sharedTriangulation
+)
+
 // share records that cost units already charged here were shared work.
-func (b *budget) share(id int, cost int64) {
+func (b *budget) share(k sharedKey, cost int64) {
 	if b != nil {
-		b.shared = append(b.shared, sharedWork{id, cost})
+		b.shared = append(b.shared, sharedWork{k, cost})
 	}
 }
 

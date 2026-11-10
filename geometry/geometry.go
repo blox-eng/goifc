@@ -121,8 +121,8 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 				}
 				states[i] = stateFor(size - pool.Load())
 				meshes[i], owns[i], shares[i] = meshAs(f, r.Elements[i].ExpressID, r.UnitScale, c, states[i])
-				pool.Add(-poolCost(owns[i], shares[i], func(id int) bool {
-					_, taken := claimed.LoadOrStore(id, true)
+				pool.Add(-poolCost(owns[i], shares[i], func(k sharedKey) bool {
+					_, taken := claimed.LoadOrStore(k, true)
 					return !taken
 				}))
 			}
@@ -137,16 +137,16 @@ func Build(f *step.File, r *model.Result) (*Scene, error) {
 	// element in order that does it.
 	var spent int64
 	boxed, leftOut := 0, 0
-	charged := map[int]bool{}
+	charged := map[sharedKey]bool{}
 	for i := range r.Elements {
 		want := stateFor(spent)
 		if want != states[i] {
 			states[i] = want
 			meshes[i], owns[i], shares[i] = meshAs(f, r.Elements[i].ExpressID, r.UnitScale, c, want)
 		}
-		spent += poolCost(owns[i], shares[i], func(id int) bool {
-			first := !charged[id]
-			charged[id] = true
+		spent += poolCost(owns[i], shares[i], func(k sharedKey) bool {
+			first := !charged[k]
+			charged[k] = true
 			return first
 		})
 		switch want {
@@ -221,10 +221,10 @@ func meshAs(f *step.File, expressID int, unitScale float64, c *meshCache, st bui
 // poolCost is what one element costs the Build budget: its own work, and each
 // piece of shared work in full where first reports that this element is the
 // first to be charged it, and 1 where it is not.
-func poolCost(own int64, shared []sharedWork, first func(id int) bool) int64 {
+func poolCost(own int64, shared []sharedWork, first func(sharedKey) bool) int64 {
 	cost := own
 	for _, w := range shared {
-		if first(w.id) {
+		if first(w.key) {
 			cost += w.cost
 		} else {
 			cost++
@@ -376,7 +376,7 @@ func elementBox(items []*step.Instance, unitScale float64, c *meshCache) (mesh, 
 		}
 		l, h, ok, walked := itemBoxOf(item, unitScale, c)
 		cost += walked
-		walks = append(walks, sharedWork{item.ID(), walked})
+		walks = append(walks, sharedWork{sharedKey{kind: sharedBoxWalk, id: item.ID(), scale: unitScale}, walked})
 		if !ok || walked > maxBoxWalk {
 			m.partial = true
 			continue
@@ -416,7 +416,7 @@ func obbFromItem(item *step.Instance, unitScale float64, c *meshCache, b *budget
 	}
 	lo, hi, ok, cost := itemBoxOf(item, unitScale, c)
 	b.spend(cost)
-	b.share(item.ID(), cost)
+	b.share(sharedKey{kind: sharedBoxWalk, id: item.ID(), scale: unitScale}, cost)
 	if cost > maxBoxWalk || !ok {
 		return nil, nil
 	}
