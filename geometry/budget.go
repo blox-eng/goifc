@@ -4,7 +4,8 @@ package geometry
 // work (ear tests, loop and face points read, clipped triangles, each mapped
 // shape's own cost) and output (every vertex and triangle an item ships), so
 // one crafted element can neither stall an import nor clone a shape into
-// gigabytes. It bounds each element, not the whole Build (#106). It keeps the
+// gigabytes. It bounds each element; buildBudgetPerInstance bounds the whole
+// Build (#106). It keeps the
 // heaviest corpus element 16 times inside it and the heaviest mapped shape 4
 // times inside its share, elementBudget / (maxMapDepth+1), as
 // TestCorpusElementsKeepSixteenfoldHeadroom checks. Past it items are boxed or

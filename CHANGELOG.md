@@ -36,10 +36,20 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 - Storey plans no longer loop forever on two elements that name each other
   as parent, and climb a long parent chain once (#130). 100,000 nested
   elements took 30 s.
-- Storey plans are bounded by a work budget of 16 per mesh triangle (#130).
-  1,000 columns through 1,000 storeys were cut a million times; past the
-  budget, plans leave elements out and `Scene.Warnings` says how many. The
-  corpus uses at most 1.53 per triangle.
+- Storey plans are bounded by a work budget of 16 per mesh vertex and
+  triangle (#130). 1,000 columns through 1,000 storeys were cut a million
+  times; past the budget, plans leave elements out and `Scene.Warnings` says
+  how many. The corpus uses at most 1.34.
+- A cut of one element made of many disjoint solids no longer nests every
+  ring against every other (#130). 40,000 small solids took 39 s to cut;
+  past 2^24 ring-points of nesting work the rings are kept as outlines.
+- `Build` has a work budget for the whole model, as well as for each element
+  (#106). Thousands of elements sharing one expensive shape each spent up to
+  a full element budget. Past 512 per file instance plus one element budget,
+  elements are boxed, one box each; past twice that they are left out; one
+  warning gives both counts. Which elements are boxed is settled in element
+  order, so it is the same on every run. The corpus spends at most 30 per
+  instance.
 - Finding an element's container, parent or type no longer scans the whole
   relation for each element (#126). Each element of an N-element relation
   scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one
