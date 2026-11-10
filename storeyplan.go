@@ -41,22 +41,23 @@ type storeyBand struct {
 	bandTop float64
 }
 
-// planWorkPerTriangle sizes the storey plans' work budget: the triangles cut,
-// plus the loop points shipped, per triangle of the model's meshes. A real
-// element is cut on the one or two storeys it stands on; a crafted model of
-// tall elements through many storeys cuts each of them on every storey, and
-// past this budget its plans leave elements out. The corpus uses at most 1.53
-// per triangle (duplex_a).
+// planWorkPerMeshPart sizes the storey plans' work budget: the vertices read
+// and triangles cut, plus the loop points shipped, per vertex and triangle of
+// the model's meshes. A real element is cut on the one or two storeys it
+// stands on; a crafted model of tall elements through many storeys cuts each
+// of them on every storey, and past this budget its plans leave elements out.
+// The corpus uses at most 1.34 per mesh part (duplex_a).
 const (
-	planWorkPerTriangle = 16
+	planWorkPerMeshPart = 16
 	planWorkFloor       = 1 << 20
 )
 
-// planElement is one meshed node, as the storey bands test it.
+// planElement is one meshed node, as the storey bands test it. cost is what
+// one cut of it reads: every vertex and every triangle.
 type planElement struct {
 	node       int
 	zmin, zmax float64
-	tris       int
+	cost       int
 }
 
 // buildStoreyPlans assembles per-storey plans from the imported nodes, the
@@ -66,7 +67,7 @@ type planElement struct {
 // mesh element are skipped (no reliable cut plane). Deterministic: identical
 // input yields an identical slice.
 //
-// The work is bounded by planWorkPerTriangle; plans past it leave elements out,
+// The work is bounded by planWorkPerMeshPart; plans past it leave elements out,
 // and the returned warnings say how many.
 func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element, storeyElev map[string]float64) ([]StoreyPlan, []string) {
 	storeyOf := enclosingStoreys(nodes)
@@ -79,8 +80,9 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 		if !ok || len(ge.Verts) == 0 {
 			continue
 		}
-		elems = append(elems, planElement{node: i, zmin: ge.BBoxMin[2], zmax: ge.BBoxMax[2], tris: len(ge.Tris) / 3})
-		budget += planWorkPerTriangle * len(ge.Tris) / 3
+		cost := len(ge.Verts)/3 + len(ge.Tris)/3
+		elems = append(elems, planElement{node: i, zmin: ge.BBoxMin[2], zmax: ge.BBoxMax[2], cost: cost})
+		budget += planWorkPerMeshPart * cost
 	}
 
 	// 2. Seed floorZ[storeyGID] = min BBoxMin[2] over contained mesh elements.
@@ -127,11 +129,11 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 			if !spans && !overlaps {
 				continue
 			}
-			if e.tris > budget {
+			if e.cost > budget {
 				leftOut++
 				continue
 			}
-			budget -= e.tris
+			budget -= e.cost
 			n := nodes[e.node]
 			loops := geometry.Footprint(meshByGID[n.GlobalID], b.cutZ) // cut if spans, else below
 			loops = dropDegenerateLoops(loops)
@@ -147,7 +149,7 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 	}
 	var warnings []string
 	if leftOut > 0 {
-		warnings = append(warnings, fmt.Sprintf("storey plans left out %d element sections: the model's elements cross more storeys than %d times its triangles can cut", leftOut, planWorkPerTriangle))
+		warnings = append(warnings, fmt.Sprintf("storey plans left out %d element sections: the model's elements cross more storeys than %d times its mesh can cut", leftOut, planWorkPerMeshPart))
 	}
 	return plans, warnings
 }

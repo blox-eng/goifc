@@ -11,12 +11,20 @@ import (
 )
 
 // planTime bounds the storey plans of each hostile model below. Each takes
-// over 10 s unbounded and well under a second bounded; the margin covers a
-// slow or instrumented CI runner.
+// 6 s or more unbounded and under a second bounded; the margin covers a slow
+// runner. Coverage, as make test and CI run the suite, makes them about three
+// times slower, so planLimit scales the bound for it.
 const planTime = 3 * time.Second
 
+func planLimit() time.Duration {
+	if testing.CoverMode() != "" {
+		return 5 * planTime
+	}
+	return planTime
+}
+
 // plansWithin runs buildStoreyPlans and fails if it takes longer than
-// planTime. A run that never ends is reported, not waited for.
+// planLimit. A run that never ends is reported, not waited for.
 func plansWithin(t *testing.T, nodes []ImportNode, mesh map[string]geometry.Element, elev map[string]float64) ([]StoreyPlan, []string) {
 	t.Helper()
 	type result struct {
@@ -31,12 +39,12 @@ func plansWithin(t *testing.T, nodes []ImportNode, mesh map[string]geometry.Elem
 	}()
 	select {
 	case r := <-done:
-		if d := time.Since(start); d > planTime {
-			t.Fatalf("storey plans took %v, want under %v", d, planTime)
+		if d := time.Since(start); d > planLimit() {
+			t.Fatalf("storey plans took %v, want under %v", d, planLimit())
 		}
 		return r.plans, r.warnings
-	case <-time.After(10 * planTime):
-		t.Fatalf("storey plans did not finish in %v", 10*planTime)
+	case <-time.After(10 * planLimit()):
+		t.Fatalf("storey plans did not finish in %v", 10*planLimit())
 		return nil, nil
 	}
 }
@@ -118,5 +126,41 @@ func TestStoreyPlansOfTallElementsAreBounded(t *testing.T) {
 	}
 	if len(warnings) == 0 || !strings.Contains(warnings[0], "storey plans") {
 		t.Fatalf("warnings = %q, want one that says the storey plans left elements out", warnings)
+	}
+}
+
+// A cut reads every vertex of its element, used or not. One tall element of
+// few triangles and many vertices, through tallCount storeys, is read once
+// per storey: the budget must charge the vertices too.
+func TestStoreyPlansChargeEveryVertexACutReads(t *testing.T) {
+	const storeys, verts = 1_000, 300_000
+	var nodes []ImportNode
+	mesh := map[string]geometry.Element{}
+	elev := map[string]float64{}
+	for i := range storeys {
+		s, slab := fmt.Sprintf("S%d", i), fmt.Sprintf("F%d", i)
+		z := 3 * float64(i)
+		nodes = append(nodes, ImportNode{GlobalID: s, IFCClass: "IfcBuildingStorey"})
+		nodes = append(nodes, ImportNode{GlobalID: slab, IFCClass: "IfcSlab", ParentIndex: iptr(2 * i)})
+		mesh[slab] = boxElem(slab, [3]float64{-10, -10, z}, [3]float64{10, 10, z + 0.2})
+		elev[s] = z
+	}
+	tall := boxElem("T", [3]float64{0, 0, 0}, [3]float64{1, 1, 3 * storeys})
+	for len(tall.Verts) < 3*verts {
+		tall.Verts = append(tall.Verts, 0.5, 0.5, 1)
+	}
+	nodes = append(nodes, ImportNode{GlobalID: "T", IFCClass: "IfcColumn", ParentIndex: iptr(0)})
+	mesh["T"] = tall
+
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, warnings := plansWithin(t, nodes, mesh, elev)
+	runtime.ReadMemStats(&after)
+	if alloc := after.TotalAlloc - before.TotalAlloc; alloc > 512<<20 {
+		t.Fatalf("storey plans allocated %d MiB, want under 512: each cut's vertices are not charged", alloc>>20)
+	}
+	if len(warnings) == 0 {
+		t.Fatal("no warning: the plans cut the tall element on every storey")
 	}
 }
