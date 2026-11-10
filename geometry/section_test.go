@@ -797,3 +797,49 @@ func TestFootprintOfManyDisjointSolidsIsBounded(t *testing.T) {
 		t.Fatalf("got %d loops, want one per solid, %d", len(loops), solids)
 	}
 }
+
+// squareRing is the CCW ring of the axis-aligned square from (x, y), side s.
+func squareRing(x, y, s float64) [][2]float64 {
+	return [][2]float64{{x, y}, {x + s, y}, {x + s, y + s}, {x, y + s}}
+}
+
+// TestAHoleAmongManyDisjointRingsIsStillAHole: a cut of 40,000 disjoint rings
+// is far past the work of testing every ring against every other, but each
+// ring meets only its neighbours, so a hole among them is still wound CW.
+func TestAHoleAmongManyDisjointRingsIsStillAHole(t *testing.T) {
+	rings := [][][2]float64{squareRing(-100, 0, 90), squareRing(-60, 40, 10)}
+	for i := range 40_000 {
+		rings = append(rings, squareRing(float64(2*(i%200)), float64(2*(i/200)), 1))
+	}
+	start := time.Now()
+	loops := nestEvenOdd(rings, LoopCut)
+	if d := time.Since(start); d > timeLimit(2*time.Second) {
+		t.Fatalf("nesting %d rings took %v, want under %v", len(rings), d, timeLimit(2*time.Second))
+	}
+	if a := polygonArea2D(loops[1].Points); a >= 0 {
+		t.Errorf("the hole has area %g, want it wound CW (negative)", a)
+	}
+	for _, i := range []int{0, 2, len(loops) - 1} {
+		if a := polygonArea2D(loops[i].Points); a <= 0 {
+			t.Errorf("ring %d has area %g, want an outer boundary (positive)", i, a)
+		}
+	}
+}
+
+// TestNestingManyConcentricRingsIsBounded: 20,000 rings each inside the last
+// all meet at one point, so nesting them is quadratic however it is indexed.
+// Past maxNestWork they are kept as outlines, in bounded time.
+func TestNestingManyConcentricRingsIsBounded(t *testing.T) {
+	var rings [][][2]float64
+	for i := range 20_000 {
+		rings = append(rings, squareRing(float64(i), float64(i), float64(2*(20_000-i))))
+	}
+	start := time.Now()
+	loops := nestEvenOdd(rings, LoopCut)
+	if d := time.Since(start); d > timeLimit(2*time.Second) {
+		t.Fatalf("nesting %d concentric rings took %v, want under %v", len(rings), d, timeLimit(2*time.Second))
+	}
+	if len(loops) != len(rings) {
+		t.Fatalf("%d loops, want one per ring, %d", len(loops), len(rings))
+	}
+}

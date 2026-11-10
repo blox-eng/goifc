@@ -225,9 +225,9 @@ func Footprint(e Element, cutZ float64) []Loop {
 	return FootprintOn(e, HorizontalPlane(cutZ))
 }
 
-// maxNestWork bounds nestEvenOdd's rings × points. The corpus cuts at most 35
-// rings at once, a few thousand points, so this is several hundredfold above
-// any real cut.
+// maxNestWork bounds nestEvenOdd's work: grid cells filled, candidates met
+// and points read. The corpus cuts at most 35 rings at once, a few thousand
+// points, so this is several hundredfold above any real cut.
 const maxNestWork = 1 << 24
 
 // nestEvenOdd classifies each ring by containment depth and emits Loops: a ring
@@ -238,44 +238,95 @@ const maxNestWork = 1 << 24
 // cutout. Iterates rings in the given (deterministic) order — never ranges a map.
 //
 // Containment tests each ring's representative interior point (see
-// representativePoint) against every OTHER ring via an even-odd ray cast
-// (pointInPolygon). A ring's centroid is deliberately NOT used: concentric
-// rings (outer + inner of a hollow section) share a centroid that lands in the
-// hole, which would misclassify the outer ring as contained.
+// representativePoint) against the OTHER rings (nestingDepths). A ring's
+// centroid is deliberately NOT used: concentric rings (outer + inner of a
+// hollow section) share a centroid that lands in the hole, which would
+// misclassify the outer ring as contained.
 //
-// Nesting costs about rings × points. Past maxNestWork the rings are kept as
-// given, each an outer boundary: a cut of many disjoint solids then still
-// draws each one, and only a hole among them is drawn filled.
+// Past maxNestWork the rings are kept as given, each an outer boundary: only
+// rings that overlap one another in large numbers cost that much, and a hole
+// among them is then drawn filled.
 func nestEvenOdd(rings [][][2]float64, role LoopRole) []Loop {
 	out := make([]Loop, 0, len(rings))
-	points := 0
-	for _, r := range rings {
-		points += len(r)
-	}
-	if len(rings)*points > maxNestWork {
-		for _, r := range rings {
-			out = append(out, Loop{Role: role, Points: r})
-		}
-		return out
-	}
+	depths, ok := nestingDepths(rings)
 	for i, r := range rings {
-		c := representativePoint(r)
-		depth := 0
-		for j, other := range rings {
-			if i == j {
-				continue
-			}
-			if pointInPolygon(c, other) {
-				depth++
-			}
-		}
 		pts := r
-		if depth%2 == 1 { // contained -> hole -> wind CW
+		if ok && depths[i]%2 == 1 { // contained -> hole -> wind CW
 			pts = reversePts(r)
 		}
 		out = append(out, Loop{Role: role, Points: pts})
 	}
 	return out
+}
+
+// nestingDepths counts, for each ring, the other rings that contain its
+// representative point, by even-odd ray cast (pointInPolygon). A ring that
+// contains a point also boxes it, so a grid over the rings' boxes finds the
+// candidates, and disjoint rings cost about their own points. ok is false
+// once the work passes maxNestWork.
+func nestingDepths(rings [][][2]float64) (depths []int, ok bool) {
+	type box struct{ lo, hi [2]float64 }
+	boxes := make([]box, len(rings))
+	all := box{[2]float64{math.Inf(1), math.Inf(1)}, [2]float64{math.Inf(-1), math.Inf(-1)}}
+	work := 0
+	for i, r := range rings {
+		work += len(r)
+		if work > maxNestWork {
+			return nil, false
+		}
+		b := box{r[0], r[0]}
+		for _, p := range r {
+			for k := range 2 {
+				b.lo[k], b.hi[k] = min(b.lo[k], p[k]), max(b.hi[k], p[k])
+			}
+		}
+		boxes[i] = b
+		for k := range 2 {
+			all.lo[k], all.hi[k] = min(all.lo[k], b.lo[k]), max(all.hi[k], b.hi[k])
+		}
+	}
+	side := max(1, int(math.Ceil(math.Sqrt(float64(len(rings))))))
+	cellOf := func(v float64, k int) int {
+		w := all.hi[k] - all.lo[k]
+		if !(w > 0) {
+			return 0
+		}
+		c := int((v - all.lo[k]) / w * float64(side))
+		return min(max(c, 0), side-1)
+	}
+	cells := make([][]int, side*side)
+	for i, b := range boxes {
+		x0, x1 := cellOf(b.lo[0], 0), cellOf(b.hi[0], 0)
+		y0, y1 := cellOf(b.lo[1], 1), cellOf(b.hi[1], 1)
+		work += (x1 - x0 + 1) * (y1 - y0 + 1)
+		if work > maxNestWork {
+			return nil, false
+		}
+		for y := y0; y <= y1; y++ {
+			for x := x0; x <= x1; x++ {
+				cells[y*side+x] = append(cells[y*side+x], i)
+			}
+		}
+	}
+	depths = make([]int, len(rings))
+	for i, r := range rings {
+		c := representativePoint(r)
+		for _, j := range cells[cellOf(c[1], 1)*side+cellOf(c[0], 0)] {
+			b := boxes[j]
+			boxed := j != i && c[0] >= b.lo[0] && c[0] <= b.hi[0] && c[1] >= b.lo[1] && c[1] <= b.hi[1]
+			work++
+			if boxed {
+				work += len(rings[j])
+			}
+			if work > maxNestWork {
+				return nil, false
+			}
+			if boxed && pointInPolygon(c, rings[j]) {
+				depths[i]++
+			}
+		}
+	}
+	return depths, true
 }
 
 // representativePoint returns a point strictly inside the (CCW) ring, close to

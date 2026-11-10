@@ -41,8 +41,10 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   times; past the budget, plans leave elements out and `Scene.Warnings` says
   how many. The corpus uses at most 1.34.
 - A cut of one element made of many disjoint solids no longer nests every
-  ring against every other (#130). 40,000 small solids took 39 s to cut;
-  past 2^24 ring-points of nesting work the rings are kept as outlines.
+  ring against every other (#130). 40,000 small solids took 39 s to cut. A
+  grid over the rings' boxes now meets each ring with its neighbours only, so
+  a hole among them is still a hole. Only rings that overlap in large numbers
+  pass 2^24 units of nesting work; those are kept as outlines.
 - `Build` has a work budget for the whole model, as well as for each element
   (#106). Thousands of elements sharing one expensive shape each spent up to
   a full element budget. Past 512 per file instance plus one element budget,
