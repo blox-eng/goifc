@@ -112,6 +112,7 @@ func footprintPerimeter(w []v3, tris []uint32) float64 {
 	type edge [2]int
 	all := make(map[edge]bool)
 	shared := make(map[edge]bool)
+	var order []edge // first-seen order: a float sum depends on its order
 	for t := 0; t+2 < len(tris); t += 3 {
 		i0, i1, i2 := tris[t], tris[t+1], tris[t+2]
 		if i0 >= nv || i1 >= nv || i2 >= nv {
@@ -129,11 +130,12 @@ func footprintPerimeter(w []v3, tris []uint32) float64 {
 				shared[e], shared[rev] = true, true
 			} else {
 				all[e] = true
+				order = append(order, e)
 			}
 		}
 	}
 	var per float64
-	for e := range all {
+	for _, e := range order {
 		if !shared[e] {
 			per += distv(pos[e[0]], pos[e[1]])
 		}
