@@ -21,6 +21,25 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Fixed
 
+- `Qto.Perimeter` from geometry is now the same on every run (#129). It summed
+  its edges in map order, so its last digit changed between runs, and two
+  imports of one file differed in up to 905 values across the corpus.
+- A property set shared by many elements is now read once per `Extract`
+  (#131). One set of 2,000 properties on 2,000 elements allocated 2.5 GiB.
+  `Element.Psets` maps are now shared between elements with the same sets:
+  do not change them. An element with a set of its own beside a type with
+  many sets still needs its own copy of the type's sets; past 16 copied
+  entries per instance in the file its sets are left out, with a warning.
+  The corpus copies under 0.13 per instance.
+- A quantity that two of a type's quantity sets both name now takes the value
+  from the set last in name order (#131). It took a random one of the two.
+- Storey plans no longer loop forever on two elements that name each other
+  as parent, and climb a long parent chain once (#130). 100,000 nested
+  elements took 30 s.
+- Storey plans are bounded by a work budget of 16 per mesh triangle (#130).
+  1,000 columns through 1,000 storeys were cut a million times; past the
+  budget, plans leave elements out and `Scene.Warnings` says how many. The
+  corpus uses at most 1.53 per triangle.
 - Finding an element's container, parent or type no longer scans the whole
   relation for each element (#126). Each element of an N-element relation
   scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one

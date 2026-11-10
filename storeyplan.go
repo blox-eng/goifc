@@ -1,6 +1,7 @@
 package ifc
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -40,40 +41,57 @@ type storeyBand struct {
 	bandTop float64
 }
 
+// planWorkPerTriangle sizes the storey plans' work budget: the triangles cut,
+// plus the loop points shipped, per triangle of the model's meshes. A real
+// element is cut on the one or two storeys it stands on; a crafted model of
+// tall elements through many storeys cuts each of them on every storey, and
+// past this budget its plans leave elements out. The corpus uses at most 1.53
+// per triangle (duplex_a).
+const (
+	planWorkPerTriangle = 16
+	planWorkFloor       = 1 << 20
+)
+
+// planElement is one meshed node, as the storey bands test it.
+type planElement struct {
+	node       int
+	zmin, zmax float64
+	tris       int
+}
+
 // buildStoreyPlans assembles per-storey plans from the imported nodes, the
 // per-GlobalID world mesh, and storey elevations. floorZ per storey is SEEDED
 // from the min world-Z of its spatially-contained mesh elements (containment
 // only seeds the band; geometry decides membership). Storeys with no contained
 // mesh element are skipped (no reliable cut plane). Deterministic: identical
 // input yields an identical slice.
-func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element, storeyElev map[string]float64) []StoreyPlan {
-	// 1. Enclosing storey per node index: walk ParentIndex up to an IfcBuildingStorey.
-	storeyOf := func(i int) string {
-		j := i
-		for {
-			if strings.EqualFold(nodes[j].IFCClass, "IfcBuildingStorey") {
-				return nodes[j].GlobalID
-			}
-			if nodes[j].ParentIndex == nil {
-				return ""
-			}
-			j = *nodes[j].ParentIndex
-		}
-	}
+//
+// The work is bounded by planWorkPerTriangle; plans past it leave elements out,
+// and the returned warnings say how many.
+func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element, storeyElev map[string]float64) ([]StoreyPlan, []string) {
+	storeyOf := enclosingStoreys(nodes)
 
-	// 2. Seed floorZ[storeyGID] = min BBoxMin[2] over contained mesh elements.
-	floorZ := make(map[string]float64)
+	// The meshed nodes, in nodes order, read once.
+	var elems []planElement
+	budget := planWorkFloor
 	for i, n := range nodes {
 		ge, ok := meshByGID[n.GlobalID]
 		if !ok || len(ge.Verts) == 0 {
 			continue
 		}
-		sgid := storeyOf(i)
+		elems = append(elems, planElement{node: i, zmin: ge.BBoxMin[2], zmax: ge.BBoxMax[2], tris: len(ge.Tris) / 3})
+		budget += planWorkPerTriangle * len(ge.Tris) / 3
+	}
+
+	// 2. Seed floorZ[storeyGID] = min BBoxMin[2] over contained mesh elements.
+	floorZ := make(map[string]float64)
+	for _, e := range elems {
+		sgid := storeyOf[e.node]
 		if sgid == "" {
 			continue
 		}
-		if cur, seen := floorZ[sgid]; !seen || ge.BBoxMin[2] < cur {
-			floorZ[sgid] = ge.BBoxMin[2]
+		if cur, seen := floorZ[sgid]; !seen || e.zmin < cur {
+			floorZ[sgid] = e.zmin
 		}
 	}
 
@@ -100,29 +118,76 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 
 	// 4. Membership: for each storey band, scan ALL mesh elements (in nodes order).
 	plans := make([]StoreyPlan, 0, len(bands))
+	leftOut := 0
 	for _, b := range bands {
 		entities := make([]StoreyEntity, 0)
-		for _, n := range nodes {
-			ge, ok := meshByGID[n.GlobalID]
-			if !ok || len(ge.Verts) == 0 {
-				continue
-			}
-			zmin, zmax := ge.BBoxMin[2], ge.BBoxMax[2]
-			spans := zmin-zEps <= b.cutZ && b.cutZ <= zmax+zEps  // mesh crosses the cut plane
-			overlaps := zmax > b.floorZ-zEps && zmin < b.bandTop // Z-range intersects the half-open band [floorZ, bandTop)
+		for _, e := range elems {
+			spans := e.zmin-zEps <= b.cutZ && b.cutZ <= e.zmax+zEps  // mesh crosses the cut plane
+			overlaps := e.zmax > b.floorZ-zEps && e.zmin < b.bandTop // Z-range intersects the half-open band [floorZ, bandTop)
 			if !spans && !overlaps {
 				continue
 			}
-			loops := geometry.Footprint(ge, b.cutZ) // cut if spans, else below
+			if e.tris > budget {
+				leftOut++
+				continue
+			}
+			budget -= e.tris
+			n := nodes[e.node]
+			loops := geometry.Footprint(meshByGID[n.GlobalID], b.cutZ) // cut if spans, else below
 			loops = dropDegenerateLoops(loops)
 			if len(loops) == 0 {
 				continue
+			}
+			for _, l := range loops {
+				budget -= len(l.Points)
 			}
 			entities = append(entities, StoreyEntity{GlobalID: n.GlobalID, IFCClass: n.IFCClass, Loops: loops})
 		}
 		plans = append(plans, StoreyPlan{StoreyGlobalID: b.gid, Elevation: storeyElev[b.gid], Entities: entities})
 	}
-	return plans
+	var warnings []string
+	if leftOut > 0 {
+		warnings = append(warnings, fmt.Sprintf("storey plans left out %d element sections: the model's elements cross more storeys than %d times its triangles can cut", leftOut, planWorkPerTriangle))
+	}
+	return plans, warnings
+}
+
+// enclosingStoreys returns, per node, the GlobalID of the IfcBuildingStorey it
+// climbs to through ParentIndex, or "" when it climbs to none. Each node is
+// climbed once: a climb stops at a node already answered, and a ParentIndex
+// cycle answers "" for every node on it.
+func enclosingStoreys(nodes []ImportNode) []string {
+	storey := make([]string, len(nodes))
+	known := make([]bool, len(nodes))
+	onPath := make([]bool, len(nodes))
+	var path []int
+	for i := range nodes {
+		path = path[:0]
+		j, found := i, ""
+		for {
+			if known[j] {
+				found = storey[j]
+				break
+			}
+			if onPath[j] { // a cycle: no storey above it
+				break
+			}
+			if strings.EqualFold(nodes[j].IFCClass, "IfcBuildingStorey") {
+				found = nodes[j].GlobalID
+				break
+			}
+			onPath[j] = true
+			path = append(path, j)
+			if nodes[j].ParentIndex == nil {
+				break
+			}
+			j = *nodes[j].ParentIndex
+		}
+		for _, k := range path {
+			storey[k], known[k], onPath[k] = found, true, false
+		}
+	}
+	return storey
 }
 
 // dropDegenerateLoops removes loops whose absolute polygon area is below minLoopA.
