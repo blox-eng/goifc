@@ -50,6 +50,25 @@ type cachedTris struct {
 	cost int64
 }
 
+// run triangulates the loop within what b has left, unless a run already
+// completed, and keeps the result once one does. It returns the work of a run
+// that ran out, or 0. The lock is released by defer: Build's workers recover a
+// panic, and a loop left locked would stall every element that names it.
+func (ct *cachedTris) run(b *budget, triangulate func(*budget) ([]uint32, bool)) (ranOut int64) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.done {
+		return 0
+	}
+	run := sizedBudget(max(b.left, 0))
+	tris, ok := triangulate(run)
+	if run.exhausted() {
+		return run.spent()
+	}
+	ct.tris, ct.ok, ct.cost, ct.done = tris, ok, run.spent(), true
+	return 0
+}
+
 // triangulated returns the triangulation of the loop instance id: a face or a
 // profile. triangulate computes it within the budget it is given, and its
 // result must depend on the loop alone. With b's cache a run is bounded by what
@@ -69,18 +88,10 @@ func (b *budget) triangulated(id int, triangulate func(*budget) ([]uint32, bool)
 		e, _ = b.cache.tris.LoadOrStore(id, &cachedTris{})
 	}
 	ct := e.(*cachedTris)
-	ct.mu.Lock()
-	if !ct.done {
-		run := sizedBudget(max(b.left, 0))
-		tris, ok := triangulate(run)
-		if run.exhausted() {
-			ct.mu.Unlock()
-			b.spend(run.spent())
-			return nil, false
-		}
-		ct.tris, ct.ok, ct.cost, ct.done = tris, ok, run.spent(), true
+	if ranOut := ct.run(b, triangulate); ranOut > 0 {
+		b.spend(ranOut)
+		return nil, false
 	}
-	ct.mu.Unlock()
 	if !b.reserve(ct.cost) {
 		return nil, false
 	}

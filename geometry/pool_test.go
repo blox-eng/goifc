@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blox-eng/goifc/model"
 )
@@ -246,5 +247,30 @@ func TestSharedWorkOfOneInstanceIsChargedPerKind(t *testing.T) {
 	})
 	if got != full {
 		t.Errorf("the Build budget charged %d, want %d: one kind of work passed as a reuse of the other", got, full)
+	}
+}
+
+// TestAPanickedTriangulationReleasesItsLoop: Build's workers recover a panic,
+// so a triangulation that panics must not keep its loop locked: the next
+// element to name the loop would wait forever.
+func TestAPanickedTriangulationReleasesItsLoop(t *testing.T) {
+	b := newBudget()
+	b.cache = &meshCache{}
+	func() {
+		defer func() { _ = recover() }()
+		b.triangulated(12, func(*budget) ([]uint32, bool) { panic("malformed loop") })
+	}()
+	done := make(chan bool)
+	go func() {
+		_, ok := b.triangulated(12, func(*budget) ([]uint32, bool) { return []uint32{0, 1, 2}, true })
+		done <- ok
+	}()
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Errorf("the loop after a panic: ok=false, want it triangulated")
+		}
+	case <-time.After(timeLimit(boundedTime)):
+		t.Fatal("the loop stayed locked after its triangulation panicked")
 	}
 }
