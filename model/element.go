@@ -1,6 +1,13 @@
 package model
 
-import "github.com/blox-eng/goifc/step"
+import (
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+
+	"github.com/blox-eng/goifc/step"
+)
 
 // Psets ports ifcopenshell.util.element.get_psets(should_inherit=True): property
 // sets attached to inst via IfcRelDefinesByProperties, merged with property sets
@@ -10,13 +17,77 @@ import "github.com/blox-eng/goifc/step"
 // IfcElementQuantity sets are returned; otherwise only IfcPropertySet. Keys are
 // set names; values are {property name -> Go scalar}.
 func Psets(f *step.File, inst *step.Instance, qtosOnly bool) map[string]map[string]any {
-	out := map[string]map[string]any{}
-	if typ := GetType(f, inst); typ != nil {
-		for name, props := range typePropertySets(typ, qtosOnly) {
-			out[name] = props
-		}
+	return newPropertySets(f).of(inst, qtosOnly)
+}
+
+// propertySets reads property and quantity sets for one pass over a file. It
+// reads each set once, and elements that name the same sets share one result:
+// a set shared by K elements is not copied K times. A result it returns may be
+// shared, so callers must not change it.
+type propertySets struct {
+	f     *step.File
+	sets  map[int]map[string]any                // IfcPropertySet or IfcElementQuantity -> its values
+	types map[setsKey]map[string]map[string]any // a type's own sets
+	byDef map[string]map[string]map[string]any  // type and occurrence sets -> the merged result
+	qtos  map[int]map[string]float64            // a type's quantities, flattened
+
+	// left is how many more set entries r may copy into results of its own;
+	// below zero is unlimited. dropped are the elements whose sets did not fit.
+	left    int
+	dropped map[int]bool
+}
+
+type setsKey struct {
+	id       int
+	qtosOnly bool
+}
+
+func newPropertySets(f *step.File) *propertySets {
+	return &propertySets{
+		f:     f,
+		sets:  map[int]map[string]any{},
+		types: map[setsKey]map[string]map[string]any{},
+		byDef: map[string]map[string]map[string]any{},
+		qtos:  map[int]map[string]float64{},
+		left:  -1,
 	}
-	for _, rel := range f.Inverse(inst) {
+}
+
+// setEntriesPerInstance sizes [Extract]'s set budget: the entries it may copy,
+// per instance in the file. A set shared as a whole costs nothing, so the
+// budget only meets elements that each carry a set of their own beside a type
+// with many sets, where every element needs its own copy of the type's sets.
+// The corpus copies at most 0.13 entries per instance (office_a), so 16 leaves
+// over a hundredfold headroom.
+const setEntriesPerInstance = 16
+
+// limitCopies makes r leave out an element's sets once copying them would pass
+// setEntriesPerInstance entries per instance in the file.
+func (r *propertySets) limitCopies() {
+	r.left = setEntriesPerInstance*r.f.Len() + 1<<16
+	r.dropped = map[int]bool{}
+}
+
+// read returns def's values, read once.
+func (r *propertySets) read(def *step.Instance) map[string]any {
+	if m, ok := r.sets[def.ID()]; ok {
+		return m
+	}
+	var m map[string]any
+	if def.IsA("IfcElementQuantity") {
+		m = readQuantitySet(def)
+	} else {
+		m = readPropertySet(def)
+	}
+	r.sets[def.ID()] = m
+	return m
+}
+
+// occurrenceSets returns the sets attached to inst by IfcRelDefinesByProperties
+// that match qtosOnly, in relation order.
+func (r *propertySets) occurrenceSets(inst *step.Instance, qtosOnly bool) []*step.Instance {
+	var defs []*step.Instance
+	for _, rel := range r.f.Inverse(inst) {
 		if !rel.IsA("IfcRelDefinesByProperties") {
 			continue
 		}
@@ -24,24 +95,132 @@ func Psets(f *step.File, inst *step.Instance, qtosOnly bool) map[string]map[stri
 		if !ok {
 			continue
 		}
-		switch {
-		case qtosOnly && def.IsA("IfcElementQuantity"):
-			out[strVal(def, attrName)] = readQuantitySet(def)
-		case !qtosOnly && def.IsA("IfcPropertySet"):
-			// Merge per-property, mirroring ifcopenshell.util.element.get_psets'
-			// psets.setdefault(name, {}).update(props): the occurrence pset wins
-			// on a per-key basis, but type-only keys in a same-named set must
-			// survive — a whole-set replace here would silently drop them.
-			name := strVal(def, attrName)
-			if out[name] == nil {
-				out[name] = map[string]any{}
-			}
-			for k, v := range readPropertySet(def) {
-				out[name][k] = v
+		if (qtosOnly && def.IsA("IfcElementQuantity")) || (!qtosOnly && def.IsA("IfcPropertySet")) {
+			defs = append(defs, def)
+		}
+	}
+	return defs
+}
+
+func (r *propertySets) of(inst *step.Instance, qtosOnly bool) map[string]map[string]any {
+	typ := GetType(r.f, inst)
+	defs := r.occurrenceSets(inst, qtosOnly)
+	var key strings.Builder
+	fmt.Fprintf(&key, "%t", qtosOnly)
+	if typ != nil {
+		fmt.Fprintf(&key, " t%d", typ.ID())
+	}
+	for _, d := range defs {
+		fmt.Fprintf(&key, " %d", d.ID())
+	}
+	if out, ok := r.byDef[key.String()]; ok {
+		if out == nil {
+			r.dropped[inst.ID()] = true
+		}
+		return out
+	}
+	var inherited map[string]map[string]any
+	if typ != nil {
+		inherited = r.typeSets(typ, qtosOnly)
+	}
+	if len(defs) == 0 && inherited != nil {
+		r.byDef[key.String()] = inherited // nothing to merge: share the type's sets whole
+		return inherited
+	}
+	drop := func() map[string]map[string]any {
+		r.byDef[key.String()] = nil
+		r.dropped[inst.ID()] = true
+		return nil
+	}
+	if !r.charge(len(inherited) + len(defs)) {
+		return drop()
+	}
+	out := make(map[string]map[string]any, len(inherited)+len(defs))
+	maps.Copy(out, inherited)
+	owned := map[string]bool{} // sets this result copied, so it may change them
+	for _, def := range defs {
+		name := strVal(def, attrName)
+		if qtosOnly {
+			out[name] = r.read(def)
+			continue
+		}
+		// Merge per-property, mirroring ifcopenshell.util.element.get_psets'
+		// psets.setdefault(name, {}).update(props): the occurrence pset wins
+		// on a per-key basis, but type-only keys in a same-named set must
+		// survive — a whole-set replace here would silently drop them.
+		cur, seen := out[name]
+		if !seen {
+			out[name] = r.read(def)
+			continue
+		}
+		// A merge copies the set it merges into, once, and then each set merged
+		// in: charge both before copying them.
+		add := r.read(def)
+		cost := len(add)
+		if !owned[name] {
+			cost += len(cur)
+		}
+		if !r.charge(cost) {
+			return drop()
+		}
+		if !owned[name] {
+			cur = maps.Clone(cur)
+			owned[name] = true
+		}
+		maps.Copy(cur, add)
+		out[name] = cur
+	}
+	r.byDef[key.String()] = out
+	return out
+}
+
+// charge takes n entries from r's budget, and reports whether they fit. An
+// unlimited r always has room.
+func (r *propertySets) charge(n int) bool {
+	if r.left < 0 {
+		return true
+	}
+	if n > r.left {
+		return false
+	}
+	r.left -= n
+	return true
+}
+
+// typeSets returns typ's own sets that match qtosOnly, read once per type.
+func (r *propertySets) typeSets(typ *step.Instance, qtosOnly bool) map[string]map[string]any {
+	k := setsKey{typ.ID(), qtosOnly}
+	if out, ok := r.types[k]; ok {
+		return out
+	}
+	out := typePropertySets(typ, qtosOnly, r.read)
+	r.types[k] = out
+	return out
+}
+
+// typeQuantities returns typ's quantities as one flat map, read once per
+// type. Sets are flattened in name order, so a quantity two sets both name
+// takes the same value on every run.
+func (r *propertySets) typeQuantities(typ *step.Instance) map[string]float64 {
+	if flat, ok := r.qtos[typ.ID()]; ok {
+		return flat
+	}
+	sets := r.typeSets(typ, true)
+	flat := map[string]float64{}
+	for _, name := range slices.Sorted(maps.Keys(sets)) {
+		for q, v := range sets[name] {
+			if val, ok := v.(float64); ok {
+				flat[q] = val
 			}
 		}
 	}
-	return out
+	r.qtos[typ.ID()] = flat
+	return flat
+}
+
+// isExternal is [IsExternal] over inst's sets as r reads them.
+func (r *propertySets) isExternal(inst *step.Instance) *bool {
+	return isExternalIn(r.of(inst, false))
 }
 
 // GetType ports ifcopenshell.util.element.get_type: the IfcTypeObject (e.g.
@@ -77,12 +256,13 @@ func TypeIdentity(f *step.File, inst *step.Instance) (globalID, name, class stri
 // IfcElementQuantity, keyed directly — not via a Rel) and returns the subset
 // matching qtosOnly, keyed by set Name. Mirrors the type-level half of
 // ifcopenshell.util.element.get_psets.
-func typePropertySets(typ *step.Instance, qtosOnly bool) map[string]map[string]any {
+func typePropertySets(typ *step.Instance, qtosOnly bool, read func(*step.Instance) map[string]any) map[string]map[string]any {
 	out := map[string]map[string]any{}
 	v, ok := typ.Get(attrHasPropertySets)
 	if !ok || v.Kind() != step.KindList {
 		return out
 	}
+	owned := map[string]bool{}
 	for _, item := range v.List() {
 		if item.Kind() != step.KindRef || item.Ref() == nil {
 			continue
@@ -90,17 +270,22 @@ func typePropertySets(typ *step.Instance, qtosOnly bool) map[string]map[string]a
 		def := item.Ref()
 		switch {
 		case qtosOnly && def.IsA("IfcElementQuantity"):
-			out[strVal(def, attrName)] = readQuantitySet(def)
+			out[strVal(def, attrName)] = read(def)
 		case !qtosOnly && def.IsA("IfcPropertySet"):
 			// Defensive per-key merge, consistent with the occurrence overlay in
 			// Psets — guards against a malformed type with two same-named psets.
 			name := strVal(def, attrName)
-			if out[name] == nil {
-				out[name] = map[string]any{}
+			cur, seen := out[name]
+			if !seen {
+				out[name] = read(def)
+				continue
 			}
-			for k, v := range readPropertySet(def) {
-				out[name][k] = v
+			if !owned[name] {
+				cur = maps.Clone(cur)
+				owned[name] = true
 			}
+			maps.Copy(cur, read(def))
+			out[name] = cur
 		}
 	}
 	return out
@@ -524,7 +709,11 @@ func materialLeaves(f *step.File, m *step.Instance) []*step.Instance {
 // *Common pset carries a boolean IsExternal property (including the EXPRESS
 // LOGICAL .U. "unknown" case, which nominalGoValue already maps to nil).
 func IsExternal(f *step.File, inst *step.Instance) *bool {
-	for name, props := range Psets(f, inst, false) {
+	return isExternalIn(Psets(f, inst, false))
+}
+
+func isExternalIn(psets map[string]map[string]any) *bool {
+	for name, props := range psets {
 		if len(name) >= 6 && name[len(name)-6:] == "Common" {
 			if v, ok := props["IsExternal"]; ok {
 				if b, isBool := v.(bool); isBool {

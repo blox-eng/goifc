@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/blox-eng/goifc/step"
@@ -97,11 +98,13 @@ func Extract(f *step.File) (*Result, error) {
 	}
 
 	climbs := newContainers(f)
+	sets := newPropertySets(f)
+	sets.limitCopies()
 	for _, e := range insts {
 		m := LocalPlacement(e)
 		m[12], m[13], m[14] = m[12]*scale, m[13]*scale, m[14]*scale
 
-		q, hasQto := QtoQuantities(f, e, scale)
+		q, hasQto := sets.quantities(e, scale)
 		src := QuantitySourceQto
 		if !hasQto {
 			// No silent partial: source="none" always pairs with a fully-empty
@@ -136,14 +139,17 @@ func Extract(f *step.File) (*Result, error) {
 			Category:       Category(f, e),
 			Storey:         climbs.storey(e),
 			Material:       material,
-			IsExternal:     IsExternal(f, e),
-			Psets:          Psets(f, e, false),
+			IsExternal:     sets.isExternal(e),
+			Psets:          sets.of(e, false),
 			Qto:            q,
 			QuantitySource: src,
 			Placement:      m,
 			ParentIndex:    parent,
 			Emit:           isStructural(e.Type()),
 		})
+	}
+	if n := len(sets.dropped); n > 0 {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("property sets left out for %d elements: each needs its own copy of its type's sets, and the copies would pass %d entries per instance in the file", n, setEntriesPerInstance))
 	}
 	return res, nil
 }

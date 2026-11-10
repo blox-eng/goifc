@@ -22,25 +22,16 @@ var (
 // length units). ok is false when no quantity set yields an area (the tier-1
 // gate, matching decompose.py).
 func QtoQuantities(f *step.File, inst *step.Instance, scale float64) (Quantities, bool) {
-	flat := map[string]float64{}
-	if typ := GetType(f, inst); typ != nil {
-		for _, qtoSet := range typePropertySets(typ, true) {
-			for name, v := range qtoSet {
-				if val, ok := v.(float64); ok {
-					flat[name] = val
-				}
-			}
-		}
+	return newPropertySets(f).quantities(inst, scale)
+}
+
+func (r *propertySets) quantities(inst *step.Instance, scale float64) (Quantities, bool) {
+	var inherited map[string]float64
+	if typ := GetType(r.f, inst); typ != nil {
+		inherited = r.typeQuantities(typ)
 	}
 	occurrence := map[string]float64{}
-	for _, rel := range f.Inverse(inst) {
-		if !rel.IsA("IfcRelDefinesByProperties") {
-			continue
-		}
-		def, ok := rel.Ref(attrRel5)
-		if !ok || !def.IsA("IfcElementQuantity") {
-			continue
-		}
+	for _, def := range r.occurrenceSets(inst, true) {
 		qv, ok := def.Get(attrQuantities)
 		if !ok || qv.Kind() != step.KindList {
 			continue
@@ -59,15 +50,17 @@ func QtoQuantities(f *step.File, inst *step.Instance, scale float64) (Quantities
 			}
 		}
 	}
-	for name, val := range occurrence {
-		flat[name] = val // occurrence overrides type, matching get_psets inheritance order
-	}
-	if len(flat) == 0 {
+	if len(occurrence) == 0 && len(inherited) == 0 {
 		return Quantities{}, false
 	}
 	pick := func(names []string, power int) *float64 {
 		for _, n := range names {
-			if v, ok := flat[n]; ok {
+			// The occurrence overrides the type, matching get_psets inheritance order.
+			v, ok := occurrence[n]
+			if !ok {
+				v, ok = inherited[n]
+			}
+			if ok {
 				scaled := v * pow(scale, power)
 				return &scaled
 			}
