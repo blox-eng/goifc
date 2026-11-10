@@ -69,11 +69,10 @@ func TrueNorth(f *step.File) [2]float64 {
 // dirXY returns an IfcDirection's first two coordinates BY POSITION, with
 // ok=false when either is absent or is not a number.
 //
-// Deliberately not coords(): that helper COMPACTS the list, silently dropping
-// non-numeric entries. On IFCDIRECTION((1.,$,0.)) it yields [1,0], so a
-// malformed direction becomes a confident due-east bearing — where this
-// function's documented contract is to fall back to the default. Reading by
-// position is what makes the malformed case distinguishable at all.
+// Reading by position is what makes the malformed case distinguishable: on
+// IFCDIRECTION((1.,$,0.)) a list that dropped the unset entry would read as
+// [1,0], a confident due-east bearing, where this function's contract is to
+// fall back to the default.
 func dirXY(inst *step.Instance) (x, y float64, ok bool) {
 	v, got := inst.Get(attrCoordinates)
 	if !got || v.Kind() != step.KindList || len(v.List()) < 2 {

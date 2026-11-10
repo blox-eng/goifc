@@ -96,6 +96,7 @@ func Extract(f *step.File) (*Result, error) {
 		idxByID[e.ID()] = i
 	}
 
+	climbs := newContainers(f)
 	for _, e := range insts {
 		m := LocalPlacement(e)
 		m[12], m[13], m[14] = m[12]*scale, m[13]*scale, m[14]*scale
@@ -133,7 +134,7 @@ func Extract(f *step.File) (*Result, error) {
 			Name:           strVal(e, attrName),
 			PredefinedType: predefinedType(f, e),
 			Category:       Category(f, e),
-			Storey:         Storey(f, e),
+			Storey:         climbs.storey(e),
 			Material:       material,
 			IsExternal:     IsExternal(f, e),
 			Psets:          Psets(f, e, false),

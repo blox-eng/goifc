@@ -49,31 +49,9 @@ func Psets(f *step.File, inst *step.Instance, qtosOnly bool) map[string]map[stri
 // RelatingType=attr5). Covers both IFC4 IsTypedBy and IFC2X3
 // IfcRelDefinesByType — both are the same entity. nil when inst has no type.
 func GetType(f *step.File, inst *step.Instance) *step.Instance {
-	for _, rel := range f.Inverse(inst) {
-		if !rel.IsA("IfcRelDefinesByType") {
-			continue
-		}
-		// RelatedObjects is attr4 for IfcRelDefinesByType (unlike IfcRelAggregates,
-		// where it's attr5 — see instInRelatedObjects). Check membership directly.
-		v, ok := rel.Get(attrRel4)
-		if !ok || v.Kind() != step.KindList {
-			continue
-		}
-		member := false
-		for _, item := range v.List() {
-			if item.Kind() == step.KindRef && item.Ref() != nil && item.Ref().ID() == inst.ID() {
-				member = true
-				break
-			}
-		}
-		if !member {
-			continue
-		}
-		if t, ok := rel.Ref(attrRel5); ok { // RelatingType
-			return t
-		}
-	}
-	return nil
+	// RelatedObjects is attr4 for IfcRelDefinesByType (unlike IfcRelAggregates,
+	// where it's attr5).
+	return memberOf(f, inst, "IfcRelDefinesByType", attrRel4, attrRel5) // RelatingType
 }
 
 // TypeIdentity returns the identity of inst's IfcTypeObject: its GlobalId, its
@@ -192,27 +170,13 @@ func Container(f *step.File, inst *step.Instance) *step.Instance {
 // Without the RelatedObjects membership check, the parent would resolve to
 // itself — a self-cycle.
 func getAggregate(f *step.File, inst *step.Instance) *step.Instance {
-	for _, rel := range f.Inverse(inst) {
-		if rel.IsA("IfcRelAggregates") && instInList(rel, attrRel5, inst) {
-			if p, ok := rel.Ref(attrRel4); ok { // RelatingObject is at index 4 for IfcRelAggregates
-				return p
-			}
-		}
-	}
-	return nil
+	return memberOf(f, inst, "IfcRelAggregates", attrRel5, attrRel4) // RelatingObject
 }
 
 // getNest returns inst's IfcRelNests parent: IfcRelNests(...,RelatingObject=4,
 // RelatedObjects=5) — same attribute layout as IfcRelAggregates.
 func getNest(f *step.File, inst *step.Instance) *step.Instance {
-	for _, rel := range f.Inverse(inst) {
-		if rel.IsA("IfcRelNests") && instInList(rel, attrRel5, inst) {
-			if p, ok := rel.Ref(attrRel4); ok { // RelatingObject
-				return p
-			}
-		}
-	}
-	return nil
+	return memberOf(f, inst, "IfcRelNests", attrRel5, attrRel4) // RelatingObject
 }
 
 // getFilledVoid returns the IfcOpeningElement inst (a building element, e.g.
@@ -308,21 +272,21 @@ func getParent(f *step.File, inst *step.Instance) *step.Instance {
 	return nil
 }
 
-// instInList reports whether inst appears (by reference) in rel's list-valued
-// attribute at attrIdx — e.g. RelatedObjects (attr5) for IfcRelAggregates/
-// IfcRelNests, or RelatedElements (attr4) for
-// IfcRelContainedInSpatialStructure.
-func instInList(rel *step.Instance, attrIdx int, inst *step.Instance) bool {
-	v, ok := rel.Get(attrIdx)
-	if !ok || v.Kind() != step.KindList {
-		return false
-	}
-	for _, item := range v.List() {
-		if item.Kind() == step.KindRef && item.Ref() != nil && item.Ref().ID() == inst.ID() {
-			return true
+// memberOf returns the relating side of the first relation of class that
+// names inst in its related list at memberAttr and has a relating side at
+// relatingAttr. The inverse index records the attribute of each reference, so
+// membership is not a scan of the list: every member of an N-member relation
+// scanning it would cost N².
+func memberOf(f *step.File, inst *step.Instance, class string, memberAttr, relatingAttr int) *step.Instance {
+	for _, r := range f.InverseIndices(inst) {
+		if r.AttrIndex != memberAttr || !r.From.IsA(class) {
+			continue
+		}
+		if relating, ok := r.From.Ref(relatingAttr); ok {
+			return relating
 		}
 	}
-	return false
+	return nil
 }
 
 // containerOf ports ifcopenshell.util.element.get_container (recursive): if
@@ -332,20 +296,59 @@ func instInList(rel *step.Instance, attrIdx int, inst *step.Instance) bool {
 // resolves door→(filled_void)→opening→(voided_element)→wall→(contained)→
 // storey. depth guards against malformed/cyclic IFC.
 func containerOf(f *step.File, inst *step.Instance, depth int) *step.Instance {
+	return newContainers(f).of(inst, depth)
+}
+
+// containers remembers each instance's container for one pass over a file.
+// Many elements can climb to one parent, and finding the parent's container
+// reads all of its references: without the memo, N children of one parent
+// cost N².
+type containers struct {
+	f    *step.File
+	memo map[int]climb
+}
+
+// climb is a container found hops parents above an instance, or the end of
+// its parent chain hops parents above it when c is nil.
+type climb struct {
+	c    *step.Instance
+	hops int
+}
+
+func newContainers(f *step.File) *containers {
+	return &containers{f: f, memo: map[int]climb{}}
+}
+
+func (r *containers) of(inst *step.Instance, depth int) *step.Instance {
+	c, _ := r.climb(inst, depth)
+	return c
+}
+
+// climb returns inst's container and whether the result holds at any depth
+// greater than the hops it took. A result cut short by depth, as in a cycle,
+// is not remembered: a call with more depth could see further.
+func (r *containers) climb(inst *step.Instance, depth int) (*step.Instance, bool) {
 	if depth <= 0 {
-		return nil
+		return nil, false
 	}
-	for _, rel := range f.Inverse(inst) {
-		if rel.IsA("IfcRelContainedInSpatialStructure") && instInList(rel, attrRel4, inst) {
-			if s, ok := rel.Ref(attrRel5); ok { // RelatingStructure
-				return s
-			}
-		}
+	if m, ok := r.memo[inst.ID()]; ok && m.hops < depth {
+		return m.c, true
 	}
-	if p := getParent(f, inst); p != nil {
-		return containerOf(f, p, depth-1)
+	if s := memberOf(r.f, inst, "IfcRelContainedInSpatialStructure", attrRel4, attrRel5); s != nil { // RelatingStructure
+		r.memo[inst.ID()] = climb{c: s}
+		return s, true
 	}
-	return nil
+	p := getParent(r.f, inst)
+	if p == nil {
+		r.memo[inst.ID()] = climb{}
+		return nil, true
+	}
+	c, whole := r.climb(p, depth-1)
+	if !whole {
+		return nil, false
+	}
+	r.memo[inst.ID()] = climb{c: c, hops: r.memo[p.ID()].hops + 1}
+	return c, true
 }
 
 // Storey ports decompose._storey: resolves inst's enclosing IfcBuildingStorey
@@ -353,12 +356,16 @@ func containerOf(f *step.File, inst *step.Instance, depth int) *step.Instance {
 // nesting/filled-void/voiding when inst isn't directly contained), climbing
 // up to 8 hops.
 func Storey(f *step.File, inst *step.Instance) string {
-	c := containerOf(f, inst, 32)
+	return newContainers(f).storey(inst)
+}
+
+func (r *containers) storey(inst *step.Instance) string {
+	c := r.of(inst, 32)
 	for i := 0; i < 8 && c != nil; i++ {
 		if c.IsA("IfcBuildingStorey") {
 			return strVal(c, attrName)
 		}
-		c = containerOf(f, c, 32)
+		c = r.of(c, 32)
 	}
 	return ""
 }
