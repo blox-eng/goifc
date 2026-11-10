@@ -21,6 +21,42 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Fixed
 
+- `Qto.Perimeter` from geometry is now the same on every run (#129). It summed
+  its edges in map order, so its last digit changed between runs, and two
+  imports of one file differed in up to 905 values across the corpus.
+- A property set shared by many elements is now read once per `Extract`
+  (#131). One set of 2,000 properties on 2,000 elements allocated 2.5 GiB.
+  `Element.Psets` maps are now shared between elements with the same sets:
+  do not change them. An element with a set of its own beside a type with
+  many sets still needs its own copy of the type's sets; past 16 copied
+  entries per instance in the file its sets are left out, with a warning.
+  The corpus copies under 0.13 per instance.
+- A quantity that two of a type's quantity sets both name now takes the value
+  from the set last in name order (#131). It took a random one of the two.
+- Storey plans no longer loop forever on two elements that name each other
+  as parent, and climb a long parent chain once (#130). 100,000 nested
+  elements took 30 s.
+- Storey plans are bounded by a work budget of 16 per mesh vertex and
+  triangle (#130). 1,000 columns through 1,000 storeys were cut a million
+  times; past the budget, plans leave elements out and `Scene.Warnings` says
+  how many. The corpus uses at most 1.34.
+- A cut of one element made of many disjoint solids no longer nests every
+  ring against every other (#130). 40,000 small solids took 39 s to cut. A
+  grid over the rings' boxes now meets each ring with its neighbours only, so
+  a hole among them is still a hole. Only rings that overlap in large numbers
+  pass 2^24 units of nesting work; those are kept as outlines.
+- `Build` has a work budget for the whole model, as well as for each element
+  (#106). Thousands of elements sharing one expensive shape each spent up to
+  a full element budget. Past 512 per file instance plus one element budget,
+  elements are boxed, one box each; past twice that they are left out; one
+  warning gives both counts. Which elements are boxed is settled in element
+  order, so it is the same on every run. The corpus spends at most 30 per
+  instance.
+- A face or profile that many elements name is triangulated once per `Build`
+  (#106). 2,000 elements whose breps share one 2,000-point face each clipped
+  it again, and past the Build budget about half of them lost their geometry;
+  now every one keeps its mesh. Each element is still charged the
+  triangulation's cost against its own budget, so no mesh changes.
 - Finding an element's container, parent or type no longer scans the whole
   relation for each element (#126). Each element of an N-element relation
   scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one

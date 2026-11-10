@@ -41,7 +41,7 @@ func TestStoreyPlansSpanningColumn(t *testing.T) {
 	}
 	elev := map[string]float64{"A": 0, "B": 2.8}
 
-	plans := buildStoreyPlans(nodes, mesh, elev)
+	plans, _ := buildStoreyPlans(nodes, mesh, elev)
 	if len(plans) != 2 {
 		t.Fatalf("want 2 storey plans, got %d", len(plans))
 	}
@@ -91,7 +91,9 @@ func TestStoreyPlansDeterministic(t *testing.T) {
 	}
 	mesh := map[string]geometry.Element{"COL": boxElem("COL", [3]float64{0, 0, 0}, [3]float64{0.4, 0.4, 3})}
 	elev := map[string]float64{"A": 0}
-	if !reflect.DeepEqual(buildStoreyPlans(nodes, mesh, elev), buildStoreyPlans(nodes, mesh, elev)) {
+	first, _ := buildStoreyPlans(nodes, mesh, elev)
+	again, _ := buildStoreyPlans(nodes, mesh, elev)
+	if !reflect.DeepEqual(first, again) {
 		t.Fatal("buildStoreyPlans not deterministic")
 	}
 }

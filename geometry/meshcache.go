@@ -37,6 +37,66 @@ type meshCache struct {
 	m      sync.Map // mapKey -> *cachedMesh
 	bounds sync.Map // point list instance id -> *cachedBounds
 	boxes  sync.Map // boxKey -> *cachedBox
+	tris   sync.Map // loop instance id -> *cachedTris
+}
+
+// cachedTris holds a loop's triangulation once a run completes. A run that
+// ran out of its caller's budget is not kept, so mu, not a sync.Once, guards it.
+type cachedTris struct {
+	mu   sync.Mutex
+	done bool
+	tris []uint32
+	ok   bool
+	cost int64
+}
+
+// run triangulates the loop within what b has left, unless a run already
+// completed, and keeps the result once one does. It returns the work of a run
+// that ran out, or 0. The lock is released by defer: Build's workers recover a
+// panic, and a loop left locked would stall every element that names it.
+func (ct *cachedTris) run(b *budget, triangulate func(*budget) ([]uint32, bool)) (ranOut int64) {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if ct.done {
+		return 0
+	}
+	run := sizedBudget(max(b.left, 0))
+	tris, ok := triangulate(run)
+	if run.exhausted() {
+		return run.spent()
+	}
+	ct.tris, ct.ok, ct.cost, ct.done = tris, ok, run.spent(), true
+	return 0
+}
+
+// triangulated returns the triangulation of the loop instance id: a face or a
+// profile. triangulate computes it within the budget it is given, and its
+// result must depend on the loop alone. With b's cache a run is bounded by what
+// b has left and kept once it completes, so a loop is triangulated in full once
+// per Build. b is charged what the triangulation cost: the same for every
+// element that names the loop, whoever ran it first. A loop that costs more
+// than b has left is refused, as if it had run out; a run that ran out is
+// charged to b, as it would be with no cache.
+//
+// The triangles are shared and must not be changed.
+func (b *budget) triangulated(id int, triangulate func(*budget) ([]uint32, bool)) ([]uint32, bool) {
+	if b == nil || b.cache == nil {
+		return triangulate(b)
+	}
+	e, found := b.cache.tris.Load(id)
+	if !found {
+		e, _ = b.cache.tris.LoadOrStore(id, &cachedTris{})
+	}
+	ct := e.(*cachedTris)
+	if ranOut := ct.run(b, triangulate); ranOut > 0 {
+		b.spend(ranOut)
+		return nil, false
+	}
+	if !b.reserve(ct.cost) {
+		return nil, false
+	}
+	b.share(sharedKey{kind: sharedTriangulation, id: id}, ct.cost)
+	return ct.tris, ct.ok
 }
 
 // boxKey includes scale because a box is built in scaled units.

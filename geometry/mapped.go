@@ -97,6 +97,7 @@ func mappedRepMesh(mappedRep *step.Instance, unitScale float64, depth int, c *me
 		}
 	}
 	b := sizedBudget(elementBudget / (maxMapDepth + 1))
+	b.cache = c
 	m := unionItems(items, unitScale, depth+1, c, b) // recurse into A/B/C in scaled meters
 	m.cost = b.spent()
 	return m

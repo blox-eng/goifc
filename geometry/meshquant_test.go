@@ -157,3 +157,30 @@ func toV3(verts []float32) []v3 {
 	}
 	return w
 }
+
+// TestFootprintPerimeterIsTheSameEveryRun pins the sum order. The perimeter
+// adds the boundary edges one by one, and float addition depends on order: a
+// sum taken in map order changed in its last digit from run to run.
+func TestFootprintPerimeterIsTheSameEveryRun(t *testing.T) {
+	const n = 200
+	w := []v3{{0, 0, 0}}
+	for i := range n {
+		a := 2 * math.Pi * float64(i) / n
+		r := 1 + 0.37*math.Sin(7*a) + 0.011*float64(i%13)
+		w = append(w, v3{r * math.Cos(a), r * math.Sin(a), 0})
+	}
+	var tris []uint32
+	for i := range n {
+		// Centre, next, this: clockwise from above, so the face points down.
+		tris = append(tris, 0, uint32(1+(i+1)%n), uint32(1+i))
+	}
+	want := footprintPerimeter(w, tris)
+	if want == 0 {
+		t.Fatal("perimeter is 0: the fan's faces do not point down")
+	}
+	for range 50 {
+		if got := footprintPerimeter(w, tris); math.Float64bits(got) != math.Float64bits(want) {
+			t.Fatalf("perimeter changed between runs: %.17g, then %.17g", want, got)
+		}
+	}
+}

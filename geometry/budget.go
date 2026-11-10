@@ -4,7 +4,8 @@ package geometry
 // work (ear tests, loop and face points read, clipped triangles, each mapped
 // shape's own cost) and output (every vertex and triangle an item ships), so
 // one crafted element can neither stall an import nor clone a shape into
-// gigabytes. It bounds each element, not the whole Build (#106). It keeps the
+// gigabytes. It bounds each element; buildBudgetPerInstance bounds the whole
+// Build (#106). It keeps the
 // heaviest corpus element 16 times inside it and the heaviest mapped shape 4
 // times inside its share, elementBudget / (maxMapDepth+1), as
 // TestCorpusElementsKeepSixteenfoldHeadroom checks. Past it items are boxed or
@@ -17,7 +18,45 @@ const elementBudget = 1 << 23
 // budget bounds the work one element's tessellation may do. A nil *budget is
 // unlimited, for callers meshing trusted input in isolation; a box walk still
 // stops at maxBoxWalk.
-type budget struct{ left, size int64 }
+//
+// cache, when set, holds the loop triangulations of the Build, and shared
+// records each piece of cached work charged here, so that the Build budget can
+// charge work many elements share once.
+type budget struct {
+	left, size int64
+	cache      *meshCache
+	shared     []sharedWork
+}
+
+// sharedWork is work many elements may share, an item's box walk or a loop's
+// triangulation, and what it costs.
+type sharedWork struct {
+	key  sharedKey
+	cost int64
+}
+
+// sharedKey names one piece of shared work: what kind it is, the instance it
+// reads, and for a box walk the scale it is built in, as the cache keys it.
+// One instance can be both box walked and triangulated, in a hostile file.
+type sharedKey struct {
+	kind  sharedKind
+	id    int
+	scale float64
+}
+
+type sharedKind uint8
+
+const (
+	sharedBoxWalk sharedKind = iota
+	sharedTriangulation
+)
+
+// share records that cost units already charged here were shared work.
+func (b *budget) share(k sharedKey, cost int64) {
+	if b != nil {
+		b.shared = append(b.shared, sharedWork{k, cost})
+	}
+}
 
 func newBudget() *budget { return sizedBudget(elementBudget) }
 

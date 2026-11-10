@@ -54,7 +54,9 @@ type Element struct {
 	Storey         string
 	Material       string
 	IsExternal     *bool
-	Psets          map[string]map[string]any
+	// Psets is shared between elements that carry the same sets, so a set
+	// shared by many elements is held once. Do not change it.
+	Psets map[string]map[string]any
 	// Qto holds tier-1 Qto scalars (L/W/H frequently nil — only Area gates
 	// hasQto/QuantitySource=="qto"). The geometry package's OBB fallback should
 	// derive dimensions from the geometry bbox, not rely on these being populated.

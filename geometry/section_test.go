@@ -4,6 +4,7 @@ import (
 	"math"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/blox-eng/goifc/model"
 )
@@ -764,5 +765,81 @@ func TestFootprintOnOpenMeshIsDirectionDependent(t *testing.T) {
 	}
 	if away[0].Role != LoopSilhouette {
 		t.Fatalf("N=-Z: role = %q, want %q — the fallback is indistinguishable by Role", away[0].Role, LoopSilhouette)
+	}
+}
+
+// One element of many small disjoint solids cuts into as many rings. Nesting
+// tests every ring against every other: rings × points, minutes at this size.
+// Past maxNestWork the rings are kept as outlines, not nested.
+func TestFootprintOfManyDisjointSolidsIsBounded(t *testing.T) {
+	const solids = 40_000
+	var w []v3
+	var tris []uint32
+	for i := range solids {
+		x, y := float64(2*(i%200)), float64(2*(i/200))
+		bw, bt := boxMeshWorld(v3{x, y, 0}, v3{x + 1, y + 1, 1})
+		base := uint32(len(w))
+		w = append(w, bw...)
+		for _, k := range bt {
+			tris = append(tris, base+k)
+		}
+	}
+	e := Element{Placement: model.Identity(), BBoxMin: [3]float64{0, 0, 0}, BBoxMax: [3]float64{400, 400, 1}, Tris: tris}
+	for _, p := range w {
+		e.Verts = append(e.Verts, float32(p[0]), float32(p[1]), float32(p[2]))
+	}
+	start := time.Now()
+	loops := Footprint(e, 0.5)
+	if d := time.Since(start); d > timeLimit(2*time.Second) {
+		t.Fatalf("cutting %d solids took %v, want under %v: every ring is tested against every other", solids, d, timeLimit(2*time.Second))
+	}
+	if len(loops) != solids {
+		t.Fatalf("got %d loops, want one per solid, %d", len(loops), solids)
+	}
+}
+
+// squareRing is the CCW ring of the axis-aligned square from (x, y), side s.
+func squareRing(x, y, s float64) [][2]float64 {
+	return [][2]float64{{x, y}, {x + s, y}, {x + s, y + s}, {x, y + s}}
+}
+
+// TestAHoleAmongManyDisjointRingsIsStillAHole: a cut of 40,000 disjoint rings
+// is far past the work of testing every ring against every other, but each
+// ring meets only its neighbours, so a hole among them is still wound CW.
+func TestAHoleAmongManyDisjointRingsIsStillAHole(t *testing.T) {
+	rings := [][][2]float64{squareRing(-100, 0, 90), squareRing(-60, 40, 10)}
+	for i := range 40_000 {
+		rings = append(rings, squareRing(float64(2*(i%200)), float64(2*(i/200)), 1))
+	}
+	start := time.Now()
+	loops := nestEvenOdd(rings, LoopCut)
+	if d := time.Since(start); d > timeLimit(2*time.Second) {
+		t.Fatalf("nesting %d rings took %v, want under %v", len(rings), d, timeLimit(2*time.Second))
+	}
+	if a := polygonArea2D(loops[1].Points); a >= 0 {
+		t.Errorf("the hole has area %g, want it wound CW (negative)", a)
+	}
+	for _, i := range []int{0, 2, len(loops) - 1} {
+		if a := polygonArea2D(loops[i].Points); a <= 0 {
+			t.Errorf("ring %d has area %g, want an outer boundary (positive)", i, a)
+		}
+	}
+}
+
+// TestNestingManyConcentricRingsIsBounded: 20,000 rings each inside the last
+// all meet at one point, so nesting them is quadratic however it is indexed.
+// Past maxNestWork they are kept as outlines, in bounded time.
+func TestNestingManyConcentricRingsIsBounded(t *testing.T) {
+	var rings [][][2]float64
+	for i := range 20_000 {
+		rings = append(rings, squareRing(float64(i), float64(i), float64(2*(20_000-i))))
+	}
+	start := time.Now()
+	loops := nestEvenOdd(rings, LoopCut)
+	if d := time.Since(start); d > timeLimit(2*time.Second) {
+		t.Fatalf("nesting %d concentric rings took %v, want under %v", len(rings), d, timeLimit(2*time.Second))
+	}
+	if len(loops) != len(rings) {
+		t.Fatalf("%d loops, want one per ring, %d", len(loops), len(rings))
 	}
 }

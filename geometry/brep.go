@@ -80,7 +80,7 @@ func brepMesh(brep *step.Instance, b *budget) (verts []float32, tris []uint32, o
 			return nil, nil, false
 		}
 		// Ear-clip (not fan) — brep faces can be concave.
-		faceTris, ok := triangulateFace(loop, b)
+		faceTris, ok := b.triangulated(fv.Ref().ID(), func(b *budget) ([]uint32, bool) { return triangulateFace(loop, b) })
 		if !ok {
 			return nil, nil, false
 		}

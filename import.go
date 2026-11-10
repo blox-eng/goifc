@@ -294,7 +294,8 @@ func BuildImportFrom(f *step.File, a *Assembled) (*ImportModel, error) {
 		nodes[i] = n
 	}
 
-	storeyPlans := buildStoreyPlans(nodes, aabb, model.StoreyElevations(f))
+	storeyPlans, warnings := buildStoreyPlans(nodes, aabb, model.StoreyElevations(f))
+	a.Scene.Warnings = append(a.Scene.Warnings, warnings...)
 	return &ImportModel{Nodes: nodes, Scene: a.Scene, StoreyPlans: storeyPlans, TypeLayers: typeLayers}, nil
 }
 
