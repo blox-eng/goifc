@@ -167,6 +167,22 @@
 - [ ] **Step 4: Full gates** `go test ./...`, `go test -race ./geometry/`, `make lint`, `make parity` — Expected: all green.
 - [ ] **Step 5: Commit** `ci: prove goifc builds for GOOS=js GOARCH=wasm (#91)` and `docs: changelog for the parametric builders (#91)`.
 
+### Task 8: Niches (spec addendum)
+
+**Files:**
+- Modify: `geometry/build.go` (Opening.Depth), `geometry/build_wall.go` (checks, quantities, NicheBack), `geometry/wall_mesh.go` (depth layers, pocket), `geometry/build_fuzz_test.go`, `CHANGELOG.md`
+- Create: `geometry/niche_test.go`
+
+**Interfaces:**
+- Consumes: `checkOpenings`, `wallQuantities`, `meshWall`, `wallSpan` (signatures unchanged; checkOpenings also takes thickness).
+- Produces: `Opening.Depth`, `WallQuantities.NicheBack`.
+
+- [ ] **Step 1: Write the failing tests** `TestNicheOracle` (the addendum row, both quantities and a closed mesh whose volume is 0.6048), `TestNicheInputErrors` (depth 0.0005, depth = thickness − 0.0005, NaN depth, sill 0 → plain errors), `TestNicheNearConcaveCorner` (L room wall 2: a niche 0.04 deep at {1.80, 0.5, 0.15, 1.0} builds — at w = 0.04 the wall reaches u = 1.96 — while the same through opening is `in_corner`), `TestNicheBesideThroughOpening` (door + niche on one wall: closed, volume matches).
+- [ ] **Step 2: Run** `go test ./geometry/ -run Niche` — Expected: FAIL, unknown field Depth.
+- [ ] **Step 3: Implement** per the addendum.
+- [ ] **Step 4: Run** `go test ./geometry/` and fuzz each wall target 120 s — Expected: PASS.
+- [ ] **Step 5: Commit** `feat(geometry): niches that stop short of the opposite face (#91)`
+
 ## After the last task
 
 Final whole-branch review, then ask before: filing the three follow-up issues (T-joins, niches, storeys), pushing, opening the PR.

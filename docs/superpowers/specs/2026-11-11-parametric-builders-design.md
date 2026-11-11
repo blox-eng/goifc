@@ -288,3 +288,30 @@ and keeps every sum finite. The fuzz properties hold inside these bounds.
 - File layout inside `geometry/`, following the package's existing style.
 - How the existing `polygonArea2D`, `pointInPolygon` and `triangulatePolygon`
   sit behind the exported names (wrap, do not fork).
+
+## Addendum: niches (approved 2026-11-11)
+
+A niche is an opening that does not cut through: it is cut from the measured
+face to a depth. It must not reduce the opposite face, or a niche in a shower
+wall would remove tiles from the room behind it.
+
+- `Opening` gains `Depth float64`: 0 cuts through (unchanged); otherwise the
+  opening is a niche cut from the measured face to `Depth`.
+- `WallQuantities` gains `NicheBack float64`: Σ Width × Height of the niches,
+  the area of their back panels, which are finished too.
+- Depth must be at least 1 mm and at least 1 mm under the thickness; a niche
+  needs a sill (Sill ≥ 1 mm). Anything else is an input error. Floor-level
+  niches are not supported yet.
+- Placement rules are the same as for any opening. `in_corner` for a niche
+  uses the span the wall has at the niche's depth: between the end lines at
+  w = Depth, so a shallow niche may sit closer to a concave corner.
+- MeasuredNet loses Width × Height of every opening; OtherNet only of the
+  through openings. NetVolume loses Width × Height × Depth for a niche and
+  × thickness for a through opening. RevealPerimeter is unchanged: the niche's
+  four edges.
+- The mesh adds a vertex layer at each niche depth: jambs, head and sill run
+  from the face to the depth, a back panel closes the pocket, and the opposite
+  face stays whole. The shell stays closed.
+- Oracle row: a niche 0.40 × 0.60, 0.08 deep, in the 2.40 × 2.60 × 0.10 wall
+  → OtherNet 6.24, MeasuredNet 6.00, NicheBack 0.24, NetVolume
+  0.624 − 0.40·0.60·0.08 = 0.6048.
