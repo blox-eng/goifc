@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.9 — 2026-11-11
+
 ### Fixed
 
 - Storey plans test each element only against the storeys its height reaches
