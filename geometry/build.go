@@ -129,7 +129,28 @@ func checkOutline(outline [][2]float64) error {
 	if edgesCrossOrOverlap([][][2]float64{ring}) {
 		return errors.New("outline edges cross or overlap")
 	}
+	// edgesCrossOrOverlap lets edges meet at a point; a builder outline must
+	// not pinch, so every point keeps 1 mm from the edges it is not on.
+	n := len(ring)
+	for i, p := range ring {
+		for j := range ring {
+			if j == i || (j+1)%n == i {
+				continue
+			}
+			if segmentDistance(p, ring[j], ring[(j+1)%n]) < minDim {
+				return fmt.Errorf("point %d touches edge %d: the outline pinches", i, j)
+			}
+		}
+	}
 	return nil
+}
+
+// segmentDistance is the distance from p to the segment a–b.
+func segmentDistance(p, a, b [2]float64) float64 {
+	dx, dy := b[0]-a[0], b[1]-a[1]
+	k := ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / (dx*dx + dy*dy)
+	k = math.Max(0, math.Min(1, k))
+	return math.Hypot(p[0]-a[0]-k*dx, p[1]-a[1]-k*dy)
 }
 
 // newElement wraps a mesh local to origin: Placement translates to origin,

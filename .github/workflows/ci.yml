@@ -291,6 +291,18 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzUnionArea2D 60s
+      - name: Fuzz the wall builder
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildWall 60s
+      - name: Fuzz the room-wall builder
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildRoomWalls 60s
+      - name: Fuzz the slab builder
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildSlab 60s
       - name: Upload crashers
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -5,10 +5,12 @@ import (
 	"slices"
 )
 
-// gridSnap merges grid values closer than this. Opening edges are at least
-// minDim apart (checkOpenings), so only rounding noise is merged: a mitre end
-// that lands a hair off 0 or the wall length.
-const gridSnap = 1e-6
+// gridSnap merges grid values closer than this, and snaps a mitre end this
+// close to the measured face's end onto it. It must exceed the float32 step of
+// a local vertex (6e-5 m at the 1,000 m bound), or two grid lines round onto
+// one vertex and leave degenerate triangles. Opening edges are at least minDim
+// (1 mm) from each other and from the ends, so only rounding noise merges.
+const gridSnap = 1e-4
 
 // meshWall meshes a wall in its own frame (u along the edge, w through the
 // thickness from the measured face at w = 0, v up) as a closed shell wound
@@ -58,14 +60,6 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 		}
 		return false
 	}
-	inDoor := func(u float64) bool {
-		for _, o := range ops {
-			if o.Sill == 0 && u > o.Offset && u < o.Offset+o.Width {
-				return true
-			}
-		}
-		return false
-	}
 
 	// The two faces: measured (w = 0, facing -w) and opposite (w = t, +w).
 	for i := 0; i+1 < len(U); i++ {
@@ -99,44 +93,37 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 		}
 	}
 
-	// Top (+v) and bottom (-v): per u interval, the region between the faces
-	// that reach it. At a mitre end only one face does, and the region is the
-	// triangle the end cap bounds.
-	for i := 0; i+1 < len(U); i++ {
-		var ring []int // pairs (grid u index, side), counter-clockwise in (u, w)
-		if i >= i0 && i+1 <= iL {
-			ring = append(ring, i, 0, i+1, 0)
-		} else if i+1 == i0 || i == iL {
-			// the measured face ends here: its end point is on the ring
-			if i+1 == i0 {
-				ring = append(ring, i0, 0)
-			} else {
-				ring = append(ring, iL, 0)
+	// Top (+v) and bottom (-v): the wall's plan is a trapezoid, its two
+	// parallel sides the faces. Zip the grid points along the measured side
+	// (w = 0) and the opposite side (w = t) into triangles. The bottom is cut
+	// at every door, which has no bottom strip.
+	cuts := []float64{math.Inf(-1)}
+	for _, o := range ops {
+		if o.Sill == 0 {
+			cuts = append(cuts, o.Offset, o.Offset+o.Width)
+		}
+	}
+	cuts = append(cuts, math.Inf(1))
+	slices.Sort(cuts[1 : len(cuts)-1])
+	zip(U, i0, iL, is, ie, func(a, b, c [2]int) { // top: (u, w) counter-clockwise faces +v
+		tris = append(tris, vert(a[0], top, a[1]), vert(b[0], top, b[1]), vert(c[0], top, c[1]))
+	})
+	for k := 0; k+1 < len(cuts); k += 2 {
+		lo, hi := cuts[k], cuts[k+1]
+		clip := func(from, to int) (int, int) {
+			for from < to && U[from] < lo-gridSnap {
+				from++
 			}
+			for to > from && U[to] > hi+gridSnap {
+				to--
+			}
+			return from, to
 		}
-		if i >= is && i+1 <= ie {
-			ring = append(ring, i+1, 1, i, 1)
-		} else if i+1 == is {
-			ring = append(ring, is, 1)
-		} else if i == ie {
-			ring = append(ring, ie, 1)
-		}
-		if len(ring) < 6 {
-			continue // the interval lies outside both faces
-		}
-		up := make([]uint32, 0, len(ring)/2)
-		for k := 0; k < len(ring); k += 2 {
-			up = append(up, vert(ring[k], top, ring[k+1]))
-		}
-		poly(up...)
-		if inDoor((U[i] + U[i+1]) / 2) {
-			continue
-		}
-		down := make([]uint32, 0, len(ring)/2)
-		for k := len(ring) - 2; k >= 0; k -= 2 {
-			down = append(down, vert(ring[k], bottom, ring[k+1]))
-		}
-		poly(down...)
+		m0, m1 := clip(i0, iL)
+		o0, o1 := clip(is, ie)
+		zip(U, m0, m1, o0, o1, func(a, b, c [2]int) {
+			tris = append(tris, vert(a[0], bottom, a[1]), vert(c[0], bottom, c[1]), vert(b[0], bottom, b[1]))
+		})
 	}
 
 	// End caps: from the measured face's end to the opposite face's, full
@@ -188,4 +175,22 @@ func placeWall(f wallFrame, pts [][3]float64, tris []uint32) ([]float32, []uint3
 		}
 	}
 	return verts, tris
+}
+
+// zip triangulates the convex region between two parallel chains of grid
+// points: the measured side U[m0..m1] at w = 0 and the opposite side
+// U[o0..o1] at w = t. It walks both chains in u, always advancing the one
+// whose next point comes first, and emits each triangle counter-clockwise in
+// (u, w) as pairs (grid index, side).
+func zip(U []float64, m0, m1, o0, o1 int, emit func(a, b, c [2]int)) {
+	i, j := m0, o0
+	for i < m1 || j < o1 {
+		if j == o1 || (i < m1 && U[i+1] <= U[j+1]) {
+			emit([2]int{i, 0}, [2]int{i + 1, 0}, [2]int{j, 1})
+			i++
+		} else {
+			emit([2]int{i, 0}, [2]int{j + 1, 1}, [2]int{j, 1})
+			j++
+		}
+	}
 }

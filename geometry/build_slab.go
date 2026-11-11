@@ -32,11 +32,21 @@ func BuildSlab(outline [][2]float64, z, thickness float64) (Slab, error) {
 			verts = append(verts, float32(p[0]), float32(p[1]), float32(h))
 		}
 	}
+	// Ear clipping emits every triangle in one winding, so one sign orients
+	// the whole cap: the largest triangle's. A small triangle's own sign
+	// cannot: a straight-through point clips to a zero-area ear whose sign is
+	// rounding noise.
+	var big float64
+	for i := 0; i+2 < len(cap); i += 3 {
+		if c := cross2D(ring[cap[i]], ring[cap[i+1]], ring[cap[i+2]]); math.Abs(c) > math.Abs(big) {
+			big = c
+		}
+	}
 	ccw := polygonArea2D(ring) > 0
 	tris := make([]uint32, 0, 2*len(cap)+6*int(n))
 	for i := 0; i+2 < len(cap); i += 3 {
 		a, b, c := cap[i], cap[i+1], cap[i+2]
-		if cross2D(ring[a], ring[b], ring[c]) < 0 {
+		if big < 0 {
 			b, c = c, b
 		}
 		tris = append(tris, a, b, c)       // top, facing +Z

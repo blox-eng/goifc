@@ -35,7 +35,11 @@ func TestBuildSlabOracle(t *testing.T) {
 }
 
 func TestBuildSlabMeshMatches(t *testing.T) {
-	for _, o := range [][][2]float64{rect54, lOutline} {
+	// The third outline has a straight-through point (3) between 2 and 4: its
+	// ear is a zero-area triangle whose own sign cannot orient it (fuzz crasher).
+	straight := [][2]float64{{-13, 0}, {72, 0}, {-49, 36}, {0, 3.333333333333333}, {2, 2}}
+	cw := [][2]float64{{0, 0}, {0, 4}, {5, 4}, {5, 0}}
+	for _, o := range [][][2]float64{rect54, lOutline, straight, cw} {
 		s, err := BuildSlab(o, 0, 0.2)
 		if err != nil {
 			t.Fatal(err)
@@ -101,6 +105,9 @@ func TestBuildSlabRefuses(t *testing.T) {
 		{"repeated point", [][2]float64{{0, 0}, {5, 0}, {5, 0}, {5, 4}, {0, 4}}, 0, 0.2},
 		{"bowtie", [][2]float64{{0, 0}, {1, 1}, {1, 0}, {0, 1}}, 0, 0.2},
 		{"collinear", [][2]float64{{0, 0}, {1, 0}, {2, 0}}, 0, 0.2},
+		// Point 2 lies on the edge from point 4 back to point 0 (fuzz crasher).
+		{"pinched: a point on another edge", [][2]float64{{5, -7.75}, {116, 109}, {2, -1}, {5, 4}, {0.6666666666666666, 2}}, 0, 0.2},
+		{"pinched: a point 0.5 mm from another edge", [][2]float64{{0, 0}, {4, 0}, {2, 0.0005}, {2, 3}}, 0, 0.2},
 		{"point 1,001 m away", far, 0, 0.2},
 		{"first point 1.1e7 m out", origin, 0, 0.2},
 		{"2049 points", regularPolygon(maxOutlinePoints+1, 10), 0, 0.2},
