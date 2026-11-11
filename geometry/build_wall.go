@@ -259,7 +259,10 @@ func BuildWall(edge [2][2]float64, base, height, thickness float64, side Side, o
 	}
 	f := newWallFrame(a, b, side)
 	origin := [3]float64{a[0], a[1], base}
+	pts, tris := meshWall(span, height, thickness, openings)
+	verts, tris := placeWall(f, pts, tris)
 	return Wall{
+		Element:    newElement(verts, tris, origin),
 		Quantities: wallQuantities(span, height, thickness, openings),
 		Measured:   measuredFace(origin, f, length, height, openings),
 	}, nil
