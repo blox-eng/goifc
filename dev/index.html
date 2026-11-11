@@ -1204,11 +1204,18 @@ the numbers — each one labelled with where it came from.</p>
 <a class="md-button" href="https://pkg.go.dev/github.com/blox-eng/goifc">API reference</a></p>
 <h2 id="what-you-get">What you get<a class="headerlink" href="#what-you-get" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Schemas</strong> — IFC2X3 and IFC4 core entities.</li>
-<li><strong>Elements</strong> — semantics, placements, units, materials, storeys.</li>
-<li><strong>Geometry</strong> — proxy meshes, bounding boxes, plane sections, GLB.</li>
+<li><strong>Schemas</strong> — IFC2X3 and IFC4 core entities, read by a STEP parser that
+  takes any STEP file.</li>
+<li><strong>Elements</strong> — semantics, placements, units, materials and their layers,
+  storeys.</li>
+<li><strong>Geometry</strong> — proxy meshes, bounding boxes, GLB, plane sections, storey
+  plans, elevations, and which side of each wall faces outside.</li>
 <li><strong>Quantities</strong> — authored (<code>qto</code>), or derived from the mesh (<code>geometry</code>).
-  Openings are not netted out, so a derived volume is gross.</li>
+  goifc does not subtract openings from a derived volume, though a mesh the
+  file supplies may already have them cut; a wall's net elevation area,
+  openings subtracted, comes from <code>Scene.NetAreas</code>.</li>
+<li><strong>Untrusted files</strong> — tessellation, extraction and storey plans are bounded
+  by the file's size, and a budget that runs out says so.</li>
 </ul>
 <p>Where goifc's numbers are bounds rather than truth, it says so in the data —
 see <a href="concepts/quantities/">quantities and provenance</a> — and the edges it does
@@ -1227,6 +1234,11 @@ not cover are written down in <a href="limitations/">limitations</a>.</p>
 <li>
 <p><strong><a href="guides/sections/">Sections and floor plans</a></strong></p>
 <p>Cut the tessellated model with any plane and get closed 2D rings back.</p>
+</li>
+<li>
+<p><strong><a href="guides/measuring-silhouettes/">Measuring silhouettes</a></strong></p>
+<p>An element's outline on any plane, and the area several outlines cover,
+with the overlap counted once.</p>
 </li>
 <li>
 <p><strong><a href="step/">The <code>step</code> package</a></strong></p>

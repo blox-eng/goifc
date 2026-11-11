@@ -778,6 +778,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#past-a-work-budget-an-element-is-a-box-or-is-left-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Past a work budget, an element is a box or is left out
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#no-express-schema" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1197,6 +1208,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#past-a-work-budget-an-element-is-a-box-or-is-left-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Past a work budget, an element is a box or is left out
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#no-express-schema" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1277,6 +1299,24 @@ not a substitute for a B-rep kernel.</p>
 <p>Do not clash-detect with them.</p>
 <p>Some elements get no mesh at all and come back as a bounding box instead. How
 many, per model, is measured rather than asserted — see <a href="../coverage/">coverage</a>.</p>
+<h2 id="past-a-work-budget-an-element-is-a-box-or-is-left-out">Past a work budget, an element is a box or is left out<a class="headerlink" href="#past-a-work-budget-an-element-is-a-box-or-is-left-out" title="Permanent link">&para;</a></h2>
+<p>goifc bounds the work of tessellation, extraction and storey plans by the
+file's size (see
+<a href="https://github.com/blox-eng/goifc/blob/main/SECURITY.md">SECURITY.md</a>, which
+also lists what is not bounded yet). When an
+element runs past its own tessellation budget, its items are boxed; past twice
+the budget they are left out. The whole <code>Build</code> has a budget too: past it, the
+remaining elements in element order are each one box; past twice it they get no
+geometry. Storey plans that run past their budget leave out the sections they
+could not cut.</p>
+<p>Each of these says so in the warnings, so a figure is never silently smaller:
+an element over its own budget is named, and the Build and storey-plan budgets
+give a count of the elements or sections they boxed or left out. No model in the <a href="../coverage/">coverage</a> corpus reaches any of
+the budgets.</p>
+<p>One consequence for drawings: a cut whose rings overlap in very large numbers
+(more than 2^24 units of nesting work) keeps every ring as an outline, so a
+hole among them is drawn filled. Disjoint rings, however many, are nested
+correctly.</p>
 <h2 id="no-express-schema">No EXPRESS schema<a class="headerlink" href="#no-express-schema" title="Permanent link">&para;</a></h2>
 <p>The semantic layer reads positional attribute indices that are stable across
 IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not

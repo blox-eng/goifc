@@ -874,6 +874,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#since-these-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Since these tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#corpus" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1487,6 +1498,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#since-these-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Since these tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#corpus" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1876,6 +1898,25 @@ CC-BY 4.0, fetched by URL and pinned by SHA-256. The seventh is a private
 production model; it is described but not named, it is not redistributable, and
 only its aggregate numbers are published.</p>
 <h2 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h2>
+<h3 id="since-these-tables">Since these tables<a class="headerlink" href="#since-these-tables" title="Permanent link">&para;</a></h3>
+<p>The tables below were measured on goifc v0.14.0-10. They have not been re-run
+in full since. This is what changed in goifc's own numbers, measured on
+2026-11-11 on the same machine: single-core, fresh processes, the two versions
+interleaved run by run. The host was under load, so treat each ratio as
+approximate.</p>
+<ul>
+<li><strong>Walk is 1.6–4.2× faster</strong> on every real model than in the tables (v0.15.7
+  against v0.14.0-10): finding an element's container, parent or type no
+  longer scans the whole relation (#126).</li>
+<li><strong>Parse is level to 1.4× faster.</strong></li>
+<li><strong>Peak memory is level to 1.3× lower.</strong></li>
+<li><strong>Tessellation is level</strong> with the tables, after #134. v0.15.7 alone took
+  1.4–2× the CPU per <code>Build</code>, and #134 brought it back.</li>
+<li><strong>Meshes and triangles are unchanged:</strong> v0.15.7 produces exactly the counts
+  in the tables, on every model.</li>
+</ul>
+<p>The comparisons below are for goifc v0.14.0-10. goifc's own figures have since
+improved or stayed level, as above; the other tools were not re-measured.</p>
 <!-- bench:begin -->
 
 <p>Measured 2026-09-29 on Intel(R) Core(TM) i7-14700K (26 cores, 63 GiB),
