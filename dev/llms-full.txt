@@ -726,6 +726,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.15.9 — 2026-11-11
+
 ### Fixed
 
 - Storey plans test each element only against the storeys its height reaches (#141). Every element was tested against every storey, uncharged to the work budget, so a file of 50,000 storeys with one element each took 6.2 s.
