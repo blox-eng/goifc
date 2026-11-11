@@ -16,8 +16,8 @@ Against that model:
 
 ## What is bounded
 
-The work goifc does on a file is bounded by the file's size, not only by
-recursion depth:
+The work of parsing, extraction, tessellation and storey plans is bounded by
+the file's size, not only by recursion depth:
 
 - **Each element** has a tessellation budget. It counts the work of meshing,
   the vertices and triangles shipped, and the walk for a fallback box. Past the
@@ -29,7 +29,8 @@ recursion depth:
   Which elements those are is settled in element order, so it is the same on
   every run.
 - **Storey plans** are charged per vertex and triangle they cut, against a
-  budget sized to the file. A parent cycle is detected, not followed.
+  budget sized to the file, and test each element only against the storeys
+  its height reaches. A parent cycle is detected, not followed.
 - **Property sets** that many elements share are read once and shared. Copies
   made to merge a type's sets into an occurrence's are charged to a budget.
 - **Relationships** are looked up by index, so an N-element relationship costs
@@ -44,6 +45,12 @@ any of these budgets.
 
 What is still not bounded:
 
+- **Elevations, net areas and facade classification.** `Scene.Elevations`,
+  `Scene.NetAreas` and `BuildFacings` are charged to no budget, and their work
+  can grow faster than the file: elevations scan every element once per height
+  band. `BuildImport` runs `Scene.NetAreas`, so it is not bounded as a whole
+  until these are
+  ([#142](https://github.com/blox-eng/goifc/issues/142)).
 - **The file itself.** goifc holds the parsed file in memory, in proportion to
   its size. Limit the size of the uploads you accept.
 - **Cancellation.** `Build` takes no `context.Context`, so a caller cannot stop

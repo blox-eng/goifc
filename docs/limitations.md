@@ -20,8 +20,10 @@ many, per model, is measured rather than asserted — see [coverage](coverage.md
 
 ## Past a work budget, an element is a box or is left out
 
-goifc bounds the work a file can cost (see
-[SECURITY.md](https://github.com/blox-eng/goifc/blob/main/SECURITY.md)). When an
+goifc bounds the work of tessellation, extraction and storey plans by the
+file's size (see
+[SECURITY.md](https://github.com/blox-eng/goifc/blob/main/SECURITY.md), which
+also lists what is not bounded yet). When an
 element runs past its own tessellation budget, its items are boxed; past twice
 the budget they are left out. The whole `Build` has a budget too: past it, the
 remaining elements in element order are each one box; past twice it they get no

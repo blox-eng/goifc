@@ -38,10 +38,11 @@ compatibility policy ·
 - **Geometry** — proxy meshes, bounding boxes, GLB, plane sections, storey
   plans, elevations, and which side of each wall faces outside.
 - **Quantities** — authored (`qto`), or derived from the mesh (`geometry`).
-  Openings are not netted out of a derived volume, so it is gross; a wall's net
-  elevation area, openings subtracted, comes from `Scene.NetAreas`.
-- **Untrusted files** — the work is bounded by the file's size, and every
-  budget that runs out says so.
+  goifc does not subtract openings from a derived volume, though a mesh the
+  file supplies may already have them cut; a wall's net elevation area,
+  openings subtracted, comes from `Scene.NetAreas`.
+- **Untrusted files** — tessellation, extraction and storey plans are bounded
+  by the file's size, and a budget that runs out says so.
 
 ## Install
 
@@ -159,7 +160,8 @@ matches IfcOpenShell exactly. Method, fairness caveats and every table:
   `BuildFacings` classifies which side of each element faces outside, and
   `Scene.Elevations` draws the building from each facade.
 - [What is bounded](SECURITY.md#what-is-bounded) — the work budgets that keep a
-  small, hostile file from costing far more than its size.
+  small, hostile file from costing far more than its size, and the passes that
+  are not bounded yet.
 - [Local and world frames](https://docs.goifc.org/latest/concepts/frames/) —
   meshes are local, bounding boxes are world, and mixing them is wrong without
   erroring.
