@@ -87,10 +87,12 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 	}
 
 	// 2. Seed floorZ[storeyGID] = min BBoxMin[2] over contained mesh elements.
+	//    A NaN bound seeds nothing: as a floor it would become the top of the
+	//    storey below, and that storey's reach would hold no element.
 	floorZ := make(map[string]float64)
 	for _, e := range elems {
 		sgid := storeyOf[e.node]
-		if sgid == "" {
+		if sgid == "" || math.IsNaN(e.zmin) {
 			continue
 		}
 		if cur, seen := floorZ[sgid]; !seen || e.zmin < cur {
