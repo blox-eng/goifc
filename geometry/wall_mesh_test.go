@@ -152,3 +152,34 @@ func TestWallManyOpenings(t *testing.T) {
 	}
 	checkWallMesh(t, "256 openings", w)
 }
+
+// Three stacked openings whose jambs sit 0.08 and 0.07 mm apart: the grid
+// merges those lines, and every hole must still be decided by grid index.
+func TestWallStackedOpeningsNearlyAligned(t *testing.T) {
+	ops := []Opening{{0.5, 1.2, 0.3, 0.3}, {0.50008, 0, 0.3, 0.3}, {0.50015, 0.7, 0.3, 0.3}}
+	w, err := BuildWall([2][2]float64{{0, 0}, {3, 0}}, 0, 3, 0.2, SideLeft, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isClosedManifold(w.Element.Verts, w.Element.Tris) {
+		t.Fatal("mesh is not a closed shell")
+	}
+}
+
+// staircase is 256 openings on a 30 m wall, each at its own u and v, so the
+// mesh grid is about 516 × 514 cells: the worst case the opening cap allows.
+func staircase() []Opening {
+	ops := make([]Opening, maxOpenings)
+	for i := range ops {
+		ops[i] = Opening{Offset: 0.1 + 0.1*float64(i), Sill: 0.01 + 0.009*float64(i), Width: 0.05, Height: 0.5}
+	}
+	return ops
+}
+
+func TestWallStaircaseIsBounded(t *testing.T) {
+	w, err := BuildWall([2][2]float64{{0, 0}, {30, 0}}, 0, 3, 0.2, SideLeft, staircase())
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkWallMesh(t, "staircase", w)
+}

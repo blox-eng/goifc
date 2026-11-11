@@ -1,6 +1,7 @@
 package geometry
 
 import (
+	"errors"
 	"slices"
 	"testing"
 )
@@ -146,4 +147,33 @@ func TestBuildRoomWallsRefuses(t *testing.T) {
 	if _, err := BuildRoomWalls(room2418, 0, 2.5, 0.10, SideLeft, nil); err != nil {
 		t.Errorf("the plain room must build: %v", err)
 	}
+}
+
+func TestBuildRoomWallsRefusesTooMuchMesh(t *testing.T) {
+	square := [][2]float64{{0, 0}, {30, 0}, {30, 30}, {0, 30}}
+	ops := [][]Opening{staircase(), staircase(), staircase(), staircase()}
+	_, err := BuildRoomWalls(square, 0, 3, 0.2, SideLeft, ops)
+	var pe *PlacementError
+	if err == nil || errors.As(err, &pe) {
+		t.Fatalf("four staircase walls: want a plain too-complex error, got %v", err)
+	}
+}
+
+func TestBuildRoomWallsJoinsRefusalsFlat(t *testing.T) {
+	ops := make([][]Opening, 4)
+	ops[0] = []Opening{{2.00, 0, 0.50, 2.0}}
+	ops[2] = []Opening{{0.50, 0.9, 0.80, 1.70}}
+	_, err := BuildRoomWalls(room2418, 0, 2.60, 0.10, SideLeft, ops)
+	j, ok := err.(interface{ Unwrap() []error })
+	if !ok {
+		t.Fatalf("want a joined error, got %T", err)
+	}
+	for i, e := range j.Unwrap() {
+		if _, ok := e.(*PlacementError); !ok {
+			t.Errorf("element %d is %T, want *PlacementError", i, e)
+		}
+	}
+	wantRefusals(t, err,
+		PlacementError{Wall: 0, Opening: 0, Reason: ReasonTooWide},
+		PlacementError{Wall: 2, Opening: 0, Reason: ReasonAboveWall})
 }

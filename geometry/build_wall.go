@@ -257,6 +257,9 @@ func BuildWall(edge [2][2]float64, base, height, thickness float64, side Side, o
 	if err := checkOpenings(0, span, height, openings); err != nil {
 		return Wall{}, err
 	}
+	if gridCells(span, height, openings) > maxMeshCells {
+		return Wall{}, errTooMuchMesh
+	}
 	f := newWallFrame(a, b, side)
 	origin := [3]float64{a[0], a[1], base}
 	pts, tris := meshWall(span, height, thickness, openings)

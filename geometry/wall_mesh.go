@@ -1,6 +1,7 @@
 package geometry
 
 import (
+	"fmt"
 	"math"
 	"slices"
 )
@@ -8,8 +9,9 @@ import (
 // gridSnap merges grid values closer than this, and snaps a mitre end this
 // close to the measured face's end onto it. It must exceed the float32 step of
 // a local vertex (6e-5 m at the 1,000 m bound), or two grid lines round onto
-// one vertex and leave degenerate triangles. Opening edges are at least minDim
-// (1 mm) from each other and from the ends, so only rounding noise merges.
+// one vertex and leave degenerate triangles. Mostly rounding noise merges,
+// but stacked openings may put u edges this close on purpose: the mesh then
+// moves an edge by up to gridSnap, and decides every hole by grid index.
 const gridSnap = 1e-4
 
 // meshWall meshes a wall in its own frame (u along the edge, w through the
@@ -24,13 +26,7 @@ const gridSnap = 1e-4
 // lies inside both faces, at least minDim from every end and from each other.
 func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3]float64, tris []uint32) {
 	L, s, e, t := span.length, span.otherStart, span.otherEnd, thickness
-	us := []float64{0, L, s, e}
-	vs := []float64{0, height}
-	for _, o := range ops {
-		us = append(us, o.Offset, o.Offset+o.Width)
-		vs = append(vs, o.Sill, o.Sill+o.Height)
-	}
-	U, V := snapSorted(us), snapSorted(vs)
+	U, V := wallGrid(span, height, ops)
 	iu := func(x float64) int { return nearestIndex(U, x) }
 	iv := func(x float64) int { return nearestIndex(V, x) }
 	i0, iL, is, ie := iu(0), iu(L), iu(s), iu(e)
@@ -52,19 +48,24 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 			tris = append(tris, p[0], p[k], p[k+1])
 		}
 	}
-	inOpening := func(u, v float64) bool {
-		for _, o := range ops {
-			if u > o.Offset && u < o.Offset+o.Width && v > o.Sill && v < o.Sill+o.Height {
-				return true
+	// Holes are decided by grid index, the same way the reveals find their
+	// edges. Stacked openings can have u edges closer than gridSnap, which
+	// merge into one grid line; comparing raw values would disagree with
+	// that merge and leave a hole without its reveal.
+	nu := len(U) - 1
+	hole := make([]bool, nu*(len(V)-1))
+	for _, o := range ops {
+		for i := iu(o.Offset); i < iu(o.Offset+o.Width); i++ {
+			for j := iv(o.Sill); j < iv(o.Sill+o.Height); j++ {
+				hole[j*nu+i] = true
 			}
 		}
-		return false
 	}
 
 	// The two faces: measured (w = 0, facing -w) and opposite (w = t, +w).
 	for i := 0; i+1 < len(U); i++ {
 		for j := 0; j+1 < len(V); j++ {
-			if inOpening((U[i]+U[i+1])/2, (V[j]+V[j+1])/2) {
+			if hole[j*nu+i] {
 				continue
 			}
 			if i >= i0 && i+1 <= iL {
@@ -97,13 +98,13 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 	// parallel sides the faces. Zip the grid points along the measured side
 	// (w = 0) and the opposite side (w = t) into triangles. The bottom is cut
 	// at every door, which has no bottom strip.
-	cuts := []float64{math.Inf(-1)}
+	cuts := []int{math.MinInt}
 	for _, o := range ops {
 		if o.Sill == 0 {
-			cuts = append(cuts, o.Offset, o.Offset+o.Width)
+			cuts = append(cuts, iu(o.Offset), iu(o.Offset+o.Width))
 		}
 	}
-	cuts = append(cuts, math.Inf(1))
+	cuts = append(cuts, math.MaxInt)
 	slices.Sort(cuts[1 : len(cuts)-1])
 	zip(U, i0, iL, is, ie, func(a, b, c [2]int) { // top: (u, w) counter-clockwise faces +v
 		tris = append(tris, vert(a[0], top, a[1]), vert(b[0], top, b[1]), vert(c[0], top, c[1]))
@@ -111,13 +112,7 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 	for k := 0; k+1 < len(cuts); k += 2 {
 		lo, hi := cuts[k], cuts[k+1]
 		clip := func(from, to int) (int, int) {
-			for from < to && U[from] < lo-gridSnap {
-				from++
-			}
-			for to > from && U[to] > hi+gridSnap {
-				to--
-			}
-			return from, to
+			return max(from, lo), min(to, hi)
 		}
 		m0, m1 := clip(i0, iL)
 		o0, o1 := clip(is, ie)
@@ -134,6 +129,33 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 	}
 	return pts, tris
 }
+
+// maxMeshCells caps the mesh grid cells of one builder call, summed over its
+// walls. One wall with the worst arrangement the opening cap allows (256
+// openings, each at its own u and v) has about 516 × 514 = 265,000 cells and
+// over a million triangles; 2,048 such walls would need tens of gigabytes. A
+// room of ordinary walls stays far below the cap.
+const maxMeshCells = 1 << 19
+
+// wallGrid is a wall's mesh grid: U holds the face ends and every opening's
+// u edges, V the base, the top and every opening's v edges.
+func wallGrid(span wallSpan, height float64, ops []Opening) (U, V []float64) {
+	us := []float64{0, span.length, span.otherStart, span.otherEnd}
+	vs := []float64{0, height}
+	for _, o := range ops {
+		us = append(us, o.Offset, o.Offset+o.Width)
+		vs = append(vs, o.Sill, o.Sill+o.Height)
+	}
+	return snapSorted(us), snapSorted(vs)
+}
+
+// gridCells is the size of a wall's mesh grid, charged against maxMeshCells.
+func gridCells(span wallSpan, height float64, ops []Opening) int {
+	U, V := wallGrid(span, height, ops)
+	return len(U) * len(V)
+}
+
+var errTooMuchMesh = fmt.Errorf("the walls' openings need more than %d mesh grid cells; use fewer openings, or line up their edges", maxMeshCells)
 
 // snapSorted sorts xs and drops values within gridSnap of the one before.
 func snapSorted(xs []float64) []float64 {

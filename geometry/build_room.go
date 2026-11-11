@@ -114,19 +114,27 @@ func BuildRoomWalls(outline [][2]float64, base, height, thickness float64, side 
 		}
 		return openings[i]
 	}
+	// One flat errors.Join of *PlacementError across all walls, in wall then
+	// opening order: a caller that unwraps one level sees every refusal.
 	var refusals []error
+	cells := 0
 	for i, s := range spans {
 		err := checkOpenings(i, s, height, opsOf(i))
 		var pe *PlacementError
-		if err != nil && !errors.As(err, &pe) {
+		switch {
+		case err == nil:
+		case !errors.As(err, &pe):
 			return nil, err
+		default:
+			refusals = append(refusals, err.(interface{ Unwrap() []error }).Unwrap()...)
 		}
-		if err != nil {
-			refusals = append(refusals, err)
-		}
+		cells += gridCells(s, height, opsOf(i))
 	}
 	if len(refusals) > 0 {
 		return nil, errors.Join(refusals...)
+	}
+	if cells > maxMeshCells {
+		return nil, errTooMuchMesh
 	}
 	walls := make([]Wall, len(spans))
 	for i, s := range spans {
