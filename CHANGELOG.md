@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.8 — 2026-11-11
+
 ### Fixed
 
 - Tessellation is back to v0.15.6 speed (#134). v0.15.7 cached every face's
@@ -26,6 +28,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   1.4 to 2 times the CPU per `Build` on the corpus. Only loops of 64 points or
   more are cached now; a smaller loop is triangulated where it is named, and
   charged in full to each element that names it.
+
+## v0.15.7 — 2026-11-10
+
+### Fixed
+
 - `Qto.Perimeter` from geometry is now the same on every run (#129). It summed
   its edges in map order, so its last digit changed between runs, and two
   imports of one file differed in up to 905 values across the corpus.
@@ -62,6 +69,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   it again, and past the Build budget about half of them lost their geometry;
   now every one keeps its mesh. Each element is still charged the
   triangulation's cost against its own budget, so no mesh changes.
+
+## v0.15.6 — 2026-11-10
+
+### Fixed
+
 - Finding an element's container, parent or type no longer scans the whole
   relation for each element (#126). Each element of an N-element relation
   scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one
@@ -78,6 +90,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   was read in full for each element using it: 2,000 walls sharing one point
   of 2M coordinates allocated 30 GiB. Such a point now places at the origin,
   as the geometry package already treats it.
+
+## v0.15.5 — 2026-11-09
+
+### Fixed
+
 - One crafted element can no longer make `Build` take minutes or tens of
   gigabytes. The per-element budget from v0.15.1 (#70) counted only input work,
   so three things escaped it: mapping a shape made of box fallbacks cloned it
@@ -98,6 +115,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   is looked up once per file. The budget drops
   from 1<<26 to 1<<23 units: the heaviest corpus element stays 16 times inside
   it and the heaviest mapped shape 4 times inside its share (#108).
+
+## v0.15.4 — 2026-11-07
+
+### Fixed
+
 - An element that falls back to its box no longer boxes an extruded solid's
   profile in the profile's own frame. The walk added the placed rings, then
   also the raw profile points, with no `Position` applied, so a solid that its
