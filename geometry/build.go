@@ -19,10 +19,22 @@ const (
 )
 
 // Opening is a rectangle on a wall's measured face, in the wall's (u, v):
-// u runs along the edge from its start, v up from the wall's base. Every
-// opening cuts through the full wall.
+// u runs along the edge from its start, v up from the wall's base.
+//
+// Depth 0 cuts through the wall. Any other Depth makes a niche: it is cut from
+// the measured face to that depth and leaves the opposite face whole. A niche
+// needs a sill, and its depth must stay at least 1 mm inside the wall.
 type Opening struct {
 	Offset, Sill, Width, Height float64
+	Depth                       float64
+}
+
+// cut is how deep the opening cuts: the full thickness unless it is a niche.
+func (o Opening) cut(thickness float64) float64 {
+	if o.Depth == 0 {
+		return thickness
+	}
+	return o.Depth
 }
 
 // Face is one planar face as data, for drawing and dimensioning without

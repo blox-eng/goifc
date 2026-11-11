@@ -37,9 +37,13 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
     `above_wall`, `in_corner`). Every refusal returns at once, joined with
     `errors.Join`. An opening that only touches the wall top, a wall end or
     another opening is refused too.
-  - Not yet: walls that meet mid-wall (T-joins), niches shallower than the
-    wall, storeys. Every opening cuts through, and the caller passes the
-    base elevation.
+  - Niches: an `Opening` with a `Depth` is cut from the measured face to
+    that depth and leaves the opposite face whole, so a niche in a shower
+    wall takes no tiles from the room behind it. `NicheBack` reports the
+    area of the niches' back panels. A niche needs a sill.
+  - Walls take a base elevation; a storey's elevation plus the wall's base
+    offset is that number.
+  - Not yet: walls that meet mid-wall (T-joins).
 - `geometry.PolygonArea2D`, `PointInPolygon2D` and `Triangulate2D`.
 - CI builds every package for `GOOS=js GOARCH=wasm`, so the builders keep
   running in a browser.

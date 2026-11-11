@@ -161,8 +161,8 @@ func TestBuildRoomWallsRefusesTooMuchMesh(t *testing.T) {
 
 func TestBuildRoomWallsJoinsRefusalsFlat(t *testing.T) {
 	ops := make([][]Opening, 4)
-	ops[0] = []Opening{{2.00, 0, 0.50, 2.0}}
-	ops[2] = []Opening{{0.50, 0.9, 0.80, 1.70}}
+	ops[0] = []Opening{{2.00, 0, 0.50, 2.0, 0}}
+	ops[2] = []Opening{{0.50, 0.9, 0.80, 1.70, 0}}
 	_, err := BuildRoomWalls(room2418, 0, 2.60, 0.10, SideLeft, ops)
 	j, ok := err.(interface{ Unwrap() []error })
 	if !ok {

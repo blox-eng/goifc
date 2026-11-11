@@ -47,14 +47,16 @@ func wallSurface(q WallQuantities, thickness float64) float64 {
 
 func FuzzBuildWall(f *testing.F) {
 	z4 := [4]float64{}
-	f.Add(0.0, 0.0, 2.40, 0.0, 0.0, 2.60, 0.10, uint8(1), 0.50, 0.0, 0.80, 2.00, 0.0, 0.0, 0.0, 0.0, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
-	f.Add(1e6, 1e6, 1e6+3, 1e6+1, 3.0, 2.70, 0.20, uint8(2), 1.00, 0.90, 1.20, 1.20, 2.4, 0.9, 0.5, 1.0, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
-	f.Add(0.0, 0.0, 1000.0, 1.0, 0.0, 3.0, 0.001, uint8(1), 500.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
+	f.Add(0.0, 0.0, 2.40, 0.0, 0.0, 2.60, 0.10, uint8(1), 0.50, 0.0, 0.80, 2.00, 0.0, 0.0, 0.0, 0.0, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
+	f.Add(1e6, 1e6, 1e6+3, 1e6+1, 3.0, 2.70, 0.20, uint8(2), 1.00, 0.90, 1.20, 1.20, 2.4, 0.9, 0.5, 1.0, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
+	f.Add(0.0, 0.0, 1000.0, 1.0, 0.0, 3.0, 0.001, uint8(1), 500.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
 	// Stacked openings with jambs closer than the grid snap (final review).
-	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 3.0, 0.2, uint8(1), 0.5, 1.2, 0.3, 0.3, 0.50008, 0.0, 0.3, 0.3, 0.50015, 0.7, 0.3, 0.3, z4[0], z4[1], z4[2], z4[3])
-	f.Fuzz(func(t *testing.T, ax, ay, bx, by, base, h, th float64, side uint8, o1, s1, w1, h1, o2, s2, w2, h2, o3, s3, w3, h3, o4, s4, w4, h4 float64) {
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 3.0, 0.2, uint8(1), 0.5, 1.2, 0.3, 0.3, 0.50008, 0.0, 0.3, 0.3, 0.50015, 0.7, 0.3, 0.3, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3])
+	// A door beside a niche.
+	f.Add(0.0, 0.0, 2.40, 0.0, 0.0, 2.60, 0.10, uint8(2), 0.20, 0.0, 0.70, 2.00, 1.00, 1.20, 0.40, 0.60, z4[0], z4[1], z4[2], z4[3], z4[0], z4[1], z4[2], z4[3], 0.0, 0.08, 0.0, 0.0)
+	f.Fuzz(func(t *testing.T, ax, ay, bx, by, base, h, th float64, side uint8, o1, s1, w1, h1, o2, s2, w2, h2, o3, s3, w3, h3, o4, s4, w4, h4, d1, d2, d3, d4 float64) {
 		var ops []Opening
-		for _, o := range []Opening{{o1, s1, w1, h1}, {o2, s2, w2, h2}, {o3, s3, w3, h3}, {o4, s4, w4, h4}} {
+		for _, o := range []Opening{{o1, s1, w1, h1, d1}, {o2, s2, w2, h2, d2}, {o3, s3, w3, h3, d3}, {o4, s4, w4, h4, d4}} {
 			if o.Width != 0 {
 				ops = append(ops, o)
 			}
@@ -75,7 +77,7 @@ func FuzzBuildRoomWalls(f *testing.F) {
 	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3, h, th float64, side, wall uint8, o, s, w, oh float64) {
 		outline := [][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}}
 		ops := make([][]Opening, len(outline))
-		ops[int(wall)%len(outline)] = []Opening{{o, s, w, oh}}
+		ops[int(wall)%len(outline)] = []Opening{{o, s, w, oh, 0}}
 		walls, err := BuildRoomWalls(outline, 0, h, th, Side(side), ops)
 		if err != nil {
 			var pe *PlacementError

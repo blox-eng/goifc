@@ -156,7 +156,7 @@ func TestWallManyOpenings(t *testing.T) {
 // Three stacked openings whose jambs sit 0.08 and 0.07 mm apart: the grid
 // merges those lines, and every hole must still be decided by grid index.
 func TestWallStackedOpeningsNearlyAligned(t *testing.T) {
-	ops := []Opening{{0.5, 1.2, 0.3, 0.3}, {0.50008, 0, 0.3, 0.3}, {0.50015, 0.7, 0.3, 0.3}}
+	ops := []Opening{{0.5, 1.2, 0.3, 0.3, 0}, {0.50008, 0, 0.3, 0.3, 0}, {0.50015, 0.7, 0.3, 0.3, 0}}
 	w, err := BuildWall([2][2]float64{{0, 0}, {3, 0}}, 0, 3, 0.2, SideLeft, ops)
 	if err != nil {
 		t.Fatal(err)

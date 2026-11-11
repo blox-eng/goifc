@@ -103,14 +103,14 @@ func TestBuildWallRefusesEachReason(t *testing.T) {
 		index  int
 		reason PlacementReason
 	}{
-		{"past the end", []Opening{{2.00, 0, 0.50, 2.0}}, 0, ReasonTooWide},
-		{"touches the end", []Opening{{1.60, 0, 0.80, 2.0}}, 0, ReasonTooWide},
-		{"touches the start", []Opening{{0, 0, 0.50, 2.0}}, 0, ReasonTooWide},
-		{"touches the top", []Opening{{0.50, 0.90, 0.80, 1.70}}, 0, ReasonAboveWall},
-		{"above the top", []Opening{{0.50, 0.90, 0.80, 2.00}}, 0, ReasonAboveWall},
-		{"shares an edge", []Opening{{0.20, 0, 0.80, 2.0}, {1.00, 0, 0.80, 2.0}}, 1, ReasonOverlaps},
-		{"crosses", []Opening{{0.20, 0, 0.80, 2.0}, {0.50, 1.0, 0.80, 1.0}}, 1, ReasonOverlaps},
-		{"touches at a corner", []Opening{{0.20, 0, 0.50, 1.0}, {0.70, 1.0, 0.50, 1.0}}, 1, ReasonOverlaps},
+		{"past the end", []Opening{{2.00, 0, 0.50, 2.0, 0}}, 0, ReasonTooWide},
+		{"touches the end", []Opening{{1.60, 0, 0.80, 2.0, 0}}, 0, ReasonTooWide},
+		{"touches the start", []Opening{{0, 0, 0.50, 2.0, 0}}, 0, ReasonTooWide},
+		{"touches the top", []Opening{{0.50, 0.90, 0.80, 1.70, 0}}, 0, ReasonAboveWall},
+		{"above the top", []Opening{{0.50, 0.90, 0.80, 2.00, 0}}, 0, ReasonAboveWall},
+		{"shares an edge", []Opening{{0.20, 0, 0.80, 2.0, 0}, {1.00, 0, 0.80, 2.0, 0}}, 1, ReasonOverlaps},
+		{"crosses", []Opening{{0.20, 0, 0.80, 2.0, 0}, {0.50, 1.0, 0.80, 1.0, 0}}, 1, ReasonOverlaps},
+		{"touches at a corner", []Opening{{0.20, 0, 0.50, 1.0, 0}, {0.70, 1.0, 0.50, 1.0, 0}}, 1, ReasonOverlaps},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := BuildWall(doorEdge, 0, 2.60, 0.10, SideLeft, tc.ops)
@@ -120,7 +120,7 @@ func TestBuildWallRefusesEachReason(t *testing.T) {
 }
 
 func TestBuildWallReturnsAllRefusals(t *testing.T) {
-	ops := []Opening{{2.00, 0, 0.50, 2.0}, door, {0.50, 0.5, 0.30, 2.50}}
+	ops := []Opening{{2.00, 0, 0.50, 2.0, 0}, door, {0.50, 0.5, 0.30, 2.50, 0}}
 	_, err := BuildWall(doorEdge, 0, 2.60, 0.10, SideLeft, ops)
 	wantRefusals(t, err,
 		PlacementError{Wall: 0, Opening: 0, Reason: ReasonTooWide},
@@ -139,10 +139,10 @@ func TestBuildWallInputErrors(t *testing.T) {
 		side Side
 		ops  []Opening
 	}{
-		{"NaN offset", doorEdge, 2.6, SideLeft, []Opening{{math.NaN(), 0, 0.8, 2}}},
-		{"zero width", doorEdge, 2.6, SideLeft, []Opening{{0.5, 0, 0, 2}}},
-		{"negative sill", doorEdge, 2.6, SideLeft, []Opening{{0.5, -0.1, 0.8, 2}}},
-		{"sill under 1 mm", doorEdge, 2.6, SideLeft, []Opening{{0.5, 0.0005, 0.8, 2}}},
+		{"NaN offset", doorEdge, 2.6, SideLeft, []Opening{{math.NaN(), 0, 0.8, 2, 0}}},
+		{"zero width", doorEdge, 2.6, SideLeft, []Opening{{0.5, 0, 0, 2, 0}}},
+		{"negative sill", doorEdge, 2.6, SideLeft, []Opening{{0.5, -0.1, 0.8, 2, 0}}},
+		{"sill under 1 mm", doorEdge, 2.6, SideLeft, []Opening{{0.5, 0.0005, 0.8, 2, 0}}},
 		{"height under 1 mm", doorEdge, 0.0005, SideLeft, nil},
 		{"Inf height", doorEdge, math.Inf(1), SideLeft, nil},
 		{"zero-length edge", [2][2]float64{{1, 1}, {1, 1}}, 2.6, SideLeft, nil},

@@ -32,15 +32,26 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 	i0, iL, is, ie := iu(0), iu(L), iu(s), iu(e)
 	top, bottom := len(V)-1, 0
 
+	// Depth layers: 0 is the measured face, 1 the opposite face, and each
+	// niche gets its own layer at its depth.
+	W := []float64{0, t}
+	layer := make([]int, len(ops))
+	for n, o := range ops {
+		layer[n] = 1
+		if o.Depth != 0 {
+			layer[n] = len(W)
+			W = append(W, o.Depth)
+		}
+	}
 	ids := map[[3]int]uint32{}
-	vert := func(i, j, side int) uint32 {
-		k := [3]int{i, j, side}
-		if id, ok := ids[k]; ok {
+	vert := func(i, j, k int) uint32 {
+		key := [3]int{i, j, k}
+		if id, ok := ids[key]; ok {
 			return id
 		}
 		id := uint32(len(pts))
-		pts = append(pts, [3]float64{U[i], float64(side) * t, V[j]})
-		ids[k] = id
+		pts = append(pts, [3]float64{U[i], W[k], V[j]})
+		ids[key] = id
 		return id
 	}
 	poly := func(p ...uint32) { // a convex fan, in the given winding
@@ -52,12 +63,16 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 	// edges. Stacked openings can have u edges closer than gridSnap, which
 	// merge into one grid line; comparing raw values would disagree with
 	// that merge and leave a hole without its reveal.
+	// A niche holes the measured face only; the opposite face stays whole
+	// behind it.
 	nu := len(U) - 1
 	hole := make([]bool, nu*(len(V)-1))
+	through := make([]bool, len(hole))
 	for _, o := range ops {
 		for i := iu(o.Offset); i < iu(o.Offset+o.Width); i++ {
 			for j := iv(o.Sill); j < iv(o.Sill+o.Height); j++ {
 				hole[j*nu+i] = true
+				through[j*nu+i] = through[j*nu+i] || o.Depth == 0
 			}
 		}
 	}
@@ -65,31 +80,35 @@ func meshWall(span wallSpan, height, thickness float64, ops []Opening) (pts [][3
 	// The two faces: measured (w = 0, facing -w) and opposite (w = t, +w).
 	for i := 0; i+1 < len(U); i++ {
 		for j := 0; j+1 < len(V); j++ {
-			if hole[j*nu+i] {
-				continue
-			}
-			if i >= i0 && i+1 <= iL {
+			if i >= i0 && i+1 <= iL && !hole[j*nu+i] {
 				poly(vert(i, j, 0), vert(i+1, j, 0), vert(i+1, j+1, 0), vert(i, j+1, 0))
 			}
-			if i >= is && i+1 <= ie {
+			if i >= is && i+1 <= ie && !through[j*nu+i] {
 				poly(vert(i, j, 1), vert(i, j+1, 1), vert(i+1, j+1, 1), vert(i+1, j, 1))
 			}
 		}
 	}
 
-	// Reveals: jambs face into the opening along u; the head faces down and
-	// the sill up. A door (Sill == 0) has no sill strip.
-	for _, o := range ops {
+	// Reveals run from the measured face to the opening's layer: jambs face
+	// into the opening along u, the head faces down and the sill up. A door
+	// (Sill == 0) has no sill strip. A niche's back panel faces the room.
+	for n, o := range ops {
+		k := layer[n]
 		a, b := iu(o.Offset), iu(o.Offset+o.Width)
 		lo, hi := iv(o.Sill), iv(o.Sill+o.Height)
 		for j := lo; j < hi; j++ {
-			poly(vert(a, j, 0), vert(a, j, 1), vert(a, j+1, 1), vert(a, j+1, 0))
-			poly(vert(b, j, 0), vert(b, j+1, 0), vert(b, j+1, 1), vert(b, j, 1))
+			poly(vert(a, j, 0), vert(a, j, k), vert(a, j+1, k), vert(a, j+1, 0))
+			poly(vert(b, j, 0), vert(b, j+1, 0), vert(b, j+1, k), vert(b, j, k))
 		}
 		for i := a; i < b; i++ {
-			poly(vert(i, hi, 0), vert(i, hi, 1), vert(i+1, hi, 1), vert(i+1, hi, 0))
+			poly(vert(i, hi, 0), vert(i, hi, k), vert(i+1, hi, k), vert(i+1, hi, 0))
 			if o.Sill > 0 {
-				poly(vert(i, lo, 0), vert(i+1, lo, 0), vert(i+1, lo, 1), vert(i, lo, 1))
+				poly(vert(i, lo, 0), vert(i+1, lo, 0), vert(i+1, lo, k), vert(i, lo, k))
+			}
+			if o.Depth != 0 {
+				for j := lo; j < hi; j++ {
+					poly(vert(i, j, k), vert(i+1, j, k), vert(i+1, j+1, k), vert(i, j+1, k))
+				}
 			}
 		}
 	}

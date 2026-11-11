@@ -119,7 +119,7 @@ func BuildRoomWalls(outline [][2]float64, base, height, thickness float64, side 
 	var refusals []error
 	cells := 0
 	for i, s := range spans {
-		err := checkOpenings(i, s, height, opsOf(i))
+		err := checkOpenings(i, s, height, thickness, opsOf(i))
 		var pe *PlacementError
 		switch {
 		case err == nil:

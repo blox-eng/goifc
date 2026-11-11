@@ -87,6 +87,7 @@ type WallQuantities struct {
 	OtherGross, OtherNet       float64 // m², the opposite face
 	RevealPerimeter            float64 // m, Σ opening edges, minus the bottom edge when Sill == 0
 	GrossVolume, NetVolume     float64 // m³
+	NicheBack                  float64 // m², the back panels of the niches
 }
 
 // Wall is what BuildWall and BuildRoomWalls return.
@@ -112,7 +113,7 @@ type wallSpan struct {
 //
 // "Touching" is anything closer than minDim: a sliver of wall under 1 mm is
 // not wall, and the reveal behind a touching edge would not exist.
-func checkOpenings(wall int, span wallSpan, height float64, ops []Opening) error {
+func checkOpenings(wall int, span wallSpan, height, thickness float64, ops []Opening) error {
 	if len(ops) > maxOpenings {
 		return fmt.Errorf("wall %d has %d openings, more than %d", wall, len(ops), maxOpenings)
 	}
@@ -120,7 +121,7 @@ func checkOpenings(wall int, span wallSpan, height float64, ops []Opening) error
 		for _, f := range [...]struct {
 			name string
 			v    float64
-		}{{"offset", o.Offset}, {"sill", o.Sill}, {"width", o.Width}, {"height", o.Height}} {
+		}{{"offset", o.Offset}, {"sill", o.Sill}, {"width", o.Width}, {"height", o.Height}, {"depth", o.Depth}} {
 			if math.IsNaN(f.v) || math.IsInf(f.v, 0) {
 				return fmt.Errorf("wall %d opening %d: %s is not a finite number", wall, i, f.name)
 			}
@@ -134,8 +135,15 @@ func checkOpenings(wall int, span wallSpan, height float64, ops []Opening) error
 		if o.Sill > 0 && o.Sill < minDim {
 			return fmt.Errorf("wall %d opening %d: sill %.6g m is under 1 mm; use 0 for a door", wall, i, o.Sill)
 		}
+		if o.Depth != 0 {
+			if o.Depth < minDim || o.Depth > thickness-minDim {
+				return fmt.Errorf("wall %d opening %d: niche depth %.6g m must be at least 1 mm and at least 1 mm under the %.6g m thickness; use 0 to cut through", wall, i, o.Depth, thickness)
+			}
+			if o.Sill == 0 {
+				return fmt.Errorf("wall %d opening %d: a niche needs a sill; floor-level niches are not supported", wall, i)
+			}
+		}
 	}
-	lo, hi := math.Max(0, span.otherStart), math.Min(span.length, span.otherEnd)
 	var errs []error
 	for i, o := range ops {
 		var reason PlacementReason
@@ -146,7 +154,7 @@ func checkOpenings(wall int, span wallSpan, height float64, ops []Opening) error
 			reason = ReasonAboveWall
 		case overlapsEarlier(ops[:i], o):
 			reason = ReasonOverlaps
-		case o.Offset < lo+minDim || o.Offset+o.Width > hi-minDim:
+		case outsideAtDepth(span, thickness, o):
 			reason = ReasonInCorner
 		default:
 			continue
@@ -154,6 +162,17 @@ func checkOpenings(wall int, span wallSpan, height float64, ops []Opening) error
 		errs = append(errs, &PlacementError{Wall: wall, Opening: i, Reason: reason})
 	}
 	return errors.Join(errs...)
+}
+
+// outsideAtDepth reports whether o leaves the span the wall has at the depth
+// o cuts to: between the end lines, which run from the measured face's ends
+// (u = 0 and u = length) to the opposite face's (otherStart, otherEnd). A
+// through opening needs wall on both faces; a niche only down to its depth.
+func outsideAtDepth(span wallSpan, thickness float64, o Opening) bool {
+	f := o.cut(thickness) / thickness
+	lo := math.Max(0, span.otherStart*f)
+	hi := math.Min(span.length, span.length+(span.otherEnd-span.length)*f)
+	return o.Offset < lo+minDim || o.Offset+o.Width > hi-minDim
 }
 
 // overlapsEarlier reports whether o overlaps or touches any of earlier: the
@@ -174,9 +193,16 @@ func overlapsEarlier(earlier []Opening, o Opening) bool {
 // area is the mean face length times the thickness.
 func wallQuantities(span wallSpan, height, thickness float64, ops []Opening) WallQuantities {
 	other := span.otherEnd - span.otherStart
-	var holes, reveal float64
+	var holes, through, cutVol, niches, reveal float64
 	for _, o := range ops {
-		holes += o.Width * o.Height
+		a := o.Width * o.Height
+		holes += a
+		cutVol += a * o.cut(thickness)
+		if o.Depth == 0 {
+			through += a
+		} else {
+			niches += a
+		}
 		reveal += 2*o.Width + 2*o.Height
 		if o.Sill == 0 {
 			reveal -= o.Width
@@ -189,10 +215,11 @@ func wallQuantities(span wallSpan, height, thickness float64, ops []Opening) Wal
 		MeasuredGross:   span.length * height,
 		MeasuredNet:     span.length*height - holes,
 		OtherGross:      other * height,
-		OtherNet:        other*height - holes,
+		OtherNet:        other*height - through,
 		RevealPerimeter: reveal,
 		GrossVolume:     gv,
-		NetVolume:       gv - holes*thickness,
+		NetVolume:       gv - cutVol,
+		NicheBack:       niches,
 	}
 }
 
@@ -254,7 +281,7 @@ func BuildWall(edge [2][2]float64, base, height, thickness float64, side Side, o
 		return Wall{}, err
 	}
 	span := wallSpan{length: length, otherStart: 0, otherEnd: length}
-	if err := checkOpenings(0, span, height, openings); err != nil {
+	if err := checkOpenings(0, span, height, thickness, openings); err != nil {
 		return Wall{}, err
 	}
 	if gridCells(span, height, openings) > maxMeshCells {
