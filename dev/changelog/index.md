@@ -10,6 +10,7 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ### Fixed
 
+- Tessellation is back to v0.15.6 speed (#134). v0.15.7 cached every face's and profile's triangulation, and the cache cost more than the work it saved: 1.4 to 2 times the CPU per `Build` on the corpus. Only loops of 64 points or more are cached now; a smaller loop is triangulated where it is named, and charged in full to each element that names it.
 - `Qto.Perimeter` from geometry is now the same on every run (#129). It summed its edges in map order, so its last digit changed between runs, and two imports of one file differed in up to 905 values across the corpus.
 - A property set shared by many elements is now read once per `Extract` (#131). One set of 2,000 properties on 2,000 elements allocated 2.5 GiB. `Element.Psets` maps are now shared between elements with the same sets: do not change them. An element with a set of its own beside a type with many sets still needs its own copy of the type's sets; past 16 copied entries per instance in the file its sets are left out, with a warning. The corpus copies under 0.13 per instance.
 - A quantity that two of a type's quantity sets both name now takes the value from the set last in name order (#131). It took a random one of the two.
