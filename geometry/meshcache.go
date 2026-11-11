@@ -69,8 +69,15 @@ func (ct *cachedTris) run(b *budget, triangulate func(*budget) ([]uint32, bool))
 	return 0
 }
 
-// triangulated returns the triangulation of the loop instance id: a face or a
-// profile. triangulate computes it within the budget it is given, and its
+// minCachedLoop is the fewest points a loop needs for its triangulation to be
+// cached. Almost every face of a real model is named once, and a small one is
+// cheaper to triangulate than to cache: caching every face made tessellation of
+// the corpus 1.3 to 1.7 times slower (#134). A small loop named by many
+// elements is still bounded, charged in full to each of them.
+const minCachedLoop = 64
+
+// triangulated returns the triangulation of the loop instance id, a face or a
+// profile of points points. triangulate computes it within the budget it is given, and its
 // result must depend on the loop alone. With b's cache a run is bounded by what
 // b has left and kept once it completes, so a loop is triangulated in full once
 // per Build. b is charged what the triangulation cost: the same for every
@@ -79,8 +86,8 @@ func (ct *cachedTris) run(b *budget, triangulate func(*budget) ([]uint32, bool))
 // charged to b, as it would be with no cache.
 //
 // The triangles are shared and must not be changed.
-func (b *budget) triangulated(id int, triangulate func(*budget) ([]uint32, bool)) ([]uint32, bool) {
-	if b == nil || b.cache == nil {
+func (b *budget) triangulated(id, points int, triangulate func(*budget) ([]uint32, bool)) ([]uint32, bool) {
+	if b == nil || b.cache == nil || points < minCachedLoop {
 		return triangulate(b)
 	}
 	e, found := b.cache.tris.Load(id)

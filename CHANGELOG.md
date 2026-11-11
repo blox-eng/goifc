@@ -21,6 +21,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Fixed
 
+- Tessellation is back to v0.15.6 speed (#134). v0.15.7 cached every face's
+  and profile's triangulation, and the cache cost more than the work it saved:
+  1.4 to 2 times the CPU per `Build` on the corpus. Only loops of 64 points or
+  more are cached now; a smaller loop is triangulated where it is named, and
+  charged in full to each element that names it.
 - `Qto.Perimeter` from geometry is now the same on every run (#129). It summed
   its edges in map order, so its last digit changed between runs, and two
   imports of one file differed in up to 905 values across the corpus.

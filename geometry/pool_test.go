@@ -210,12 +210,12 @@ func TestARefusedTriangulationRunsWithinWhatTheCallerHasLeft(t *testing.T) {
 	poor.cache = c
 	// The budget stops a clip within one ear test, which reads at most every
 	// point of the loop.
-	if _, ok := poor.triangulated(12, triangulate); ok || ran > 1000+int64(len(loop)) || !poor.exhausted() {
+	if _, ok := poor.triangulated(12, len(loop), triangulate); ok || ran > 1000+int64(len(loop)) || !poor.exhausted() {
 		t.Fatalf("a 1,000-unit caller: ok=%v after %d units of work, exhausted=%v; want a refusal within its 1,000 and one ear test", ok, ran, poor.exhausted())
 	}
 	rich := newBudget()
 	rich.cache = c
-	if tris, ok := rich.triangulated(12, triangulate); !ok || len(tris) == 0 {
+	if tris, ok := rich.triangulated(12, len(loop), triangulate); !ok || len(tris) == 0 {
 		t.Fatalf("a full budget after a refused one: ok=%v with %d indices, want the face", ok, len(tris))
 	}
 }
@@ -258,11 +258,11 @@ func TestAPanickedTriangulationReleasesItsLoop(t *testing.T) {
 	b.cache = &meshCache{}
 	func() {
 		defer func() { _ = recover() }()
-		b.triangulated(12, func(*budget) ([]uint32, bool) { panic("malformed loop") })
+		b.triangulated(12, 1000, func(*budget) ([]uint32, bool) { panic("malformed loop") })
 	}()
 	done := make(chan bool)
 	go func() {
-		_, ok := b.triangulated(12, func(*budget) ([]uint32, bool) { return []uint32{0, 1, 2}, true })
+		_, ok := b.triangulated(12, 1000, func(*budget) ([]uint32, bool) { return []uint32{0, 1, 2}, true })
 		done <- ok
 	}()
 	select {
@@ -272,5 +272,29 @@ func TestAPanickedTriangulationReleasesItsLoop(t *testing.T) {
 		}
 	case <-time.After(timeLimit(boundedTime)):
 		t.Fatal("the loop stayed locked after its triangulation panicked")
+	}
+}
+
+// TestASmallLoopCostsNoMoreWithTheCache: almost every face of a real model
+// is named once, and a small one is cheaper to triangulate than to cache, so
+// the cache must not touch it. Caching every face made tessellation of the
+// corpus 1.3 to 1.7 times slower.
+func TestASmallLoopCostsNoMoreWithTheCache(t *testing.T) {
+	loop := []v3{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}
+	triangulate := func(b *budget) ([]uint32, bool) { return triangulateFace(loop, b) }
+	id := 0
+	uncached := testing.AllocsPerRun(100, func() {
+		id++
+		newBudget().triangulated(id, len(loop), triangulate)
+	})
+	c := &meshCache{}
+	cached := testing.AllocsPerRun(100, func() {
+		id++
+		b := newBudget()
+		b.cache = c
+		b.triangulated(id, len(loop), triangulate)
+	})
+	if cached > uncached {
+		t.Errorf("a %d-point face allocates %.0f times with the cache and %.0f without", len(loop), cached, uncached)
 	}
 }

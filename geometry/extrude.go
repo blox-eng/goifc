@@ -21,7 +21,7 @@ func extrudeSolid(solid *step.Instance, b *budget) (verts []float32, tris []uint
 	// a naive fan inverts on L-shaped walls/slabs), emit bottom (reversed
 	// winding, downward normal) and top rings from the same triangulation.
 	prof, _ := solid.Ref(attrSweptArea)
-	capTris, ok := b.triangulated(prof.ID(), func(b *budget) ([]uint32, bool) { return triangulatePolygon(poly, b) })
+	capTris, ok := b.triangulated(prof.ID(), len(poly), func(b *budget) ([]uint32, bool) { return triangulatePolygon(poly, b) })
 	if !ok {
 		return nil, nil, false
 	}
