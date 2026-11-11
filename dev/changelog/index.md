@@ -8,9 +8,16 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.15.8 — 2026-11-11
+
 ### Fixed
 
 - Tessellation is back to v0.15.6 speed (#134). v0.15.7 cached every face's and profile's triangulation, and the cache cost more than the work it saved: 1.4 to 2 times the CPU per `Build` on the corpus. Only loops of 64 points or more are cached now; a smaller loop is triangulated where it is named, and charged in full to each element that names it.
+
+## v0.15.7 — 2026-11-10
+
+### Fixed
+
 - `Qto.Perimeter` from geometry is now the same on every run (#129). It summed its edges in map order, so its last digit changed between runs, and two imports of one file differed in up to 905 values across the corpus.
 - A property set shared by many elements is now read once per `Extract` (#131). One set of 2,000 properties on 2,000 elements allocated 2.5 GiB. `Element.Psets` maps are now shared between elements with the same sets: do not change them. An element with a set of its own beside a type with many sets still needs its own copy of the type's sets; past 16 copied entries per instance in the file its sets are left out, with a warning. The corpus copies under 0.13 per instance.
 - A quantity that two of a type's quantity sets both name now takes the value from the set last in name order (#131). It took a random one of the two.
@@ -19,11 +26,26 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 - A cut of one element made of many disjoint solids no longer nests every ring against every other (#130). 40,000 small solids took 39 s to cut. A grid over the rings' boxes now meets each ring with its neighbours only, so a hole among them is still a hole. Only rings that overlap in large numbers pass 2^24 units of nesting work; those are kept as outlines.
 - `Build` has a work budget for the whole model, as well as for each element (#106). Thousands of elements sharing one expensive shape each spent up to a full element budget. Past 512 per file instance plus one element budget, elements are boxed, one box each; past twice that they are left out; one warning gives both counts. Which elements are boxed is settled in element order, so it is the same on every run. The corpus spends at most 30 per instance.
 - A face or profile that many elements name is triangulated once per `Build` (#106). 2,000 elements whose breps share one 2,000-point face each clipped it again, and past the Build budget about half of them lost their geometry; now every one keeps its mesh. Each element is still charged the triangulation's cost against its own budget, so no mesh changes.
+
+## v0.15.6 — 2026-11-10
+
+### Fixed
+
 - Finding an element's container, parent or type no longer scans the whole relation for each element (#126). Each element of an N-element relation scanned all N, so a storey holding 40,000 walls, or 10,000 walls of one type, took from 11 s to over a minute. Membership now comes from the inverse index.
 - Finding each element's storey no longer reads a shared parent's references again for each element (#126). 80,000 walls aggregated into one assembly, each through a relation of its own, took 14 s to extract; each container is now found once per extract.
 - A placement point or direction with an unset or non-numeric coordinate is no longer read (#126). Dropping the entry shifted the rest, so a location (1,$,5) placed at (1,5,0); it now places at the origin.
 - A placement point with more than 3 coordinates is no longer read (#126). It was read in full for each element using it: 2,000 walls sharing one point of 2M coordinates allocated 30 GiB. Such a point now places at the origin, as the geometry package already treats it.
+
+## v0.15.5 — 2026-11-09
+
+### Fixed
+
 - One crafted element can no longer make `Build` take minutes or tens of gigabytes. The per-element budget from v0.15.1 (#70) counted only input work, so three things escaped it: mapping a shape made of box fallbacks cloned it for free (an 88 KB file reached 96M triangles), emitted vertices and triangles cost nothing, and the box fallback walked shared subgraphs without limit (20 s and 20 GB for 2,000 wrappers over one shell). The budget now charges every item's output and every box walk, and a box walk stops past one budget. A face set's walk is charged by its points, not its triangles, so a face set too large to mesh still gets its box, up to about 8.4M points. A faceted brep that declines to mesh gets no box past about 600k faces. An element over budget still boxes what it can, then leaves the rest out with the "tessellation budget exceeded" warning. Reads that grew with a file's repeats, not its size, are bounded too: a point with more than three coordinates is not read, a face's inner bounds are not read and its bounds are charged each time a shell names it, a clip's boundary is charged on every clip, a composite curve that names one parent curve twice is declined, an arc trim of more than two selects is declined, and the plane angle unit is looked up once per file. The budget drops from 1\<<26 to 1\<<23 units: the heaviest corpus element stays 16 times inside it and the heaviest mapped shape 4 times inside its share (#108).
+
+## v0.15.4 — 2026-11-07
+
+### Fixed
+
 - An element that falls back to its box no longer boxes an extruded solid's profile in the profile's own frame. The walk added the placed rings, then also the raw profile points, with no `Position` applied, so a solid that its placement moves or turns boxed too large: a thin diagonal strip turned onto the X axis boxed 10 units wide. The walk now stops at the solid once it adds its placed points (#110).
 
 ## v0.15.3 — 2026-10-05
