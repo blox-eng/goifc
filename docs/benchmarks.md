@@ -129,6 +129,27 @@ only its aggregate numbers are published.
 
 ## Results
 
+### Since these tables
+
+The tables below were measured on goifc v0.14.0-10. They have not been re-run
+in full since. This is what changed in goifc's own numbers, measured on
+2026-11-11 on the same machine: single-core, fresh processes, the two versions
+interleaved run by run. The host was under load, so treat each ratio as
+approximate.
+
+- **Walk is 1.6–4.2× faster** on every real model than in the tables (v0.15.7
+  against v0.14.0-10): finding an element's container, parent or type no
+  longer scans the whole relation (#126).
+- **Parse is level to 1.4× faster.**
+- **Peak memory is level to 1.3× lower.**
+- **Tessellation is level** with the tables, after #134. v0.15.7 alone took
+  1.4–2× the CPU per `Build`, and #134 brought it back.
+- **Meshes and triangles are unchanged:** v0.15.7 produces exactly the counts
+  in the tables, on every model.
+
+The comparisons below are for goifc v0.14.0-10. goifc's own figures have since
+improved or stayed level, as above; the other tools were not re-measured.
+
 <!-- bench:begin -->
 
 Measured 2026-09-29 on Intel(R) Core(TM) i7-14700K (26 cores, 63 GiB),

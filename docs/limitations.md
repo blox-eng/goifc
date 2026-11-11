@@ -18,6 +18,28 @@ Do not clash-detect with them.
 Some elements get no mesh at all and come back as a bounding box instead. How
 many, per model, is measured rather than asserted — see [coverage](coverage.md).
 
+## Past a work budget, an element is a box or is left out
+
+goifc bounds the work of tessellation, extraction and storey plans by the
+file's size (see
+[SECURITY.md](https://github.com/blox-eng/goifc/blob/main/SECURITY.md), which
+also lists what is not bounded yet). When an
+element runs past its own tessellation budget, its items are boxed; past twice
+the budget they are left out. The whole `Build` has a budget too: past it, the
+remaining elements in element order are each one box; past twice it they get no
+geometry. Storey plans that run past their budget leave out the sections they
+could not cut.
+
+Each of these says so in the warnings, so a figure is never silently smaller:
+an element over its own budget is named, and the Build and storey-plan budgets
+give a count of the elements or sections they boxed or left out. No model in the [coverage](coverage.md) corpus reaches any of
+the budgets.
+
+One consequence for drawings: a cut whose rings overlap in very large numbers
+(more than 2^24 units of nesting work) keeps every ring as an outline, so a
+hole among them is drawn filled. Disjoint rings, however many, are nested
+correctly.
+
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across
