@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.15.8 — 2026-11-11
+
 ### Fixed
 
 - Tessellation is back to v0.15.6 speed (#134). v0.15.7 cached every face's
