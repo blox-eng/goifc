@@ -29,6 +29,20 @@ compatibility policy ·
 [`model`](https://pkg.go.dev/github.com/blox-eng/goifc/model) ·
 [`geometry`](https://pkg.go.dev/github.com/blox-eng/goifc/geometry)
 
+## What you get
+
+- **Schemas** — IFC2X3 and IFC4 core entities, read by a STEP parser that
+  takes any STEP file.
+- **Elements** — semantics, placements, units, materials and their layers,
+  storeys.
+- **Geometry** — proxy meshes, bounding boxes, GLB, plane sections, storey
+  plans, elevations, and which side of each wall faces outside.
+- **Quantities** — authored (`qto`), or derived from the mesh (`geometry`).
+  Openings are not netted out of a derived volume, so it is gross; a wall's net
+  elevation area, openings subtracted, comes from `Scene.NetAreas`.
+- **Untrusted files** — the work is bounded by the file's size, and every
+  budget that runs out says so.
+
 ## Install
 
 ```bash
@@ -138,6 +152,14 @@ matches IfcOpenShell exactly. Method, fairness caveats and every table:
   cut the model with any plane, get closed 2D rings back.
 - [Storey plans](https://docs.goifc.org/latest/guides/storey-plans/) — what
   `BuildImport` pre-bakes per `IfcBuildingStorey`.
+- [Measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/) —
+  an element's outline on any plane, and the area several outlines cover, with
+  the overlap counted once.
+- [Facades and elevations](https://pkg.go.dev/github.com/blox-eng/goifc/geometry#BuildFacings) —
+  `BuildFacings` classifies which side of each element faces outside, and
+  `Scene.Elevations` draws the building from each facade.
+- [What is bounded](SECURITY.md#what-is-bounded) — the work budgets that keep a
+  small, hostile file from costing far more than its size.
 - [Local and world frames](https://docs.goifc.org/latest/concepts/frames/) —
   meshes are local, bounding boxes are world, and mixing them is wrong without
   erroring.

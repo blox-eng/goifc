@@ -173,6 +173,25 @@
 
   .sub code { font: 400 0.92em/1 var(--mono); color: var(--ink); }
 
+  .does {
+    list-style: none;
+    margin: clamp(0.75rem, 2vh, 1.1rem) 0 0;
+    padding: 0;
+    max-width: 46ch;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.15rem 1rem;
+    color: var(--muted);
+    font-size: clamp(0.85rem, 1vw, 0.95rem);
+    line-height: 1.45;
+  }
+  .does li { display: contents; }
+  .does b {
+    color: var(--ink);
+    font: 500 0.92em/1.6 var(--mono);
+    letter-spacing: 0.02em;
+  }
+
   .install { margin-top: clamp(1.25rem, 3vh, 1.75rem); max-width: 40rem; }
 
   .cmd { display: flex; align-items: stretch; border: 1px solid var(--rule); background: var(--surface); }
