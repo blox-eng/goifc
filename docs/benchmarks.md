@@ -147,8 +147,8 @@ approximate.
 - **Meshes and triangles are unchanged:** v0.15.7 produces exactly the counts
   in the tables, on every model.
 
-So the per-stage and whole-job comparisons below still hold, and the walk
-comparison understates goifc. The other tools were not re-measured.
+The comparisons below are for goifc v0.14.0-10. goifc's own figures have since
+improved or stayed level, as above; the other tools were not re-measured.
 
 <!-- bench:begin -->
 

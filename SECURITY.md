@@ -36,7 +36,9 @@ recursion depth:
   N, not N².
 - **Recursion** has explicit depth guards on the parse and geometry paths.
 
-Every budget that runs out says so in the result's warnings, with a count. No
+Every budget that runs out says so in the result's warnings. An element over
+its own budget is named; the Build, storey-plan and property-set budgets give a
+count of what they boxed or left out. No
 model in the [coverage corpus](https://docs.goifc.org/latest/coverage/) reaches
 any of these budgets.
 

@@ -28,8 +28,9 @@ remaining elements in element order are each one box; past twice it they get no
 geometry. Storey plans that run past their budget leave out the sections they
 could not cut.
 
-Each of these says so in the warnings, with a count, so a figure is never
-silently smaller. No model in the [coverage](coverage.md) corpus reaches any of
+Each of these says so in the warnings, so a figure is never silently smaller:
+an element over its own budget is named, and the Build and storey-plan budgets
+give a count of the elements or sections they boxed or left out. No model in the [coverage](coverage.md) corpus reaches any of
 the budgets.
 
 One consequence for drawings: a cut whose rings overlap in very large numbers
