@@ -3,6 +3,7 @@ package ifc
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 
@@ -86,10 +87,12 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 	}
 
 	// 2. Seed floorZ[storeyGID] = min BBoxMin[2] over contained mesh elements.
+	//    A NaN bound seeds nothing: as a floor it would become the top of the
+	//    storey below, and that storey's reach would hold no element.
 	floorZ := make(map[string]float64)
 	for _, e := range elems {
 		sgid := storeyOf[e.node]
-		if sgid == "" {
+		if sgid == "" || math.IsNaN(e.zmin) {
 			continue
 		}
 		if cur, seen := floorZ[sgid]; !seen || e.zmin < cur {
@@ -118,12 +121,15 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 		}
 	}
 
-	// 4. Membership: for each storey band, scan ALL mesh elements (in nodes order).
+	// 4. Membership: for each storey band, the mesh elements its height
+	//    reaches, in nodes order. A sweep finds them (bandReach).
 	plans := make([]StoreyPlan, 0, len(bands))
 	leftOut := 0
+	reach := newBandReach(elems)
 	for _, b := range bands {
 		entities := make([]StoreyEntity, 0)
-		for _, e := range elems {
+		for _, ei := range reach.within(b.floorZ-zEps, math.Max(b.cutZ+zEps, b.bandTop)) {
+			e := elems[ei]
 			spans := e.zmin-zEps <= b.cutZ && b.cutZ <= e.zmax+zEps  // mesh crosses the cut plane
 			overlaps := e.zmax > b.floorZ-zEps && e.zmin < b.bandTop // Z-range intersects the half-open band [floorZ, bandTop)
 			if !spans && !overlaps {
@@ -152,6 +158,82 @@ func buildStoreyPlans(nodes []ImportNode, meshByGID map[string]geometry.Element,
 		warnings = append(warnings, fmt.Sprintf("storey plans left out %d element sections: the model's elements cross more storeys than %d times its mesh can cut", leftOut, planWorkPerMeshPart))
 	}
 	return plans, warnings
+}
+
+// bandReach finds, for each storey band in turn, the elements whose height
+// can reach it: those starting at or below the band's top and ending above its
+// floor. Bands come in rising order, so both bounds only rise: an element joins
+// once, when the top passes its lowest point, and leaves once, when the floor
+// passes its highest. Each element is visited once to join and once to leave,
+// however many storeys there are; testing every element against every storey
+// cost storeys × elements. Elements with a NaN bound are never in reach, as no
+// comparison holds for them.
+type bandReach struct {
+	elems  []planElement
+	byLow  []int // element indices by zmin, rising
+	next   int   // the next of byLow to join
+	active []int // a min-heap of element indices by zmax
+}
+
+func newBandReach(elems []planElement) *bandReach {
+	r := &bandReach{elems: elems}
+	for i, e := range elems {
+		if !math.IsNaN(e.zmin) && !math.IsNaN(e.zmax) {
+			r.byLow = append(r.byLow, i)
+		}
+	}
+	sort.SliceStable(r.byLow, func(a, b int) bool { return elems[r.byLow[a]].zmin < elems[r.byLow[b]].zmin })
+	return r
+}
+
+// within returns, in elements order, the elements with zmin <= top and
+// zmax > floor. floor and top must not fall from one call to the next.
+func (r *bandReach) within(floor, top float64) []int {
+	for r.next < len(r.byLow) && r.elems[r.byLow[r.next]].zmin <= top {
+		r.push(r.byLow[r.next])
+		r.next++
+	}
+	for len(r.active) > 0 && r.elems[r.active[0]].zmax <= floor {
+		r.pop()
+	}
+	out := slices.Clone(r.active)
+	slices.Sort(out)
+	return out
+}
+
+func (r *bandReach) push(i int) {
+	h := append(r.active, i)
+	for c := len(h) - 1; c > 0; {
+		p := (c - 1) / 2
+		if r.elems[h[p]].zmax <= r.elems[h[c]].zmax {
+			break
+		}
+		h[p], h[c] = h[c], h[p]
+		c = p
+	}
+	r.active = h
+}
+
+func (r *bandReach) pop() {
+	h := r.active
+	last := len(h) - 1
+	h[0] = h[last]
+	h = h[:last]
+	for p := 0; ; {
+		c := 2*p + 1
+		if c >= len(h) {
+			break
+		}
+		if c+1 < len(h) && r.elems[h[c+1]].zmax < r.elems[h[c]].zmax {
+			c++
+		}
+		if r.elems[h[p]].zmax <= r.elems[h[c]].zmax {
+			break
+		}
+		h[p], h[c] = h[c], h[p]
+		p = c
+	}
+	r.active = h
 }
 
 // enclosingStoreys returns, per node, the GlobalID of the IfcBuildingStorey it

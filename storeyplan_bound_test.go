@@ -164,3 +164,30 @@ func TestStoreyPlansChargeEveryVertexACutReads(t *testing.T) {
 		t.Fatal("no warning: the plans cut the tall element on every storey")
 	}
 }
+
+// Each of many storeys holds one element of its own. Testing every element
+// against every storey costs storeys × elements; an element is only tested
+// against the storeys its height reaches.
+func TestStoreyPlansTestEachElementAgainstItsOwnStoreys(t *testing.T) {
+	const storeys = 50_000
+	nodes := make([]ImportNode, 0, 2*storeys)
+	mesh := make(map[string]geometry.Element, storeys)
+	elev := make(map[string]float64, storeys)
+	for i := range storeys {
+		sid, gid := fmt.Sprintf("S%d", i), fmt.Sprintf("E%d", i)
+		z := 3 * float64(i)
+		nodes = append(nodes, ImportNode{GlobalID: sid, IFCClass: "IfcBuildingStorey"})
+		nodes = append(nodes, ImportNode{GlobalID: gid, IFCClass: "IfcWall", ParentIndex: iptr(2 * i)})
+		mesh[gid] = boxElem(gid, [3]float64{0, 0, z}, [3]float64{1, 0.2, z + 2.5})
+		elev[sid] = z
+	}
+	plans, warnings := plansWithin(t, nodes, mesh, elev)
+	if len(plans) != storeys || len(warnings) != 0 {
+		t.Fatalf("%d plans and warnings %q, want %d plans and none", len(plans), warnings, storeys)
+	}
+	for i, p := range plans {
+		if len(p.Entities) != 1 || p.Entities[0].GlobalID != fmt.Sprintf("E%d", i) {
+			t.Fatalf("plan %d holds %d entities, want only E%d", i, len(p.Entities), i)
+		}
+	}
+}

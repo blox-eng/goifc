@@ -19,6 +19,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- Storey plans test each element only against the storeys its height reaches
+  (#141). Every element was tested against every storey, uncharged to the work
+  budget, so a file of 50,000 storeys with one element each took 6.2 s.
+
 ## v0.15.8 — 2026-11-11
 
 ### Fixed

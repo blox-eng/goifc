@@ -1,6 +1,7 @@
 package ifc
 
 import (
+	"math"
 	"reflect"
 	"testing"
 
@@ -95,5 +96,31 @@ func TestStoreyPlansDeterministic(t *testing.T) {
 	again, _ := buildStoreyPlans(nodes, mesh, elev)
 	if !reflect.DeepEqual(first, again) {
 		t.Fatal("buildStoreyPlans not deterministic")
+	}
+}
+
+// A storey whose only element has a NaN bound has no reliable floor. It must
+// not become the top of the storey below and hide that storey's elements.
+func TestStoreyPlansIgnoreANaNFloor(t *testing.T) {
+	nodes := []ImportNode{
+		{GlobalID: "A", IFCClass: "IfcBuildingStorey"},
+		{GlobalID: "B", IFCClass: "IfcBuildingStorey"},
+		{GlobalID: "W1", IFCClass: "IfcWall", ParentIndex: iptr(0)},
+		{GlobalID: "BAD", IFCClass: "IfcWall", ParentIndex: iptr(1)},
+	}
+	bad := boxElem("BAD", [3]float64{0, 0, 3}, [3]float64{1, 1, 5})
+	bad.BBoxMin[2] = math.NaN()
+	mesh := map[string]geometry.Element{
+		"W1":  boxElem("W1", [3]float64{1, 0, 0}, [3]float64{1.2, 3, 2.5}),
+		"BAD": bad,
+	}
+	plans, _ := buildStoreyPlans(nodes, mesh, map[string]float64{"A": 0, "B": 3})
+	for _, p := range plans {
+		if p.StoreyGlobalID == "B" {
+			t.Errorf("storey B has only a NaN floor, yet got a plan")
+		}
+	}
+	if len(plans) == 0 || plans[0].StoreyGlobalID != "A" || len(plans[0].Entities) != 1 || plans[0].Entities[0].GlobalID != "W1" {
+		t.Fatalf("storey A should hold W1, got %+v", plans)
 	}
 }
