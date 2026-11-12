@@ -13,6 +13,8 @@
 // from numbers instead of an IFC file. Their quantities are exact, from the
 // numbers. Their mesh is float32 like every Element's and agrees with the
 // quantities within that rounding, so [Scene.DerivedQuantities] on a built
-// Element gives the same figures. A wall read from IFC can differ: its
-// derived volume is gross unless the file's own mesh cuts the openings.
+// Element gives the same figures. The builders leave GlobalID empty, and
+// DerivedQuantities skips such an element: set a unique GlobalID first. A
+// wall read from IFC can differ: its derived volume is gross unless the
+// file's own mesh cuts the openings.
 package geometry
