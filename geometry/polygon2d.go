@@ -15,8 +15,9 @@ const maxOutlinePoints = 2048
 var errTooManyPoints = fmt.Errorf("outline has more than %d points", maxOutlinePoints)
 
 // PolygonArea2D returns the unsigned area of a simple polygon, in either
-// winding.
-func PolygonArea2D(poly [][2]float64) float64 { return math.Abs(polygonArea2D(poly)) }
+// winding. It works relative to the first point, so a polygon far from the
+// origin keeps its area.
+func PolygonArea2D(poly [][2]float64) float64 { return math.Abs(polygonArea2D(localRing(poly))) }
 
 // PointInPolygon2D reports whether p is inside poly (even-odd rule). A point
 // exactly on an edge may fall either way.
@@ -32,6 +33,9 @@ func Triangulate2D(poly [][2]float64) ([]uint32, error) {
 	}
 	if len(poly) > maxOutlinePoints {
 		return nil, errTooManyPoints
+	}
+	if edgesCrossOrOverlap([][][2]float64{localRing(poly)}) {
+		return nil, errors.New("polygon touches or crosses itself")
 	}
 	tris, ok := triangulatePolygon(poly, newBudget())
 	if !ok || len(tris) == 0 {

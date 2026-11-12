@@ -7,7 +7,8 @@ import (
 
 // BuildSlab builds a slab from a plan outline (meters, either winding, no
 // holes): its top face is at z and it extends down by thickness. Quantities
-// come from the numbers; the mesh is a closed shell that agrees with them.
+// come from the numbers; the mesh is a closed shell that agrees with them
+// within float32 rounding.
 // Invalid input returns an error and nothing else.
 func BuildSlab(outline [][2]float64, z, thickness float64) (Slab, error) {
 	if err := checkOutline(outline); err != nil {

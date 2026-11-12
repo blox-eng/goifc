@@ -267,8 +267,9 @@ func checkWallDims(base, height, thickness float64, side Side) error {
 // BuildWall builds one straight wall with square ends from its edge in plan,
 // its base elevation, height, thickness, the side it is measured on, and its
 // openings. Quantities come from the numbers; the mesh is a closed shell that
-// agrees with them. A misplaced opening returns *PlacementError values joined
-// with errors.Join; other invalid input returns a plain error.
+// agrees with them within float32 rounding. A misplaced opening returns
+// *PlacementError values joined with errors.Join; other invalid input returns
+// a plain error.
 func BuildWall(edge [2][2]float64, base, height, thickness float64, side Side, openings []Opening) (Wall, error) {
 	if err := checkWallDims(base, height, thickness, side); err != nil {
 		return Wall{}, err

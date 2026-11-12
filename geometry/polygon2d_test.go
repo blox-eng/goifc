@@ -72,3 +72,30 @@ func TestTriangulate2DRefuses(t *testing.T) {
 		t.Errorf("a %d-point polygon is within the cap: %v", maxOutlinePoints, err)
 	}
 }
+
+// Far from the origin, uncentred cross products cancel: this square's area
+// would come back near zero.
+func TestPolygonArea2DFarFromOrigin(t *testing.T) {
+	x, d := 1e7, 0.0625
+	sq := [][2]float64{{x, x}, {x + d, x}, {x + d, x + d}, {x, x + d}}
+	if got := PolygonArea2D(sq); math.Abs(got-d*d) > 1e-12 {
+		t.Errorf("PolygonArea2D = %v, want %v", got, d*d)
+	}
+}
+
+// A spike that retraces an edge touches itself; the cleanup inside the ear
+// clipper would drop it and clip the rest, so the check must come first.
+func TestTriangulate2DRefusesRetracedSpike(t *testing.T) {
+	spike := [][2]float64{{0, 0}, {2, 0}, {1, 0}, {2, 0}, {2, 2}, {0, 2}}
+	if _, err := Triangulate2D(spike); err == nil {
+		t.Error("a retraced spike touches itself; want an error")
+	}
+}
+
+func TestPolygonArea2DOfTooFewPoints(t *testing.T) {
+	for _, p := range [][][2]float64{nil, {{1, 1}}, {{0, 0}, {1, 1}}} {
+		if got := PolygonArea2D(p); got != 0 {
+			t.Errorf("PolygonArea2D(%v) = %v, want 0", p, got)
+		}
+	}
+}

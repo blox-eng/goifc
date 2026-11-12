@@ -10,7 +10,9 @@
 // positions and [Element.WorldNormal] for directions.
 //
 // BUILDERS — [BuildWall], [BuildRoomWalls] and [BuildSlab] make an Element
-// from numbers instead of an IFC file. Their quantities come from the numbers
-// and their mesh agrees with them, so a drafted wall and the same wall read
-// from IFC give the same figures.
+// from numbers instead of an IFC file. Their quantities are exact, from the
+// numbers. Their mesh is float32 like every Element's and agrees with the
+// quantities within that rounding, so [Scene.DerivedQuantities] on a built
+// Element gives the same figures. A wall read from IFC can differ: its
+// derived volume is gross unless the file's own mesh cuts the openings.
 package geometry
