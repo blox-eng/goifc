@@ -79,7 +79,8 @@ func (e *PlacementError) Error() string {
 }
 
 // WallQuantities are a wall's exact quantities, from its numbers. Both faces
-// lose the full area of every opening: every opening cuts through.
+// lose the full area of every through opening; a niche (Depth > 0) cuts the
+// measured face only.
 type WallQuantities struct {
 	Length                     float64 // the measured face, along u
 	Height                     float64

@@ -50,6 +50,11 @@ not cover are written down in [limitations](limitations.md).
     An element's outline on any plane, and the area several outlines cover,
     with the overlap counted once.
 
+-   **[Building from numbers](guides/builders.md)**
+
+    Walls, the walls of a room, and slabs from plain numbers, with no IFC,
+    and a refusal that names each misplaced opening.
+
 -   **[The `step` package](step.md)**
 
     A schema-agnostic STEP/SPF parser that works on any STEP file, IFC or not.

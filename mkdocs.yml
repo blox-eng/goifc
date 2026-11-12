@@ -141,6 +141,7 @@ nav:
       - Sections and floor plans: guides/sections.md
       - Storey plans: guides/storey-plans.md
       - Measuring silhouettes: guides/measuring-silhouettes.md
+      - Building from numbers: guides/builders.md
   - Reference:
       - The step package: step.md
       - Limitations: limitations.md
