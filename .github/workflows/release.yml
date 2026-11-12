@@ -128,12 +128,12 @@ jobs:
           date="$(date -u +%Y-%m-%d)"
           .github/scripts/promote-changelog.sh "$RELEASE_VERSION" "$date"
 
-          # goifc.org's news line names the release. With no headline in its
-          # changelog section the line stays as it is, and the pull request
-          # says so: the Landing check then fails until someone adds one.
+          # goifc.org's news line names the release. A release with no
+          # headline in its changelog section (most patch releases) keeps the
+          # line of the last one that had one, and the pull request says so.
           news=""
           if ! .github/scripts/announce-release.sh "$RELEASE_VERSION"; then
-            news="**The site's news line still names the last release:** v${RELEASE_VERSION} has no headline (a \`- **...**\` line) in CHANGELOG.md. Add one, run \`.github/scripts/announce-release.sh ${RELEASE_VERSION}\` on this branch, and push."
+            news="**goifc.org keeps announcing the last release with a headline:** v${RELEASE_VERSION} has no \`- **...**\` line in CHANGELOG.md. To announce it, add one, run \`.github/scripts/announce-release.sh ${RELEASE_VERSION}\` on this branch, and push."
           fi
 
           if git diff --quiet -- CHANGELOG.md; then

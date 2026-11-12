@@ -68,13 +68,16 @@ today and what shipped last. Two gaps stop that now:
   `https://github.com/blox-eng/goifc/releases/tag/vVERSION`. It refuses a
   malformed version, a section with no headline, and a page without exactly
   one news line, and leaves the page untouched each time.
-- `.github/scripts/news-guard.sh`: finds the newest released version in
-  `CHANGELOG.md`, writes the expected line to a temporary copy, and fails
-  when the real page differs. Its message names the command that fixes it.
-  It runs in the CI Lint job.
+- `.github/scripts/news-guard.sh`: finds the newest release in
+  `CHANGELOG.md` that has a headline, writes the expected line to a temporary
+  copy, and fails when the real page differs. Its message names the command
+  that fixes it. It runs in the Landing workflow, which runs on every change
+  to `www/` or `CHANGELOG.md`; the CI Lint job skips changes with no Go code.
+  (Amended 2026-11-12, final review: was "the newest release", "in Lint".)
 - `release.yml`: after promoting the changelog, runs `announce-release.sh` in
-  the same changelog pull request. With no headline it leaves the line and
-  says so in that pull request's body.
+  the same changelog pull request. A release with no headline (most patch
+  releases) keeps the last headline (maintainer decision, 2026-11-13), and the
+  pull request's body says so.
 - Go tests drive both scripts in a temporary directory: a headline, a wrapped
   headline, HTML in the headline, a missing headline, a missing news line,
   and a malformed version.

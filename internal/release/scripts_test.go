@@ -143,3 +143,33 @@ func TestNewsGuard(t *testing.T) {
 		t.Fatalf("a changelog with no release passed: %v %s", err, out)
 	}
 }
+
+// A patch release often has no headline. The line keeps naming the newest
+// release that has one, and the guard passes that.
+func TestNewsGuardKeepsTheLastHeadline(t *testing.T) {
+	cl := file(t, "## Unreleased\n\n## v0.4.1 — 2026-11-13\n\n### Fixed\n\n- A plain fix.\n\n"+released[strings.Index(released, "## v0.4.0"):])
+	page := file(t, site)
+	if out, err := script(t, "announce-release.sh", "0.4.0", cl, page); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if out, err := script(t, "news-guard.sh", cl, page); err != nil {
+		t.Fatalf("the last headline failed the guard: %v %s", err, out)
+	}
+	stale := file(t, site)
+	if out, err := script(t, "announce-release.sh", "0.3.0", cl, stale); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if out, err := script(t, "news-guard.sh", cl, stale); err == nil || !strings.Contains(out, "announce-release.sh 0.4.0") {
+		t.Fatalf("a line older than the last headline passed: %v %s", err, out)
+	}
+}
+
+// The headline is the first bold bullet of the section, not its first
+// bullet; quotes and code marks in it are handled.
+func TestAnnounceSkipsPlainBullets(t *testing.T) {
+	page := file(t, site)
+	cl := "## v0.7.0 — 2026-11-13\n\n- A plain line.\n- **Don't call `Old` again.**\n"
+	if out, err := script(t, "announce-release.sh", "0.7.0", file(t, cl), page); err != nil || !strings.Contains(read(t, page), "v0.7.0 · Don&#39;t call Old again<") {
+		t.Fatalf("%v %s\n%s", err, out, read(t, page))
+	}
+}
