@@ -843,6 +843,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.16.0 — 2026-11-12
+
 ### Added
 
 - **Build walls, room walls and slabs from numbers, with no IFC.** (#91) `geometry.BuildWall`, `geometry.BuildRoomWalls` and `geometry.BuildSlab` return an `Element` that `WriteGLB` and `DerivedQuantities` take, the exact quantities, and the measured face as data (`Face`). A wall's quantities are gross and net area of both faces, the reveal perimeter, and gross and net volume. The mesh is a closed shell whose volume equals the net volume.
