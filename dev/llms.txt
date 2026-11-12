@@ -23,6 +23,7 @@ Meshes are element-local; placements and bounding boxes are world.
 
 ## Guides
 
+- [Building from numbers](https://docs.goifc.org/latest/guides/builders/index.md)
 - [Measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/index.md)
 - [Sections and floor plans](https://docs.goifc.org/latest/guides/sections/index.md)
 - [Storey plans](https://docs.goifc.org/latest/guides/storey-plans/index.md)

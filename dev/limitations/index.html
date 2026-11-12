@@ -600,6 +600,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/builders/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building from numbers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -782,6 +810,17 @@
     <span class="md-ellipsis">
       
         Past a work budget, an element is a box or is left out
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#builders-do-not-join-walls-mid-wall-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Builders do not join walls mid-wall yet
       
     </span>
   </a>
@@ -1219,6 +1258,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#builders-do-not-join-walls-mid-wall-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Builders do not join walls mid-wall yet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#no-express-schema" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1317,6 +1367,11 @@ the budgets.</p>
 (more than 2^24 units of nesting work) keeps every ring as an outline, so a
 hole among them is drawn filled. Disjoint rings, however many, are nested
 correctly.</p>
+<h2 id="builders-do-not-join-walls-mid-wall-yet">Builders do not join walls mid-wall yet<a class="headerlink" href="#builders-do-not-join-walls-mid-wall-yet" title="Permanent link">&para;</a></h2>
+<p><code>BuildRoomWalls</code> joins walls at the corners of one outline. A wall that ends
+against the middle of another (a T-join) is not built yet. Build the partition
+as a separate wall with <code>BuildWall</code>; its end then overlaps the through wall's
+core, and the through wall's measured face still counts the strip it covers.</p>
 <h2 id="no-express-schema">No EXPRESS schema<a class="headerlink" href="#no-express-schema" title="Permanent link">&para;</a></h2>
 <p>The semantic layer reads positional attribute indices that are stable across
 IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not

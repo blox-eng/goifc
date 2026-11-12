@@ -14,6 +14,7 @@ go get github.com/blox-eng/goifc
 - **Elements** — semantics, placements, units, materials and their layers, storeys.
 - **Geometry** — proxy meshes, bounding boxes, GLB, plane sections, storey plans, elevations, and which side of each wall faces outside.
 - **Quantities** — authored (`qto`), or derived from the mesh (`geometry`). goifc does not subtract openings from a derived volume, though a mesh the file supplies may already have them cut; a wall's net elevation area, openings subtracted, comes from `Scene.NetAreas`.
+- **Builders** — walls, the walls of a room and slabs from numbers, with no IFC: a mesh, exact quantities, and a refusal that names the misplaced opening and why.
 - **Untrusted files** — tessellation, extraction and storey plans are bounded by the file's size, and a budget that runs out says so.
 
 Where goifc's numbers are bounds rather than truth, it says so in the data — see [quantities and provenance](https://docs.goifc.org/latest/concepts/quantities/index.md) — and the edges it does not cover are written down in [limitations](https://docs.goifc.org/latest/limitations/index.md).
@@ -35,6 +36,10 @@ Where goifc's numbers are bounds rather than truth, it says so in the data — s
 - **[Measuring silhouettes](https://docs.goifc.org/latest/guides/measuring-silhouettes/index.md)**
 
   An element's outline on any plane, and the area several outlines cover, with the overlap counted once.
+
+- **[Building from numbers](https://docs.goifc.org/latest/guides/builders/index.md)**
+
+  Walls, the walls of a room, and slabs from plain numbers, with no IFC, and a refusal that names each misplaced opening.
 
 - **[The `step` package](https://docs.goifc.org/latest/step/index.md)**
 
