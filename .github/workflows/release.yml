@@ -128,6 +128,14 @@ jobs:
           date="$(date -u +%Y-%m-%d)"
           .github/scripts/promote-changelog.sh "$RELEASE_VERSION" "$date"
 
+          # goifc.org's news line names the release. A release with no
+          # headline in its changelog section (most patch releases) keeps the
+          # line of the last one that had one, and the pull request says so.
+          news=""
+          if ! .github/scripts/announce-release.sh "$RELEASE_VERSION"; then
+            news="**goifc.org keeps announcing the last release with a headline:** v${RELEASE_VERSION} has no \`- **...**\` line in CHANGELOG.md. To announce it, add one, run \`.github/scripts/announce-release.sh ${RELEASE_VERSION}\` on this branch, and push."
+          fi
+
           if git diff --quiet -- CHANGELOG.md; then
             echo "CHANGELOG.md unchanged — nothing to promote."
             exit 0
@@ -137,7 +145,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add CHANGELOG.md
+          git add CHANGELOG.md www/index.html
           git commit -m "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md"
           git push origin "$branch"
 
@@ -149,7 +157,9 @@ jobs:
             "" \
             "Moves the \`## Unreleased\` section under a \`## v${RELEASE_VERSION}\` heading." \
             "The tag and GitHub Release already exist; this only records them in" \
-            "the changelog, so merging is safe whenever convenient.")"
+            "the changelog, so merging is safe whenever convenient." \
+            "" \
+            "$news")"
 
           gh pr create \
             --base main \

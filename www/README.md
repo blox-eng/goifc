@@ -21,6 +21,14 @@ Inlining a small script instead is not an option either: `_headers` sets
 `script-src 'self'` with no `'unsafe-inline'`, and that is worth more than a
 toggle on an error page.
 
+The news line over the headline names the newest release that has a
+headline, and links to its notes. A release without one, such as most fixes,
+leaves the line as it is. Nobody writes it by hand: `.github/scripts/announce-release.sh` writes it
+from the release's first bold changelog bullet, in the changelog pull request
+the release workflow opens, and `.github/scripts/news-guard.sh` fails the
+Landing check when it drifts. It is static HTML for the same reason the page
+loads nothing else from another origin.
+
 The drawing is the goifc mark, brought to life the way openblox.sh animates its
 own: one solid in, measured parts out. STEP lines are read one at a time, each
 landing as a strip of the solid, and the two parts drop out beneath it at the

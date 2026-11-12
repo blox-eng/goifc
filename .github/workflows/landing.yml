@@ -15,12 +15,18 @@ on:
     branches: [main]
     paths:
       - 'www/**'
+      - 'CHANGELOG.md'
       - '.github/scripts/check-links.sh'
+      - '.github/scripts/announce-release.sh'
+      - '.github/scripts/news-guard.sh'
       - '.github/workflows/landing.yml'
   pull_request:
     paths:
       - 'www/**'
+      - 'CHANGELOG.md'
       - '.github/scripts/check-links.sh'
+      - '.github/scripts/announce-release.sh'
+      - '.github/scripts/news-guard.sh'
       - '.github/workflows/landing.yml'
   workflow_dispatch:
 
@@ -47,3 +53,9 @@ jobs:
 
       - name: Check references
         run: .github/scripts/check-links.sh www
+
+      # The news line names the newest release in CHANGELOG.md, as
+      # announce-release.sh writes it. A hand edit, a headline reworded after
+      # the release, or a release with no headline fails here.
+      - name: News line
+        run: .github/scripts/news-guard.sh
