@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.16.0 — 2026-11-12
+
 ### Added
 
 - **Build walls, room walls and slabs from numbers, with no IFC.** (#91)
