@@ -21,7 +21,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Added
 
-- Build geometry from numbers, with no IFC (#91). `geometry.BuildWall`,
+- **Build walls, room walls and slabs from numbers, with no IFC.** (#91)
+  `geometry.BuildWall`,
   `geometry.BuildRoomWalls` and `geometry.BuildSlab` return an `Element`
   that `WriteGLB` and `DerivedQuantities` take, the exact quantities, and the
   measured face as data (`Face`). A wall's quantities are gross and net area
