@@ -18,8 +18,11 @@ copyright: MIT-licensed. Built by Blox.
 # .gitignore) are real Markdown files mkdocs would otherwise try to publish.
 # Excluding them here, rather than only gitignoring them, is what lets a
 # contributor who has such a file locally still run `make docs` clean.
+# docs/superpowers/ holds committed design specs and plans: records for
+# contributors, not pages for readers of the library.
 exclude_docs: |
   plans/
+  superpowers/
 
 theme:
   name: material
@@ -138,6 +141,7 @@ nav:
       - Sections and floor plans: guides/sections.md
       - Storey plans: guides/storey-plans.md
       - Measuring silhouettes: guides/measuring-silhouettes.md
+      - Building from numbers: guides/builders.md
   - Reference:
       - The step package: step.md
       - Limitations: limitations.md

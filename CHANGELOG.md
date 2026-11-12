@@ -19,6 +19,36 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- **Build walls, room walls and slabs from numbers, with no IFC.** (#91)
+  `geometry.BuildWall`,
+  `geometry.BuildRoomWalls` and `geometry.BuildSlab` return an `Element`
+  that `WriteGLB` and `DerivedQuantities` take, the exact quantities, and the
+  measured face as data (`Face`). A wall's quantities are gross and net area
+  of both faces, the reveal perimeter, and gross and net volume. The mesh is a
+  closed shell whose volume equals the net volume.
+  - The measured face lies on the edge line; `SideLeft` and `SideRight` say
+    which way the wall grows. A counter-clockwise room with `SideLeft`
+    measures the interior. `Side` reads and writes as "left" and "right".
+  - Walls of one closed outline join on mitres: the core at a corner counts
+    once, and each measured face stops at the outline's corner.
+  - A misplaced opening is refused, never clamped: `*PlacementError` names
+    the wall, the opening and the reason (`too_wide`, `overlaps`,
+    `above_wall`, `in_corner`). Every refusal returns at once, joined with
+    `errors.Join`. An opening that only touches the wall top, a wall end or
+    another opening is refused too.
+  - Niches: an `Opening` with a `Depth` is cut from the measured face to
+    that depth and leaves the opposite face whole, so a niche in a shower
+    wall takes no tiles from the room behind it. `NicheBack` reports the
+    area of the niches' back panels. A niche needs a sill.
+  - Walls take a base elevation; a storey's elevation plus the wall's base
+    offset is that number.
+  - Not yet: walls that meet mid-wall (T-joins).
+- `geometry.PolygonArea2D`, `PointInPolygon2D` and `Triangulate2D`.
+- CI builds every package for `GOOS=js GOARCH=wasm`, so the builders keep
+  running in a browser.
+
 ## v0.15.9 — 2026-11-11
 
 ### Fixed

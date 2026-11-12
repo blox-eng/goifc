@@ -22,6 +22,9 @@ go get github.com/blox-eng/goifc
   goifc does not subtract openings from a derived volume, though a mesh the
   file supplies may already have them cut; a wall's net elevation area,
   openings subtracted, comes from `Scene.NetAreas`.
+- **Builders** — walls, the walls of a room and slabs from numbers, with no
+  IFC: a mesh, exact quantities, and a refusal that names the misplaced
+  opening and why.
 - **Untrusted files** — tessellation, extraction and storey plans are bounded
   by the file's size, and a budget that runs out says so.
 
@@ -49,6 +52,11 @@ not cover are written down in [limitations](limitations.md).
 
     An element's outline on any plane, and the area several outlines cover,
     with the overlap counted once.
+
+-   **[Building from numbers](guides/builders.md)**
+
+    Walls, the walls of a room, and slabs from plain numbers, with no IFC,
+    and a refusal that names each misplaced opening.
 
 -   **[The `step` package](step.md)**
 

@@ -40,6 +40,13 @@ One consequence for drawings: a cut whose rings overlap in very large numbers
 hole among them is drawn filled. Disjoint rings, however many, are nested
 correctly.
 
+## Builders do not join walls mid-wall yet
+
+`BuildRoomWalls` joins walls at the corners of one outline. A wall that ends
+against the middle of another (a T-join) is not built yet. Build the partition
+as a separate wall with `BuildWall`; its end then overlaps the through wall's
+core, and the through wall's measured face still counts the strip it covers.
+
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across
