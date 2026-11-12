@@ -49,6 +49,18 @@ The landing page at <https://goifc.org> is a separate site: hand-written HTML in
 `python3 -m http.server --directory www`, and see [`www/README.md`](www/README.md)
 before changing it. It never links into the docs by relative path.
 
+Its news line names the newest release. The release workflow writes it from the
+first bold bullet of that release's changelog section, so a change that will
+lead a release opens `## Unreleased` with one:
+
+```markdown
+- **Build walls, room walls and slabs from numbers, with no IFC.** (#91)
+  The rest of the entry.
+```
+
+The Landing check fails when the line does not name the newest release; the
+failure prints the command that fixes it.
+
 ## Pull requests
 
 Keep PRs focused on one change. Include a test for any bug fix or new

@@ -128,6 +128,14 @@ jobs:
           date="$(date -u +%Y-%m-%d)"
           .github/scripts/promote-changelog.sh "$RELEASE_VERSION" "$date"
 
+          # goifc.org's news line names the release. With no headline in its
+          # changelog section the line stays as it is, and the pull request
+          # says so: the Landing check then fails until someone adds one.
+          news=""
+          if ! .github/scripts/announce-release.sh "$RELEASE_VERSION"; then
+            news="**The site's news line still names the last release:** v${RELEASE_VERSION} has no headline (a \`- **...**\` line) in CHANGELOG.md. Add one, run \`.github/scripts/announce-release.sh ${RELEASE_VERSION}\` on this branch, and push."
+          fi
+
           if git diff --quiet -- CHANGELOG.md; then
             echo "CHANGELOG.md unchanged — nothing to promote."
             exit 0
@@ -137,7 +145,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add CHANGELOG.md
+          git add CHANGELOG.md www/index.html
           git commit -m "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md"
           git push origin "$branch"
 
@@ -149,7 +157,9 @@ jobs:
             "" \
             "Moves the \`## Unreleased\` section under a \`## v${RELEASE_VERSION}\` heading." \
             "The tag and GitHub Release already exist; this only records them in" \
-            "the changelog, so merging is safe whenever convenient.")"
+            "the changelog, so merging is safe whenever convenient." \
+            "" \
+            "$news")"
 
           gh pr create \
             --base main \
