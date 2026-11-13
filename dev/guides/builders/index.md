@@ -102,6 +102,25 @@ niche := geometry.Opening{Offset: 1.00, Sill: 1.20, Width: 0.40, Height: 0.60, D
 
 In the 2.40 × 2.60 × 0.10 wall, this niche leaves `MeasuredNet` at 6.00 m², `OtherNet` at 6.24 m² (whole), and `NicheBack` at 0.24 m².
 
+## Layers
+
+A wall or slab is often several materials. `BuildWallLayers`, `BuildRoomWallLayers` and `BuildSlabLayers` take the layer thicknesses in metres, measured face first for walls and top first for slabs, and return one `Wall` or `Slab` per layer, in that order. The element's thickness is their sum.
+
+```
+layers := []float64{0.015, 0.175, 0.10} // plaster, brick, insulation
+ws, err := geometry.BuildWallLayers(edge, 0, 2.50, layers, geometry.SideLeft, openings)
+// ws[0] is the plaster, ws[2] the insulation
+```
+
+Each layer's quantities mean what they mean for a whole wall, for that layer alone. `MeasuredGross` and `MeasuredNet` are its face toward the measured side; `OtherGross` and `OtherNet` its face away from it. The layers' net volumes add up to the whole wall's.
+
+- **Corners.** In a room each layer mitres at its own depth, so it reports its own length: at an outside corner the outer layer is longer than the inner one.
+- **Openings** are checked once, on the whole wall, so a layered wall refuses exactly what the same single wall refuses, plus `layer_sliver` (below). A through opening cuts every layer, and each layer lists it in its own `Measured.Openings`.
+- **Niches** cut the layers they pass through, are a niche in the layer where their back falls, and leave the rest whole. A back exactly on a layer boundary is the next layer's `NicheBack`. A back under 1 mm from a boundary is refused as `layer_sliver`.
+- **`RevealPerimeter`** repeats in every layer an opening cuts; it does not add up across layers. For through openings, a layer's reveal area is `RevealPerimeter` × its thickness; in the layer where a niche ends, the niche's reveal is only as deep as the niche reaches into that layer.
+
+At a corner that is almost straight, a layer's face end can snap by under 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.
+
 ## Not yet
 
 Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a separate wall for now; see [limitations](https://docs.goifc.org/latest/limitations/index.md).

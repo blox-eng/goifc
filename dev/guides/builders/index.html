@@ -735,6 +735,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1280,6 +1291,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1474,6 +1496,38 @@ must stay at least 1 mm inside the wall.</p>
 </code></pre></div>
 <p>In the 2.40 × 2.60 × 0.10 wall, this niche leaves <code>MeasuredNet</code> at 6.00 m²,
 <code>OtherNet</code> at 6.24 m² (whole), and <code>NicheBack</code> at 0.24 m².</p>
+<h2 id="layers">Layers<a class="headerlink" href="#layers" title="Permanent link">&para;</a></h2>
+<p>A wall or slab is often several materials. <code>BuildWallLayers</code>,
+<code>BuildRoomWallLayers</code> and <code>BuildSlabLayers</code> take the layer thicknesses in
+metres, measured face first for walls and top first for slabs, and return one
+<code>Wall</code> or <code>Slab</code> per layer, in that order. The element's thickness is their
+sum.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nx">layers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="p">[]</span><span class="kt">float64</span><span class="p">{</span><span class="mf">0.015</span><span class="p">,</span><span class="w"> </span><span class="mf">0.175</span><span class="p">,</span><span class="w"> </span><span class="mf">0.10</span><span class="p">}</span><span class="w"> </span><span class="c1">// plaster, brick, insulation</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nx">ws</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildWallLayers</span><span class="p">(</span><span class="nx">edge</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mf">2.50</span><span class="p">,</span><span class="w"> </span><span class="nx">layers</span><span class="p">,</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">,</span><span class="w"> </span><span class="nx">openings</span><span class="p">)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">// ws[0] is the plaster, ws[2] the insulation</span>
+</code></pre></div>
+<p>Each layer's quantities mean what they mean for a whole wall, for that layer
+alone. <code>MeasuredGross</code> and <code>MeasuredNet</code> are its face toward the measured
+side; <code>OtherGross</code> and <code>OtherNet</code> its face away from it. The layers' net
+volumes add up to the whole wall's.</p>
+<ul>
+<li><strong>Corners.</strong> In a room each layer mitres at its own depth, so it reports its
+  own length: at an outside corner the outer layer is longer than the inner
+  one.</li>
+<li><strong>Openings</strong> are checked once, on the whole wall, so a layered wall refuses
+  exactly what the same single wall refuses, plus <code>layer_sliver</code> (below). A through opening cuts every
+  layer, and each layer lists it in its own <code>Measured.Openings</code>.</li>
+<li><strong>Niches</strong> cut the layers they pass through, are a niche in the layer where
+  their back falls, and leave the rest whole. A back exactly on a layer
+  boundary is the next layer's <code>NicheBack</code>. A back under 1 mm from a boundary
+  is refused as <code>layer_sliver</code>.</li>
+<li><strong><code>RevealPerimeter</code></strong> repeats in every layer an opening cuts; it does not
+  add up across layers. For through openings, a layer's reveal area is
+  <code>RevealPerimeter</code> × its thickness; in the layer where a niche ends, the
+  niche's reveal is only as deep as the niche reaches into that layer.</li>
+</ul>
+<p>At a corner that is almost straight, a layer's face end can snap by under
+0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.</p>
 <h2 id="not-yet">Not yet<a class="headerlink" href="#not-yet" title="Permanent link">&para;</a></h2>
 <p>Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a
 separate wall for now; see <a href="../../limitations/">limitations</a>.</p>
