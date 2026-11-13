@@ -106,3 +106,30 @@ func FuzzBuildSlab(f *testing.F) {
 		meshAgrees(t, s.Element, q.Volume, 2*q.Area+q.Perimeter*th, 0, q.Area, q.Perimeter, q.Volume)
 	})
 }
+
+func FuzzBuildSlabLayers(f *testing.F) {
+	f.Add(0.0, 0.0, 5.0, 0.0, 5.0, 4.0, 0.0, 4.0, 2.0, 2.0, 0.0, 0.05, 0.20, 0.0)
+	f.Add(1e6, 2e6, 1e6+4, 2e6, 1e6+4, 2e6+2, 1e6+2, 2e6+2, 1e6+2, 2e6+4, 6.0, 0.02, 0.25, 0.01)
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3, x4, y4, z, t1, t2, t3 float64) {
+		var layers []float64
+		for _, th := range []float64{t1, t2, t3} {
+			if th != 0 {
+				layers = append(layers, th)
+			}
+		}
+		slabs, err := BuildSlabLayers([][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}, {x4, y4}}, z, layers)
+		if err != nil {
+			return
+		}
+		var vol, total float64
+		for k, s := range slabs {
+			q := s.Quantities
+			meshAgrees(t, s.Element, q.Volume, 2*q.Area+q.Perimeter*layers[k], 0, q.Area, q.Perimeter, q.Volume)
+			vol += q.Volume
+			total += layers[k]
+		}
+		if a := slabs[0].Quantities.Area; !nearRel(vol, a*total, 1e-9) {
+			t.Fatalf("layer volumes sum to %v, want area·thickness %v", vol, a*total)
+		}
+	})
+}

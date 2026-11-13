@@ -3,6 +3,7 @@ package geometry
 import (
 	"errors"
 	"math"
+	"slices"
 )
 
 // BuildSlab builds a slab from a plan outline (meters, either winding, no
@@ -20,12 +21,25 @@ func BuildSlab(outline [][2]float64, z, thickness float64) (Slab, error) {
 	if err := checkDim("thickness", thickness); err != nil {
 		return Slab{}, err
 	}
-	ring := localRing(outline)
+	ring, cap, err := slabCap(outline)
+	if err != nil {
+		return Slab{}, err
+	}
+	return slabAt(outline, ring, cap, z, thickness), nil
+}
+
+// slabCap triangulates a checked outline once, for every slab layer.
+func slabCap(outline [][2]float64) (ring [][2]float64, cap []uint32, err error) {
+	ring = localRing(outline)
 	cap, ok := triangulatePolygon(ring, newBudget())
 	if !ok || len(cap) == 0 {
-		return Slab{}, errors.New("outline could not be triangulated whole within the work budget")
+		return nil, nil, errors.New("outline could not be triangulated whole within the work budget")
 	}
+	return ring, cap, nil
+}
 
+// slabAt builds the slab whose top face is at z, from a triangulated outline.
+func slabAt(outline, ring [][2]float64, cap []uint32, z, thickness float64) Slab {
 	n := uint32(len(ring))
 	verts := make([]float32, 0, 6*n)
 	for _, h := range []float64{0, -thickness} {
@@ -76,7 +90,7 @@ func BuildSlab(outline [][2]float64, z, thickness float64) (Slab, error) {
 			U:       [3]float64{1, 0, 0},
 			V:       [3]float64{0, 1, 0},
 			Normal:  [3]float64{0, 0, 1},
-			Outline: ring,
+			Outline: slices.Clone(ring),
 		},
-	}, nil
+	}
 }
