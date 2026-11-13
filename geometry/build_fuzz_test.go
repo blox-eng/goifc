@@ -133,3 +133,63 @@ func FuzzBuildSlabLayers(f *testing.F) {
 		}
 	})
 }
+
+// layersExplain reports whether a layered build may fail where the whole one
+// built: a layer input error, a layer sliver, or the summed mesh cap.
+func layersExplain(err error, layers []float64) bool {
+	if _, lerr := checkLayers(layers); lerr != nil {
+		return true
+	}
+	var pe *PlacementError
+	return errors.Is(err, errTooMuchMesh) || (errors.As(err, &pe) && pe.Reason == ReasonLayerSliver)
+}
+
+func FuzzBuildWallLayers(f *testing.F) {
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.015, 0.175, 0.10, uint8(1), 1.00, 0.90, 1.20, 1.20, 0.0, 1.0, 1.0, 0.5, 0.5, 0.10)
+	f.Add(1e6, 1e6, 1e6+3, 1e6+1, 3.0, 2.70, 0.02, 0.2, 0.0, uint8(2), 0.40, 0.0, 0.80, 2.0, 0.0, 1.8, 1.0, 0.5, 0.5, 0.02)
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.015, 0.175, 0.10, uint8(1), 0.20, 1.0, 0.5, 0.5, 0.19, 1.0, 1.0, 0.5, 0.5, 0.0155)
+	f.Fuzz(func(t *testing.T, ax, ay, bx, by, base, h, t1, t2, t3 float64, side uint8, o1, s1, w1, h1, d1, o2, s2, w2, h2, d2 float64) {
+		var layers []float64
+		for _, th := range []float64{t1, t2, t3} {
+			if th != 0 {
+				layers = append(layers, th)
+			}
+		}
+		var ops []Opening
+		for _, o := range []Opening{{o1, s1, w1, h1, d1}, {o2, s2, w2, h2, d2}} {
+			if o.Width != 0 {
+				ops = append(ops, o)
+			}
+		}
+		edge := [2][2]float64{{ax, ay}, {bx, by}}
+		var total float64
+		for _, th := range layers {
+			total += th
+		}
+		whole, werr := BuildWall(edge, base, h, total, Side(side), ops)
+		ws, err := BuildWallLayers(edge, base, h, layers, Side(side), ops)
+		switch {
+		case err != nil && werr == nil:
+			if !layersExplain(err, layers) {
+				t.Fatalf("layered build refused what the whole wall built: %v", err)
+			}
+			return
+		case err == nil && werr != nil:
+			t.Fatalf("layered build placed what the whole wall refused: %v", werr)
+		case err != nil:
+			return
+		}
+		var vol, backs float64
+		for k, w := range ws {
+			q := w.Quantities
+			meshAgrees(t, w.Element, q.NetVolume, wallSurface(q, layers[k]), snapSlack(q, layers[k]),
+				q.Length, q.Height, q.MeasuredGross, q.MeasuredNet, q.OtherGross, q.OtherNet, q.RevealPerimeter, q.GrossVolume, q.NetVolume)
+			vol += q.NetVolume
+			backs += q.NicheBack
+		}
+		wq := whole.Quantities
+		if math.Abs(vol-wq.NetVolume) > 1e-9*wq.NetVolume+1e-12 || math.Abs(backs-wq.NicheBack) > 1e-9*wq.NicheBack+1e-12 {
+			t.Fatalf("layers sum to volume %v, niche back %v; whole wall %v, %v", vol, backs, wq.NetVolume, wq.NicheBack)
+		}
+	})
+}
