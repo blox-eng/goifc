@@ -1,6 +1,6 @@
 # Layered builders: walls, room walls and slabs in layers
 
-Status: draft for approval, 2026-11-13.
+Status: approved, 2026-11-13.
 
 ## Intent
 
@@ -89,8 +89,8 @@ func BuildSlabLayers(outline [][2]float64, z float64, layers []float64) ([]Slab,
 
 Layers are plain thicknesses (`[]float64`), not a `Layer{Name, Thickness}`
 struct. goifc would not read the name, and the index already keys the result.
-This differs from the shape agreed with the consumer on 2026-11-12; it is
-told before code lands.
+This replaces the `Layer{Name, Thickness}` shape agreed with the consumer on
+2026-11-12; the consumer was told on 2026-11-13, when the design was approved.
 
 ### Input checks
 
