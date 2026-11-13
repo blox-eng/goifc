@@ -400,3 +400,15 @@ func TestBuildRoomWallLayers_SnapsALayerMitreLikeTheWholeWall(t *testing.T) {
 		}
 	}
 }
+
+// An opening refused by the whole wall gets that one reason, never a second
+// layer_sliver: like the single-solid builders, one reason per opening.
+func TestBuildWallLayers_OneReasonPerOpening(t *testing.T) {
+	ops := []Opening{{Offset: 3.9, Sill: 1, Width: 0.5, Height: 0.5, Depth: 0.1005}}
+	_, err := BuildWallLayers([2][2]float64{{0, 0}, {4, 0}}, 0, 2.5, []float64{0.1, 0.2}, SideLeft, ops)
+	refusals := unjoin(err)
+	var pe *PlacementError
+	if len(refusals) != 1 || !errors.As(refusals[0], &pe) || pe.Reason != ReasonTooWide {
+		t.Errorf("refusals %v, want only opening 0: too_wide", refusals)
+	}
+}

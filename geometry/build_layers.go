@@ -78,7 +78,6 @@ func splitLayers(span wallSpan, layers []float64, ops []Opening) []layerPart {
 		depth[k+1] = depth[k] + t
 	}
 	total := depth[n]
-	depth[n] = total
 	// start[k], end[k]: the face at depth[k], in the whole wall's u.
 	start, end := make([]float64, n+1), make([]float64, n+1)
 	for k, d := range depth {
@@ -224,13 +223,26 @@ func BuildWallLayers(edge [2][2]float64, base, height float64, layers []float64,
 }
 
 // joinRefusals joins placement refusals flat, whole-wall ones first. A plain
-// error (bad input) stops alone.
+// error (bad input) stops alone. An opening the whole wall refused keeps that
+// one reason: one reason per opening, like the single-solid builders.
 func joinRefusals(whole, slivers error) error {
 	var pe *PlacementError
 	if whole != nil && !errors.As(whole, &pe) {
 		return whole
 	}
-	return errors.Join(append(unjoin(whole), unjoin(slivers)...)...)
+	refused := map[[2]int]bool{}
+	all := unjoin(whole)
+	for _, e := range all {
+		if errors.As(e, &pe) {
+			refused[[2]int{pe.Wall, pe.Opening}] = true
+		}
+	}
+	for _, e := range unjoin(slivers) {
+		if errors.As(e, &pe) && !refused[[2]int{pe.Wall, pe.Opening}] {
+			all = append(all, e)
+		}
+	}
+	return errors.Join(all...)
 }
 
 // unjoin returns the errors an errors.Join holds, or err alone.

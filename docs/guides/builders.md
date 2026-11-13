@@ -145,15 +145,16 @@ volumes add up to the whole wall's.
   own length: at an outside corner the outer layer is longer than the inner
   one.
 - **Openings** are checked once, on the whole wall, so a layered wall refuses
-  exactly what the same single wall refuses. A through opening cuts every
+  exactly what the same single wall refuses, plus `layer_sliver` (below). A through opening cuts every
   layer, and each layer lists it in its own `Measured.Openings`.
 - **Niches** cut the layers they pass through, are a niche in the layer where
   their back falls, and leave the rest whole. A back exactly on a layer
   boundary is the next layer's `NicheBack`. A back under 1 mm from a boundary
   is refused as `layer_sliver`.
 - **`RevealPerimeter`** repeats in every layer an opening cuts; it does not
-  add up across layers. A layer's reveal area is `RevealPerimeter` × its
-  thickness.
+  add up across layers. For through openings, a layer's reveal area is
+  `RevealPerimeter` × its thickness; in the layer where a niche ends, the
+  niche's reveal is only as deep as the niche reaches into that layer.
 
 At a corner that is almost straight, a layer's face end can snap by under
 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.
