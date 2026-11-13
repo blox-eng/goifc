@@ -72,25 +72,28 @@ type layerPart struct {
 // straight from the measured face to the opposite face, so a face at depth d
 // spans [s(d), e(d)], linear in d.
 func splitLayers(span wallSpan, layers []float64, ops []Opening) []layerPart {
-	var total float64
-	for _, t := range layers {
-		total += t
-	}
-	start := func(d float64) float64 { return span.otherStart * d / total }
-	end := func(d float64) float64 { return span.length + (span.otherEnd-span.length)*d/total }
-	parts := make([]layerPart, len(layers))
-	d0 := 0.0
+	n := len(layers)
+	depth := make([]float64, n+1)
 	for k, t := range layers {
-		d1 := d0 + t
-		s0, e0, s1, e1 := start(d0), end(d0), start(d1), end(d1)
-		if k == 0 {
-			s0, e0 = 0, span.length
-		}
-		if k == len(layers)-1 {
-			d1, s1, e1 = total, span.otherStart, span.otherEnd
-		}
+		depth[k+1] = depth[k] + t
+	}
+	total := depth[n]
+	depth[n] = total
+	// start[k], end[k]: the face at depth[k], in the whole wall's u.
+	start, end := make([]float64, n+1), make([]float64, n+1)
+	for k, d := range depth {
+		start[k] = span.otherStart * d / total
+		end[k] = span.length + (span.otherEnd-span.length)*d/total
+	}
+	start[0], end[0], start[n], end[n] = 0, span.length, span.otherStart, span.otherEnd
+	snapFaceEnds(start)
+	snapFaceEnds(end)
+
+	parts := make([]layerPart, n)
+	for k, t := range layers {
+		d0, d1, s0 := depth[k], depth[k+1], start[k]
 		p := layerPart{
-			span:      wallSpan{length: e0 - s0, otherStart: s1 - s0, otherEnd: e1 - s0},
+			span:      wallSpan{length: end[k] - s0, otherStart: start[k+1] - s0, otherEnd: end[k+1] - s0},
 			shift:     s0,
 			depth:     d0,
 			thickness: t,
@@ -112,9 +115,26 @@ func splitLayers(span wallSpan, layers []float64, ops []Opening) []layerPart {
 			p.ops = append(p.ops, o)
 		}
 		parts[k] = p
-		d0 = d1
 	}
 	return parts
+}
+
+// snapFaceEnds makes each layer's two ends at one wall end either equal or at
+// least gridSnap apart, as roomSpans does for the whole wall: the mesh grid
+// merges closer values, and the quantities must measure the merged mesh. xs is
+// monotone and its first and last values (the whole wall's faces) stay put; an
+// inner value joins the one before it, or the last one when that is closer
+// than gridSnap.
+func snapFaceEnds(xs []float64) {
+	n := len(xs) - 1
+	for k := 1; k < n; k++ {
+		if math.Abs(xs[k]-xs[k-1]) < gridSnap {
+			xs[k] = xs[k-1]
+		}
+	}
+	for k := n - 1; k > 0 && math.Abs(xs[n]-xs[k]) < gridSnap; k-- {
+		xs[k] = xs[n]
+	}
 }
 
 // checkLayerSlivers refuses each niche whose back lies under 1 mm from an
@@ -222,4 +242,39 @@ func unjoin(err error) []error {
 		return j.Unwrap()
 	}
 	return []error{err}
+}
+
+// BuildRoomWallLayers builds the walls of one closed outline in layers; the
+// result is indexed [wall][layer], measured face first. Each layer mitres at
+// its own depth, so it reports its own length and area: at an outside corner
+// an outer layer is longer than an inner one. Openings and refusals follow
+// BuildRoomWalls with the summed thickness, and BuildWallLayers for niches.
+func BuildRoomWallLayers(outline [][2]float64, base, height float64, layers []float64, side Side, openings [][]Opening) ([][]Wall, error) {
+	total, err := checkLayers(layers)
+	if err != nil {
+		return nil, err
+	}
+	spans, err := checkRoom(outline, base, height, total, side, openings)
+	var slivers []error
+	for i := range spans {
+		if e := checkLayerSlivers(i, layers, roomOpenings(openings, i)); e != nil {
+			slivers = append(slivers, unjoin(e)...)
+		}
+	}
+	if err := joinRefusals(err, errors.Join(slivers...)); err != nil {
+		return nil, err
+	}
+	cells := 0
+	for i, s := range spans {
+		cells += layerCells(splitLayers(s, layers, roomOpenings(openings, i)), height)
+	}
+	if cells > maxMeshCells {
+		return nil, errTooMuchMesh
+	}
+	walls := make([][]Wall, len(spans))
+	for i, s := range spans {
+		a, b := outline[i], outline[(i+1)%len(outline)]
+		walls[i] = wallLayers(newWallFrame(a, b, side), wallOrigin(a, base), s, height, layers, roomOpenings(openings, i))
+	}
+	return walls, nil
 }

@@ -193,3 +193,48 @@ func FuzzBuildWallLayers(f *testing.F) {
 		}
 	})
 }
+
+func FuzzBuildRoomWallLayers(f *testing.F) {
+	f.Add(0.0, 0.0, 4.0, 0.0, 4.0, 4.0, 0.0, 4.0, 2.50, 0.015, 0.20, 0.10, uint8(1), uint8(0), 1.0, 0.0, 0.8, 2.0, 0.0)
+	f.Add(0.0, 0.0, 4.0, 0.0, 2.0, 2.0, 0.0, 4.0, 2.50, 0.02, 0.18, 0.0, uint8(2), uint8(2), 1.0, 0.5, 0.5, 1.0, 0.1)
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3, h, t1, t2, t3 float64, side, wall uint8, o, s, w, oh, d float64) {
+		var layers []float64
+		var total float64
+		for _, th := range []float64{t1, t2, t3} {
+			if th != 0 {
+				layers = append(layers, th)
+				total += th
+			}
+		}
+		outline := [][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}}
+		ops := make([][]Opening, len(outline))
+		ops[int(wall)%len(outline)] = []Opening{{o, s, w, oh, d}}
+		whole, werr := BuildRoomWalls(outline, 0, h, total, Side(side), ops)
+		rooms, err := BuildRoomWallLayers(outline, 0, h, layers, Side(side), ops)
+		switch {
+		case err != nil && werr == nil:
+			if !layersExplain(err, layers) {
+				t.Fatalf("layered room refused what the whole room built: %v", err)
+			}
+			return
+		case err == nil && werr != nil:
+			t.Fatalf("layered room placed what the whole room refused: %v", werr)
+		case err != nil:
+			return
+		}
+		for i, ws := range rooms {
+			var vol float64
+			for k, lw := range ws {
+				q := lw.Quantities
+				meshAgrees(t, lw.Element, q.NetVolume, wallSurface(q, layers[k])+2*total*total*maxMitre, snapSlack(q, layers[k]),
+					q.Length, q.Height, q.MeasuredGross, q.MeasuredNet, q.OtherGross, q.OtherNet, q.RevealPerimeter, q.GrossVolume, q.NetVolume)
+				vol += q.NetVolume
+			}
+			// Each inner face end may snap by under gridSnap at each wall end.
+			snap := 2 * float64(len(layers)-1) * gridSnap * total * h
+			if want := whole[i].Quantities.NetVolume; math.Abs(vol-want) > 1e-9*want+1e-12+snap {
+				t.Fatalf("wall %d: layers sum to %v m³, whole wall %v", i, vol, want)
+			}
+		}
+	})
+}

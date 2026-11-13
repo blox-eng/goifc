@@ -266,3 +266,137 @@ func TestBuildWallLayers_MeshCapCountsEveryLayer(t *testing.T) {
 		t.Errorf("16 layers: err = %v, want errTooMuchMesh", err)
 	}
 }
+
+var roomLayers = []float64{0.015, 0.20, 0.10} // 0.315 m in all
+
+func buildRoomLayers(t *testing.T, side Side, ops [][]Opening) [][]Wall {
+	t.Helper()
+	rs, err := BuildRoomWallLayers(square4, 0, 2.50, roomLayers, side, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rs) != 4 {
+		t.Fatalf("got %d walls, want 4", len(rs))
+	}
+	return rs
+}
+
+func TestBuildRoomWallLayersOracle(t *testing.T) {
+	rs := buildRoomLayers(t, SideLeft, nil)
+	measured := []float64{4.00, 4.03, 4.43}
+	other := []float64{4.03, 4.43, 4.63}
+	vol := []float64{0.1505625, 2.115, 1.1325}
+	for i, layers := range rs {
+		for k, w := range layers {
+			wq := w.Quantities
+			checkQ(t, fmt.Sprintf("wall %d layer %d", i, k),
+				q{"Length", wq.Length, measured[k]},
+				q{"MeasuredGross", wq.MeasuredGross, measured[k] * 2.5},
+				q{"OtherGross", wq.OtherGross, other[k] * 2.5},
+				q{"GrossVolume", wq.GrossVolume, vol[k]},
+			)
+		}
+	}
+	o := rs[0][1].Measured.Origin
+	checkQ(t, "wall 0 layer 1 origin", q{"x", o[0], -0.015}, q{"y", o[1], -0.015}, q{"z", o[2], 0})
+}
+
+func TestBuildRoomWallLayers_InwardLayersShrink(t *testing.T) {
+	rs := buildRoomLayers(t, SideRight, nil)
+	measured := []float64{4.00, 3.97, 3.57}
+	other := []float64{3.97, 3.57, 3.37}
+	for k, w := range rs[0] {
+		checkQ(t, fmt.Sprintf("layer %d", k),
+			q{"Length", w.Quantities.Length, measured[k]},
+			q{"OtherGross", w.Quantities.OtherGross, other[k] * 2.5})
+	}
+	small := [][2]float64{{0, 0}, {0.7, 0}, {0.7, 0.7}, {0, 0.7}}
+	_, want := BuildRoomWalls(small, 0, 2.5, 0.4, SideRight, nil)
+	_, got := BuildRoomWallLayers(small, 0, 2.5, []float64{0.2, 0.2}, SideRight, nil)
+	if want == nil || got == nil || got.Error() != want.Error() {
+		t.Errorf("small inward room: got %v, want %v", got, want)
+	}
+}
+
+func TestBuildRoomWallLayers_OpeningKeepsItsPlace(t *testing.T) {
+	door := Opening{Offset: 1.0, Width: 0.8, Height: 2.0}
+	rs := buildRoomLayers(t, SideLeft, [][]Opening{{door}, nil, nil, nil})
+	d := 0.0
+	for k, w := range rs[0] {
+		f := w.Measured
+		if len(f.Openings) != 1 {
+			t.Fatalf("layer %d: %d openings, want 1", k, len(f.Openings))
+		}
+		off := f.Openings[0].Offset
+		checkQ(t, fmt.Sprintf("layer %d", k),
+			q{"Offset", off, 1.0 + d},
+			q{"world x", f.Origin[0] + off*f.U[0], 1.0})
+		d += roomLayers[k]
+	}
+}
+
+func TestBuildRoomWallLayers_OneLayerIsBuildRoomWalls(t *testing.T) {
+	ops := [][]Opening{{{Offset: 1.0, Width: 0.8, Height: 2.0}}, nil, {{Offset: 1.0, Sill: 1.0, Width: 1.0, Height: 1.0, Depth: 0.1}}, nil}
+	for _, side := range []Side{SideLeft, SideRight} {
+		want, err := BuildRoomWalls(square4, 0, 2.5, 0.315, side, ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := BuildRoomWallLayers(square4, 0, 2.5, []float64{0.315}, side, ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range want {
+			if len(got[i]) != 1 || !reflect.DeepEqual(got[i][0], want[i]) {
+				t.Errorf("side %v wall %d: one layer differs from BuildRoomWalls", side, i)
+			}
+		}
+	}
+}
+
+func TestBuildRoomWallLayers_SameRefusalsAsWholeRoom(t *testing.T) {
+	ops := [][]Opening{{{Offset: 0.1, Sill: 1.0, Width: 0.5, Height: 0.5}}, nil, nil, nil}
+	_, want := BuildRoomWalls(square4, 0, 2.5, 0.315, SideRight, ops)
+	_, got := BuildRoomWallLayers(square4, 0, 2.5, roomLayers, SideRight, ops)
+	var pe *PlacementError
+	if !errors.As(want, &pe) || pe.Reason != ReasonInCorner {
+		t.Fatalf("fixture: whole room err = %v, want in_corner", want)
+	}
+	if got == nil || got.Error() != want.Error() {
+		t.Errorf("refusals differ:\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestBuildRoomWallLayers_Invariants(t *testing.T) {
+	ops := [][]Opening{{{Offset: 1.0, Width: 0.8, Height: 2.0}}, nil, {{Offset: 1.0, Sill: 1.0, Width: 1.0, Height: 1.0, Depth: 0.1}}, {{Offset: 1.0, Sill: 1.0, Width: 1.0, Height: 1.0, Depth: 0.215}}}
+	for _, side := range []Side{SideLeft, SideRight} {
+		whole, err := BuildRoomWalls(square4, 0, 2.5, 0.315, side, ops)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rs := buildRoomLayers(t, side, ops)
+		for i := range whole {
+			layerInvariants(t, fmt.Sprintf("side %v wall %d", side, i), rs[i], whole[i], roomLayers)
+		}
+	}
+}
+
+// A near-square corner leans the whole wall's opposite end 5e-4 m; split
+// into layers, one layer's end leans under the 1e-4 m grid snap. The layer
+// must snap it like roomSpans does, or its mesh and quantities disagree
+// (fuzz, 2026-11-13).
+func TestBuildRoomWallLayers_SnapsALayerMitreLikeTheWholeWall(t *testing.T) {
+	outline := [][2]float64{{0, 0}, {-26, 0}, {0.2, 42}, {0, 0.5}}
+	layers := []float64{0.04, 0.18}
+	rooms, err := BuildRoomWallLayers(outline, 0, 2.5, layers, SideRight, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ws := range rooms {
+		for k, w := range ws {
+			lq := w.Quantities
+			meshAgrees(t, w.Element, lq.NetVolume, wallSurface(lq, layers[k])+2*0.22*0.22*maxMitre, snapSlack(lq, layers[k]),
+				lq.Length, lq.NetVolume)
+		}
+	}
+}
