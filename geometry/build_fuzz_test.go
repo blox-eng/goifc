@@ -148,6 +148,8 @@ func FuzzBuildWallLayers(f *testing.F) {
 	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.015, 0.175, 0.10, uint8(1), 1.00, 0.90, 1.20, 1.20, 0.0, 1.0, 1.0, 0.5, 0.5, 0.10)
 	f.Add(1e6, 1e6, 1e6+3, 1e6+1, 3.0, 2.70, 0.02, 0.2, 0.0, uint8(2), 0.40, 0.0, 0.80, 2.0, 0.0, 1.8, 1.0, 0.5, 0.5, 0.02)
 	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.015, 0.175, 0.10, uint8(1), 0.20, 1.0, 0.5, 0.5, 0.19, 1.0, 1.0, 0.5, 0.5, 0.0155)
+	// A niche back 5e-10 m past a boundary snaps onto it (review, #151).
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.01, 0.01, 0.0, uint8(1), 0.5, 0.5, 2.0, 1.5, 0.0100000005, 0.0, 0.0, 0.0, 0.0, 0.0)
 	f.Fuzz(func(t *testing.T, ax, ay, bx, by, base, h, t1, t2, t3 float64, side uint8, o1, s1, w1, h1, d1, o2, s2, w2, h2, d2 float64) {
 		var layers []float64
 		for _, th := range []float64{t1, t2, t3} {
@@ -188,7 +190,12 @@ func FuzzBuildWallLayers(f *testing.F) {
 			backs += q.NicheBack
 		}
 		wq := whole.Quantities
-		if math.Abs(vol-wq.NetVolume) > 1e-9*wq.NetVolume+1e-12 || math.Abs(backs-wq.NicheBack) > 1e-9*wq.NicheBack+1e-12 {
+		// A niche back within onBoundary of a boundary is cut to it exactly.
+		var area float64
+		for _, o := range ops {
+			area += o.Width * o.Height
+		}
+		if math.Abs(vol-wq.NetVolume) > 1e-9*wq.NetVolume+1e-12+onBoundary*area || math.Abs(backs-wq.NicheBack) > 1e-9*wq.NicheBack+1e-12 {
 			t.Fatalf("layers sum to volume %v, niche back %v; whole wall %v, %v", vol, backs, wq.NetVolume, wq.NicheBack)
 		}
 	})
@@ -231,7 +238,8 @@ func FuzzBuildRoomWallLayers(f *testing.F) {
 				vol += q.NetVolume
 			}
 			// Each inner face end may snap by under gridSnap at each wall end.
-			snap := 2 * float64(len(layers)-1) * gridSnap * total * h
+			// and a niche back within onBoundary of a boundary is cut to it.
+			snap := 2*float64(len(layers)-1)*gridSnap*total*h + onBoundary*w*oh
 			if want := whole[i].Quantities.NetVolume; math.Abs(vol-want) > 1e-9*want+1e-12+snap {
 				t.Fatalf("wall %d: layers sum to %v m³, whole wall %v", i, vol, want)
 			}

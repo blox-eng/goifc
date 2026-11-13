@@ -49,7 +49,8 @@ compatibility policy ·
 
 **Units:** goifc works in SI metres everywhere: builder input and output,
 quantities (m, m², m³) and GLB. IFC files in other units are converted to
-metres when they are read. If your app shows feet and inches, convert at its
+metres when they are read; a file that states no length unit is read as
+metres. If your app shows feet and inches, convert at its
 input and display.
 
 ## Install

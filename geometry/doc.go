@@ -11,7 +11,8 @@
 //
 // UNITS — goifc works in SI metres everywhere: builder input and output,
 // quantities (m, m², m³) and GLB. IFC files in other units are converted to
-// metres when they are read. A host that shows imperial units converts at its
+// metres when they are read; a file that states no length unit is read as
+// metres. A host that shows imperial units converts at its
 // own input and display.
 //
 // BUILDERS — [BuildWall], [BuildRoomWalls] and [BuildSlab] make an Element
