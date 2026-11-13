@@ -64,6 +64,9 @@ const (
 	// ReasonInCorner: the opening cuts into a corner join, where the face
 	// opposite the measured one stops short.
 	ReasonInCorner PlacementReason = "in_corner"
+	// ReasonLayerSliver: a niche's back lies less than 1 mm from a layer
+	// boundary but not on it, which would leave a layer sliver under 1 mm.
+	ReasonLayerSliver PlacementReason = "layer_sliver"
 )
 
 // PlacementError refuses one opening. The builders return every refusal at
@@ -271,31 +274,34 @@ func checkWallDims(base, height, thickness float64, side Side) error {
 // *PlacementError values joined with errors.Join; other invalid input returns
 // a plain error.
 func BuildWall(edge [2][2]float64, base, height, thickness float64, side Side, openings []Opening) (Wall, error) {
-	if err := checkWallDims(base, height, thickness, side); err != nil {
-		return Wall{}, err
-	}
-	if err := checkPoints(edge[:]); err != nil {
-		return Wall{}, err
-	}
-	a, b := edge[0], edge[1]
-	length := math.Hypot(b[0]-a[0], b[1]-a[1])
-	if err := checkDim("edge length", length); err != nil {
-		return Wall{}, err
-	}
-	span := wallSpan{length: length, otherStart: 0, otherEnd: length}
-	if err := checkOpenings(0, span, height, thickness, openings); err != nil {
+	span, err := checkWall(edge, base, height, thickness, side, openings)
+	if err != nil {
 		return Wall{}, err
 	}
 	if gridCells(span, height, openings) > maxMeshCells {
 		return Wall{}, errTooMuchMesh
 	}
-	f := newWallFrame(a, b, side)
-	origin := [3]float64{a[0], a[1], base}
-	pts, tris := meshWall(span, height, thickness, openings)
-	verts, tris := placeWall(f, pts, tris)
-	return Wall{
-		Element:    newElement(verts, tris, origin),
-		Quantities: wallQuantities(span, height, thickness, openings),
-		Measured:   measuredFace(origin, f, length, height, openings),
-	}, nil
+	return wallLayers(newWallFrame(edge[0], edge[1], side), wallOrigin(edge[0], base), span, height, []float64{thickness}, openings)[0], nil
+}
+
+// checkWall checks a straight wall and its openings, and returns its span.
+func checkWall(edge [2][2]float64, base, height, thickness float64, side Side, openings []Opening) (wallSpan, error) {
+	if err := checkWallDims(base, height, thickness, side); err != nil {
+		return wallSpan{}, err
+	}
+	if err := checkPoints(edge[:]); err != nil {
+		return wallSpan{}, err
+	}
+	a, b := edge[0], edge[1]
+	length := math.Hypot(b[0]-a[0], b[1]-a[1])
+	if err := checkDim("edge length", length); err != nil {
+		return wallSpan{}, err
+	}
+	span := wallSpan{length: length, otherStart: 0, otherEnd: length}
+	return span, checkOpenings(0, span, height, thickness, openings)
+}
+
+// wallOrigin is a wall's element origin: its edge start at its base.
+func wallOrigin(a [2]float64, base float64) [3]float64 {
+	return [3]float64{a[0], a[1], base}
 }

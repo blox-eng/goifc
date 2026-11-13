@@ -43,9 +43,15 @@ compatibility policy ·
   openings subtracted, comes from `Scene.NetAreas`.
 - **Builders** — walls, the walls of a room and slabs from numbers, with no
   IFC: a mesh, exact quantities, and a refusal that names the misplaced
-  opening and why.
+  opening and why. Each can be built in layers, with quantities per layer.
 - **Untrusted files** — tessellation, extraction and storey plans are bounded
   by the file's size, and a budget that runs out says so.
+
+**Units:** goifc works in SI metres everywhere: builder input and output,
+quantities (m, m², m³) and GLB. IFC files in other units are converted to
+metres when they are read; a file that states no length unit is read as
+metres. If your app shows feet and inches, convert at its
+input and display.
 
 ## Install
 

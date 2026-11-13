@@ -30,7 +30,9 @@ fuzztime=${3:-60s}
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
-go test "$pkg" -run "$target" -fuzz "$target" -fuzztime="$fuzztime" 2>&1 | tee "$log"
+# Anchored: FuzzBuildWall must not also match FuzzBuildWallLayers, or go test
+# refuses to fuzz ("matches more than one fuzz test").
+go test "$pkg" -run "^${target}\$" -fuzz "^${target}\$" -fuzztime="$fuzztime" 2>&1 | tee "$log"
 status=${PIPESTATUS[0]}
 
 if [[ $status -eq 0 ]]; then

@@ -106,3 +106,143 @@ func FuzzBuildSlab(f *testing.F) {
 		meshAgrees(t, s.Element, q.Volume, 2*q.Area+q.Perimeter*th, 0, q.Area, q.Perimeter, q.Volume)
 	})
 }
+
+func FuzzBuildSlabLayers(f *testing.F) {
+	f.Add(0.0, 0.0, 5.0, 0.0, 5.0, 4.0, 0.0, 4.0, 2.0, 2.0, 0.0, 0.05, 0.20, 0.0)
+	f.Add(1e6, 2e6, 1e6+4, 2e6, 1e6+4, 2e6+2, 1e6+2, 2e6+2, 1e6+2, 2e6+4, 6.0, 0.02, 0.25, 0.01)
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3, x4, y4, z, t1, t2, t3 float64) {
+		var layers []float64
+		for _, th := range []float64{t1, t2, t3} {
+			if th != 0 {
+				layers = append(layers, th)
+			}
+		}
+		slabs, err := BuildSlabLayers([][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}, {x4, y4}}, z, layers)
+		if err != nil {
+			return
+		}
+		var vol, total float64
+		for k, s := range slabs {
+			q := s.Quantities
+			meshAgrees(t, s.Element, q.Volume, 2*q.Area+q.Perimeter*layers[k], 0, q.Area, q.Perimeter, q.Volume)
+			vol += q.Volume
+			total += layers[k]
+		}
+		if a := slabs[0].Quantities.Area; !nearRel(vol, a*total, 1e-9) {
+			t.Fatalf("layer volumes sum to %v, want area·thickness %v", vol, a*total)
+		}
+	})
+}
+
+// layersExplain reports whether a layered build may fail where the whole one
+// built: a layer input error, a layer sliver, or the summed mesh cap.
+func layersExplain(err error, layers []float64) bool {
+	if _, lerr := checkLayers(layers); lerr != nil {
+		return true
+	}
+	var pe *PlacementError
+	return errors.Is(err, errTooMuchMesh) || (errors.As(err, &pe) && pe.Reason == ReasonLayerSliver)
+}
+
+func FuzzBuildWallLayers(f *testing.F) {
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.015, 0.175, 0.10, uint8(1), 1.00, 0.90, 1.20, 1.20, 0.0, 1.0, 1.0, 0.5, 0.5, 0.10)
+	f.Add(1e6, 1e6, 1e6+3, 1e6+1, 3.0, 2.70, 0.02, 0.2, 0.0, uint8(2), 0.40, 0.0, 0.80, 2.0, 0.0, 1.8, 1.0, 0.5, 0.5, 0.02)
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.015, 0.175, 0.10, uint8(1), 0.20, 1.0, 0.5, 0.5, 0.19, 1.0, 1.0, 0.5, 0.5, 0.0155)
+	// A niche back 5e-10 m past a boundary snaps onto it (review, #151).
+	f.Add(0.0, 0.0, 3.0, 0.0, 0.0, 2.50, 0.01, 0.01, 0.0, uint8(1), 0.5, 0.5, 2.0, 1.5, 0.0100000005, 0.0, 0.0, 0.0, 0.0, 0.0)
+	f.Fuzz(func(t *testing.T, ax, ay, bx, by, base, h, t1, t2, t3 float64, side uint8, o1, s1, w1, h1, d1, o2, s2, w2, h2, d2 float64) {
+		var layers []float64
+		for _, th := range []float64{t1, t2, t3} {
+			if th != 0 {
+				layers = append(layers, th)
+			}
+		}
+		var ops []Opening
+		for _, o := range []Opening{{o1, s1, w1, h1, d1}, {o2, s2, w2, h2, d2}} {
+			if o.Width != 0 {
+				ops = append(ops, o)
+			}
+		}
+		edge := [2][2]float64{{ax, ay}, {bx, by}}
+		var total float64
+		for _, th := range layers {
+			total += th
+		}
+		whole, werr := BuildWall(edge, base, h, total, Side(side), ops)
+		ws, err := BuildWallLayers(edge, base, h, layers, Side(side), ops)
+		switch {
+		case err != nil && werr == nil:
+			if !layersExplain(err, layers) {
+				t.Fatalf("layered build refused what the whole wall built: %v", err)
+			}
+			return
+		case err == nil && werr != nil:
+			t.Fatalf("layered build placed what the whole wall refused: %v", werr)
+		case err != nil:
+			return
+		}
+		var vol, backs float64
+		for k, w := range ws {
+			q := w.Quantities
+			meshAgrees(t, w.Element, q.NetVolume, wallSurface(q, layers[k]), snapSlack(q, layers[k]),
+				q.Length, q.Height, q.MeasuredGross, q.MeasuredNet, q.OtherGross, q.OtherNet, q.RevealPerimeter, q.GrossVolume, q.NetVolume)
+			vol += q.NetVolume
+			backs += q.NicheBack
+		}
+		wq := whole.Quantities
+		// A niche back within onBoundary of a boundary is cut to it exactly.
+		var area float64
+		for _, o := range ops {
+			area += o.Width * o.Height
+		}
+		if math.Abs(vol-wq.NetVolume) > 1e-9*wq.NetVolume+1e-12+onBoundary*area || math.Abs(backs-wq.NicheBack) > 1e-9*wq.NicheBack+1e-12 {
+			t.Fatalf("layers sum to volume %v, niche back %v; whole wall %v, %v", vol, backs, wq.NetVolume, wq.NicheBack)
+		}
+	})
+}
+
+func FuzzBuildRoomWallLayers(f *testing.F) {
+	f.Add(0.0, 0.0, 4.0, 0.0, 4.0, 4.0, 0.0, 4.0, 2.50, 0.015, 0.20, 0.10, uint8(1), uint8(0), 1.0, 0.0, 0.8, 2.0, 0.0)
+	f.Add(0.0, 0.0, 4.0, 0.0, 2.0, 2.0, 0.0, 4.0, 2.50, 0.02, 0.18, 0.0, uint8(2), uint8(2), 1.0, 0.5, 0.5, 1.0, 0.1)
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3, h, t1, t2, t3 float64, side, wall uint8, o, s, w, oh, d float64) {
+		var layers []float64
+		var total float64
+		for _, th := range []float64{t1, t2, t3} {
+			if th != 0 {
+				layers = append(layers, th)
+				total += th
+			}
+		}
+		outline := [][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}}
+		ops := make([][]Opening, len(outline))
+		ops[int(wall)%len(outline)] = []Opening{{o, s, w, oh, d}}
+		whole, werr := BuildRoomWalls(outline, 0, h, total, Side(side), ops)
+		rooms, err := BuildRoomWallLayers(outline, 0, h, layers, Side(side), ops)
+		switch {
+		case err != nil && werr == nil:
+			if !layersExplain(err, layers) {
+				t.Fatalf("layered room refused what the whole room built: %v", err)
+			}
+			return
+		case err == nil && werr != nil:
+			t.Fatalf("layered room placed what the whole room refused: %v", werr)
+		case err != nil:
+			return
+		}
+		for i, ws := range rooms {
+			var vol float64
+			for k, lw := range ws {
+				q := lw.Quantities
+				meshAgrees(t, lw.Element, q.NetVolume, wallSurface(q, layers[k])+2*total*total*maxMitre, snapSlack(q, layers[k]),
+					q.Length, q.Height, q.MeasuredGross, q.MeasuredNet, q.OtherGross, q.OtherNet, q.RevealPerimeter, q.GrossVolume, q.NetVolume)
+				vol += q.NetVolume
+			}
+			// Each inner face end may snap by under gridSnap at each wall end.
+			// and a niche back within onBoundary of a boundary is cut to it.
+			snap := 2*float64(len(layers)-1)*gridSnap*total*h + onBoundary*w*oh
+			if want := whole[i].Quantities.NetVolume; math.Abs(vol-want) > 1e-9*want+1e-12+snap {
+				t.Fatalf("wall %d: layers sum to %v m³, whole wall %v", i, vol, want)
+			}
+		}
+	})
+}
