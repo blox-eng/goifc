@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.17.0 — 2026-11-13
+
 ### Added
 
 - **Layered builders.** `geometry.BuildWallLayers`, `BuildRoomWallLayers` and
