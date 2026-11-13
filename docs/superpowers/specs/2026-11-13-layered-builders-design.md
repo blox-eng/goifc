@@ -46,7 +46,11 @@ are.
 ## Anti-goals
 
 - Layer quantities that do not add up to the wall. The sum of the layers'
-  `NetVolume` must equal the single-solid wall's `NetVolume`.
+  `NetVolume` must equal the single-solid wall's `NetVolume`. (Build ruling,
+  2026-11-13: at an almost straight room corner an inner layer face end snaps
+  by under the 1e-4 m mesh grid snap, as the whole wall's mitre does, so each
+  layer's mesh and numbers agree; the sum then matches within
+  2·(n−1)·1e-4 m·T·h.)
 - An opening that is refused in a layered wall but placed in the same
   single-solid wall, or the reverse.
 - Any private or downstream data in the repository. Fixtures are synthetic.

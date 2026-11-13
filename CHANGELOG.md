@@ -19,6 +19,18 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- **Layered builders.** `geometry.BuildWallLayers`, `BuildRoomWallLayers` and
+  `BuildSlabLayers` take layer thicknesses (metres, measured face or top
+  first) and return one `Wall` or `Slab` per layer, with quantities per layer.
+  In a room each layer mitres at its own depth. Openings are checked once on
+  the whole wall; a niche cuts the layers up to its depth, and a niche whose
+  back would leave a layer under 1 mm is refused with the new
+  `ReasonLayerSliver` (`layer_sliver`).
+- **Units stated.** The README and package docs say goifc works in SI metres
+  everywhere.
+
 ## v0.16.0 — 2026-11-12
 
 ### Added

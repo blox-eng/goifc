@@ -42,3 +42,23 @@ func ExampleBuildWall_refusal() {
 	// wall 0 opening 0: too_wide
 	// opening 0 is too_wide
 }
+
+// ExampleBuildWallLayers builds a 3 m wall of plaster, brick and insulation
+// with a window. Each layer has its own quantities; the window cuts all three.
+func ExampleBuildWallLayers() {
+	edge := [2][2]float64{{0, 0}, {3.00, 0}}
+	window := geometry.Opening{Offset: 1.00, Sill: 0.90, Width: 1.20, Height: 1.20}
+	layers := []float64{0.015, 0.175, 0.10} // plaster, brick, insulation
+	ws, err := geometry.BuildWallLayers(edge, 0, 2.50, layers, geometry.SideLeft, []geometry.Opening{window})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	for k, w := range ws {
+		fmt.Printf("layer %d: measured net %.2f m², net volume %.4f m³\n", k, w.Quantities.MeasuredNet, w.Quantities.NetVolume)
+	}
+	// Output:
+	// layer 0: measured net 6.06 m², net volume 0.0909 m³
+	// layer 1: measured net 6.06 m², net volume 1.0605 m³
+	// layer 2: measured net 6.06 m², net volume 0.6060 m³
+}
