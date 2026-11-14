@@ -1,4 +1,4 @@
-.PHONY: lint test build clean fmt vet help docs docs-serve docs-deps parity parity-report parity-baseline oracle
+.PHONY: lint test build wasm wasm-test clean fmt vet help docs docs-serve docs-deps parity parity-report parity-baseline oracle
 
 # Default target
 .DEFAULT_GOAL := help
@@ -26,6 +26,19 @@ test: ## Run tests with coverage
 build: ## Build the project
 	@echo "Building..."
 	go build ./...
+
+WASM_FLAGS := -trimpath -ldflags="-s -w"
+
+wasm: ## Build the WebAssembly release files into dist/
+	mkdir -p dist
+	CGO_ENABLED=0 GOOS=js GOARCH=wasm go build $(WASM_FLAGS) -o dist/goifc-build.wasm ./cmd/goifc-build
+	CGO_ENABLED=0 GOOS=js GOARCH=wasm go build $(WASM_FLAGS) -o dist/goifc-read.wasm ./cmd/goifc-read
+	install -m 644 "$$(go env GOROOT)/lib/wasm/wasm_exec.js" wasm/goifc.js wasm/goifc-contract.schema.json dist/
+
+wasm-test: wasm ## Test the WebAssembly files: Node tests, the contract suite as wasm, the size gate
+	node --test "wasm/test/*.test.mjs"
+	GOOS=js GOARCH=wasm go test -exec="bash $$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/wasmapi/
+	.github/scripts/wasm-size.sh dist/goifc-build.wasm 1200000 dist/goifc-read.wasm
 
 fmt: ## Format code
 	@echo "Formatting code..."

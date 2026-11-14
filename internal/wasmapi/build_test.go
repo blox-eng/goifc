@@ -223,3 +223,14 @@ func TestBuild_OKMatchesErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestValidID(t *testing.T) {
+	for id, want := range map[string]bool{
+		"w1": true, "A-z_0.9:x": true, strings.Repeat("a", 64): true,
+		"": false, strings.Repeat("a", 65): false, "a/b": false, "a b": false, "é": false, "a\x00": false,
+	} {
+		if got := validID(id); got != want {
+			t.Errorf("validID(%q) = %v, want %v", id, got, want)
+		}
+	}
+}

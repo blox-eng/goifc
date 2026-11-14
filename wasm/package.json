@@ -1,0 +1,6 @@
+{
+  "name": "goifc-wasm-tests",
+  "private": true,
+  "type": "module",
+  "description": "Lets Node load goifc.js as an ES module in the repository tests. Not a release asset."
+}

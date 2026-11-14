@@ -88,6 +88,7 @@ Decided with Martin, one question at a time:
    small default. Rejected: the import tree only; the flat elements
    with every property set (many MB on a real file).
 5. **The read size cap.** Picked: 256 MiB, refused with `too_large`.
+   Changed to 48 MiB on 2026-11-14 after measuring (see "Build notes").
    Rejected: no cap (the tab dies with no code); a caller-set cap (one
    more option before anyone needs it).
 6. **How it gets built.** One sensible way: a pure-Go contract package
@@ -287,7 +288,7 @@ read(ifcBytes, { include: ["nodes", "glb"] })   // the default
 - An unknown name in `include` returns `invalid_input` that names it.
 - A part that is off is absent from the answer.
 - The answer lists the parts it holds: `"parts": ["nodes", "glb"]`.
-- A file over 256 MiB (268,435,456 bytes) returns `too_large` before it
+- A file over 48 MiB (50,331,648 bytes) returns `too_large` before it
   is parsed. `goifc.js` checks the size before it copies the file into
   the worker.
 - The scene's warnings come back as `"warnings": [...]`, never dropped.
@@ -367,9 +368,7 @@ The `wasm` job, which today runs `go build ./...` for `js/wasm`, also:
   on amd64 and pure Go on wasm), the fix goes into `geometry` so both
   agree; the contract never rounds to hide it.
 - measures peak memory while `goifc-read.wasm` reads a synthetic
-  256 MiB IFC under Node. If it does not fit, the plan lowers the cap
-  to the largest size that fits with 2x headroom, and Martin hears the
-  number before the cap changes.
+  IFC at the 48 MiB cap under Node every night, and fails over 2 GiB.
 
 ## Tests
 
@@ -404,7 +403,7 @@ The `wasm` job, which today runs `go build ./...` for `js/wasm`, also:
 - Which existing Go errors wrap `ErrTooLarge` (the list above).
 - If the worker dies, `goifc.js` rejects with `worker_failed` and starts
   a fresh worker for queued requests.
-- The read cap stays 256 MiB unless CI measures that it does not fit;
+- The read cap was 256 MiB, measured to not fit, and is now 48 MiB;
   then Martin hears the number first.
 - Build parity passes the same version to both sides and compares full
   float64; a last-digit difference is fixed in `geometry`.
@@ -435,3 +434,21 @@ The `wasm` job, which today runs `go build ./...` for `js/wasm`, also:
 The first consumer codes against this. Once approved, it gets: the file names and
 where they live (release assets), the `goifc.js` API, the request and
 answer shapes, the element id scheme and the error codes.
+
+## Build notes
+
+- 2026-11-14, Martin: the read cap is 48 MiB, not 256 MiB. Measured in
+  Node, Go 1.25 wasm, `runtime.MemStats.Sys` after one `Read` of a
+  synthetic file of dense walls (about 1 KB each, one property set each):
+  16 MiB → 585 MiB, 32 → 1,159, 48 → 1,669, 64 → 2,295, 96 → 3,070; 128
+  and 256 MiB run out of memory at the 4 GiB wasm32 limit. Memory is about
+  35 times the file. 48 MiB keeps under 2 GiB, for headroom in a tab and
+  on weaker devices. Picked over 96 MiB (about 3.1 GiB, which only fits
+  where a tab can use almost 4 GiB) and over keeping 256 MiB and letting
+  big files fail as `worker_failed`.
+- 2026-11-14: `goifc-build.wasm` was 1,281,483 bytes gzipped, over the
+  1.2 MB gate. The `regexp` package was 127 KB of it; the id check is now
+  written out, and the file is 1,154,220 bytes.
+- 2026-11-14: the whole contract suite, compiled to wasm and run under
+  Node, gives the same bytes as on amd64, floats included. No `geometry`
+  change was needed for parity.

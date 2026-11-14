@@ -10,9 +10,9 @@ import (
 
 // Caps on one request.
 const (
-	maxRequestBytes = 16 << 20  // a build request's JSON
-	maxItems        = 10_000    // walls + rooms + slabs in one build request
-	maxReadBytes    = 256 << 20 // an IFC file given to Read
+	maxRequestBytes = 16 << 20 // a build request's JSON
+	maxItems        = 10_000   // walls + rooms + slabs in one build request
+	maxReadBytes    = 48 << 20 // an IFC file given to Read: about 1.7 GiB of wasm memory, measured
 )
 
 // Error is one refusal in an answer. Code is what a program matches on;

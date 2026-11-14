@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 
 	"github.com/blox-eng/goifc/geometry"
 )
@@ -69,9 +68,9 @@ type built struct {
 }
 
 type wallOut struct {
-	ID         string        `json:"id"`
+	ID         string         `json:"id"`
 	Quantities wallQuantities `json:"quantities"`
-	Measured   faceOut       `json:"measured"`
+	Measured   faceOut        `json:"measured"`
 }
 
 type slabOut struct {
@@ -122,7 +121,21 @@ type previewOut struct {
 	Error  *Error `json:"error,omitempty"`
 }
 
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,64}$`)
+// validID reports whether id matches ^[A-Za-z0-9_.:-]{1,64}$. It is written
+// out because the regexp package adds 127 KB to goifc-build.wasm gzipped.
+func validID(id string) bool {
+	if len(id) == 0 || len(id) > 64 {
+		return false
+	}
+	for _, c := range []byte(id) {
+		switch {
+		case 'A' <= c && c <= 'Z', 'a' <= c && c <= 'z', '0' <= c && c <= '9', c == '_', c == '.', c == ':', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
 
 // Build builds every wall, room and slab in one JSON request. It returns the
 // JSON answer and, when the answer is ok, a GLB with one node per built
@@ -237,7 +250,7 @@ func checkIDs(req buildRequest) []Error {
 	seen := map[string]bool{}
 	for _, id := range ids {
 		switch {
-		case !idPattern.MatchString(id):
+		case !validID(id):
 			errs = append(errs, Error{Code: "invalid_input", Item: id, Message: fmt.Sprintf(
 				"id %q must be 1 to 64 letters, digits or _ . : -", id)})
 		case seen[id]:

@@ -103,8 +103,8 @@ func TestRead_RejectsInclude(t *testing.T) {
 func TestRead_TooLarge(t *testing.T) {
 	answer, glb := Read(testVersion, make([]byte, maxReadBytes+1), nil)
 	a := decodeAnswer(t, answer)
-	if a.OK || glb != nil || len(a.Errors) != 1 || a.Errors[0].Code != "too_large" || !strings.Contains(a.Errors[0].Message, "268,435,456") {
-		t.Errorf("answer %s, want one too_large naming the 268,435,456-byte cap", answer)
+	if a.OK || glb != nil || len(a.Errors) != 1 || a.Errors[0].Code != "too_large" || !strings.Contains(a.Errors[0].Message, "50,331,648") {
+		t.Errorf("answer %s, want one too_large naming the 50,331,648-byte cap", answer)
 	}
 }
 

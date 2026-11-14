@@ -241,6 +241,15 @@ jobs:
           GOOS: js
           GOARCH: wasm
         run: go build ./...
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      # goifc-build.wasm and goifc-read.wasm: build them, hold the build file
+      # under 1.2 MB gzipped, run goifc.js and both files under Node against
+      # the Go goldens, and run the whole contract suite compiled to wasm, so
+      # the browser gives the same bytes as Go.
+      - name: Build and test the wasm files
+        run: make wasm-test
 
   govulncheck:
     name: Vulnerability Scan
