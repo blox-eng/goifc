@@ -857,21 +857,11 @@ type previewSink struct {
 	n   int
 }
 
-func (s *previewSink) WriteString(x string) {
+func (s *previewSink) add(x string) {
 	s.n += len(x)
 	if s.n <= maxPreviewBytes {
 		s.buf.WriteString(x)
 	}
-}
-
-func (s *previewSink) WriteByte(c byte) error {
-	s.WriteString(string(c))
-	return nil
-}
-
-func (s *previewSink) Write(p []byte) (int, error) {
-	s.WriteString(string(p))
-	return len(p), nil
 }
 
 // writePreview writes the document for shapes into s and reports whether it
@@ -889,46 +879,46 @@ func writePreview(buf *previewSink, shapes []previewShape, detail Detail) bool {
 		}
 	}
 	m := 0.02 * math.Max(hi[0]-lo[0], hi[1]-lo[1])
-	fmt.Fprintf(buf, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="%s %s %s %s" data-detail="%s">`+"\n",
-		mm(lo[0]-m), mm(lo[1]-m), mm(hi[0]-lo[0]+2*m), mm(hi[1]-lo[1]+2*m), detail)
-	buf.WriteString(`<g class="goifc-preview">` + "\n")
+	buf.add(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="%s %s %s %s" data-detail="%s">`+"\n",
+		mm(lo[0]-m), mm(lo[1]-m), mm(hi[0]-lo[0]+2*m), mm(hi[1]-lo[1]+2*m), detail))
+	buf.add(`<g class="goifc-preview">` + "\n")
 	for _, s := range shapes {
 		if len(s.loops) == 1 {
-			buf.WriteString(`<polygon class="` + s.class + `" points="`)
+			buf.add(`<polygon class="` + s.class + `" points="`)
 			for i, p := range s.loops[0] {
 				if i > 0 {
-					buf.WriteByte(' ')
+					buf.add(" ")
 				}
 				writePoint(buf, p)
 			}
 		} else {
-			buf.WriteString(`<path class="` + s.class + `" fill-rule="evenodd" d="`)
+			buf.add(`<path class="` + s.class + `" fill-rule="evenodd" d="`)
 			for i, l := range s.loops {
 				if i > 0 {
-					buf.WriteByte(' ')
+					buf.add(" ")
 				}
 				for k, p := range l {
 					if k == 0 {
-						buf.WriteByte('M')
+						buf.add("M")
 					} else {
-						buf.WriteByte('L')
+						buf.add("L")
 					}
 					writePoint(buf, p)
 				}
-				buf.WriteByte('Z')
+				buf.add("Z")
 			}
 		}
-		buf.WriteString("\"/>\n")
+		buf.add("\"/>\n")
 	}
-	buf.WriteString("</g>\n</svg>\n")
+	buf.add("</g>\n</svg>\n")
 	return buf.n <= maxPreviewBytes
 }
 
 func writePoint(buf *previewSink, p v3) {
 	q := previewPoint(p)
-	buf.WriteString(mm(q[0]))
-	buf.WriteByte(' ')
-	buf.WriteString(mm(q[1]))
+	buf.add(mm(q[0]))
+	buf.add(" ")
+	buf.add(mm(q[1]))
 }
 
 // mm writes a length in metres rounded to 1 mm, with no trailing zeros.
