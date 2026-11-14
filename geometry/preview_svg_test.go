@@ -313,6 +313,7 @@ func TestWritePreviewSVG_Refusals(t *testing.T) {
 		{"empty", nil, nil, []string{"nothing to draw"}},
 		{"elements", make([]Wall, maxPreviewElements+1), nil, []string{"100,001", "100,000"}},
 		{"triangles", manyTris, nil, []string{"4,000,001", "4,000,000"}},
+		{"vertices", []Wall{{Element: Element{Verts: make([]float32, 3*(maxPreviewVertices+1))}}}, nil, []string{"4,000,001 vertices", "4,000,000"}},
 		{"NaN vertex", nanVert, room.slabs, []string{"wall 0", "vertex"}},
 		{"NaN normal", nanNormal, room.slabs, []string{"wall 0", "measured face"}},
 		{"NaN width", nanWidth, room.slabs, []string{"wall 0", "opening 0"}},

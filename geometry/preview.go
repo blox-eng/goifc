@@ -25,6 +25,7 @@ const (
 	maxPreviewBytes     = 1 << 20
 	maxPreviewElements  = 100_000
 	maxPreviewTriangles = 4_000_000
+	maxPreviewVertices  = 4_000_000
 	// maxPreviewPairs bounds the shape pairs paintOrder compares by plane.
 	// Past it, the remaining pairs keep centroid order.
 	maxPreviewPairs = 20_000_000
@@ -436,6 +437,16 @@ func checkPreview(walls []Wall, slabs []Slab) error {
 	}
 	if tris > maxPreviewTriangles {
 		return fmt.Errorf("%s triangles, over the %s limit", thousands(tris), thousands(maxPreviewTriangles))
+	}
+	verts := 0
+	for _, w := range walls {
+		verts += len(w.Element.Verts) / 3
+	}
+	for _, s := range slabs {
+		verts += len(s.Element.Verts) / 3
+	}
+	if verts > maxPreviewVertices {
+		return fmt.Errorf("%s vertices, over the %s limit", thousands(verts), thousands(maxPreviewVertices))
 	}
 	for i, w := range walls {
 		f := w.Measured
