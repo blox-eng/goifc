@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/blox-eng/goifc/geometry"
 )
@@ -230,6 +231,9 @@ func decodeRequest(request []byte) (buildRequest, error) {
 	}
 	if _, err := dec.Token(); err != io.EOF {
 		return req, errors.New("the request has more data after the request object")
+	}
+	if err := checkKeys(request, reflect.TypeOf(req), ""); err != nil {
+		return req, fmt.Errorf("the request is not valid: %w", err)
 	}
 	return req, nil
 }
