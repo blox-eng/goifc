@@ -44,6 +44,7 @@ compatibility policy ·
 - **Builders** — walls, the walls of a room and slabs from numbers, with no
   IFC: a mesh, exact quantities, and a refusal that names the misplaced
   opening and why. Each can be built in layers, with quantities per layer.
+  `WritePreviewSVG` draws them as a small isometric SVG that your CSS colours.
 - **Untrusted files** — tessellation, extraction and storey plans are bounded
   by the file's size, and a budget that runs out says so.
 

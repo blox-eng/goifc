@@ -3,6 +3,7 @@ package geometry_test
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/blox-eng/goifc/geometry"
 )
@@ -61,4 +62,26 @@ func ExampleBuildWallLayers() {
 	// layer 0: measured net 6.06 m², net volume 0.0909 m³
 	// layer 1: measured net 6.06 m², net volume 1.0605 m³
 	// layer 2: measured net 6.06 m², net volume 0.6060 m³
+}
+
+// ExampleWritePreviewSVG draws a 4 × 3 m room as a small isometric SVG.
+// Style it with CSS on the classes top, left, right and opening.
+func ExampleWritePreviewSVG() {
+	outline := [][2]float64{{0, 0}, {4, 0}, {4, 3}, {0, 3}}
+	walls, err := geometry.BuildRoomWalls(outline, 0, 2.70, 0.20, geometry.SideLeft, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var svg strings.Builder
+	detail, err := geometry.WritePreviewSVG(&svg, walls, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(detail)
+	fmt.Println(strings.SplitN(svg.String(), "\n", 2)[0])
+	// Output:
+	// exact
+	// <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2.514 -5.336 5.736 5.609" data-detail="exact">
 }
