@@ -36,6 +36,9 @@ export async function createReader({ base } = {}) {
       if (size > MAX_READ_BYTES) {
         throw failure("too_large", `the file is ${size.toLocaleString("en-US")} bytes, over the 50,331,648-byte cap`);
       }
+      if (include != null && !(Array.isArray(include) && include.every((p) => typeof p === "string"))) {
+        throw failure("invalid_input", "include must be an array of part names, or left out for nodes and glb");
+      }
       const bytes = await copy(file);
       return w.call({ bytes, include: include ?? null }, [bytes]);
     },
@@ -58,25 +61,32 @@ async function copy(file) {
 }
 
 // start returns a queue that sends one request at a time to a worker and
-// replaces the worker if it dies.
+// replaces the worker if it dies. At most one worker runs or starts at a
+// time: every caller waits on the same starting promise.
 async function start(kind, base) {
-  const baseURL = new URL(base ?? "./", globalThis.location?.href ?? import.meta.url).href;
+  // A base the caller gives resolves against the page; the default is the
+  // folder goifc.js was loaded from.
+  const baseURL = (base === undefined ? new URL("./", import.meta.url) : new URL(base, globalThis.location?.href ?? import.meta.url)).href;
   const queue = [];
   let worker = null;
+  let starting = null;
   let busy = false;
   let closed = false;
 
   const spawn = () =>
-    new Promise((resolve, reject) => {
+    (starting ??= new Promise((resolve, reject) => {
       const url = new URL(import.meta.url);
       url.searchParams.set(WORKER_PARAM, kind);
       url.searchParams.set("base", baseURL);
       const w = new Worker(url, { type: "module" });
       let ready = false;
       const died = (message) => {
-        if (w !== worker && ready) return;
         w.terminate();
-        if (!ready) return reject(failure("worker_failed", message));
+        if (!ready) {
+          starting = null;
+          return reject(failure("worker_failed", message));
+        }
+        if (w !== worker) return;
         worker = null;
         const job = busy ? queue.shift() : null;
         busy = false;
@@ -87,16 +97,19 @@ async function start(kind, base) {
       w.addEventListener("message", ({ data }) => {
         if (data.type === "ready") {
           ready = true;
-          worker = w;
+          starting = null;
+          if (closed) w.terminate();
+          else worker = w;
           return resolve();
         }
         if (data.type === "failed" || data.type === "exit") return died(data.message);
+        if (w !== worker) return;
         const job = queue.shift();
         busy = false;
         job.resolve({ answer: JSON.parse(data.answer), glb: data.glb });
         pump();
       });
-    });
+    }));
 
   const pump = () => {
     if (busy || closed || queue.length === 0) return;
@@ -106,9 +119,17 @@ async function start(kind, base) {
       });
       return;
     }
+    const job = queue[0];
     busy = true;
-    const { message, transfer } = queue[0];
-    worker.postMessage(message, transfer);
+    try {
+      worker.postMessage(job.message, job.transfer);
+    } catch (e) {
+      // The worker never saw this request: refuse it and go on.
+      queue.shift();
+      busy = false;
+      job.reject(e);
+      pump();
+    }
   };
 
   await spawn();

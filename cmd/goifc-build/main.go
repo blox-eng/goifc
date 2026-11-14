@@ -15,11 +15,13 @@ import (
 func main() {
 	version := jsbridge.Version()
 	js.Global().Set("goifcBuild", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		var request []byte
-		if len(args) > 0 && args[0].Type() == js.TypeString {
-			request = []byte(args[0].String())
-		}
-		return jsbridge.Result(wasmapi.Build(version, request))
+		return jsbridge.Guard(version, func() any {
+			var request []byte
+			if len(args) > 0 && args[0].Type() == js.TypeString {
+				request = []byte(args[0].String())
+			}
+			return jsbridge.Result(wasmapi.Build(version, request))
+		})
 	}))
 	select {}
 }

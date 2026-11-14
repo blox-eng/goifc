@@ -16,19 +16,17 @@ import (
 func main() {
 	version := jsbridge.Version()
 	js.Global().Set("goifcRead", js.FuncOf(func(_ js.Value, args []js.Value) any {
-		var src []byte
-		var include []string
-		if len(args) > 0 {
-			src = jsbridge.Bytes(args[0])
-		}
-		if len(args) > 1 && args[1].Type() == js.TypeObject {
-			n := args[1].Get("length").Int()
-			include = make([]string, n)
-			for i := range n {
-				include[i] = args[1].Index(i).String()
+		return jsbridge.Guard(version, func() any {
+			var src []byte
+			var include []string
+			if len(args) > 0 {
+				src = jsbridge.Bytes(args[0])
 			}
-		}
-		return jsbridge.Result(wasmapi.Read(version, src, include))
+			if len(args) > 1 {
+				include = jsbridge.Include(args[1])
+			}
+			return jsbridge.Result(wasmapi.Read(version, src, include))
+		})
 	}))
 	select {}
 }

@@ -32,6 +32,12 @@ type failed struct {
 	Errors       []Error `json:"errors"`
 }
 
+// Failure is a refused answer with one error, for a caller outside this
+// package that must answer without calling Build or Read.
+func Failure(version, code, message string) []byte {
+	return failAnswer(version, []Error{{Code: code, Message: message}})
+}
+
 func failAnswer(version string, errs []Error) []byte {
 	return mustJSON(failed{GoifcVersion: version, Errors: errs})
 }

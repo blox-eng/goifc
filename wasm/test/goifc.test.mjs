@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { CRASH_MARKER } from "./shims.mjs";
+import { CRASH_MARKER, UNCLONABLE_MARKER, workerCount } from "./shims.mjs";
 import { createBuilder, createReader } from "../goifc.js";
 
 const root = new URL("../../", import.meta.url);
@@ -100,5 +100,76 @@ test("every answer names the version it was built from", async () => {
     assert.match(answer.goifcVersion, /^(v\d+\.\d+\.\d+.*|\(devel\))$/);
   } finally {
     builder.close();
+  }
+});
+
+const slab = (id, extra = {}) => ({ slabs: [{ id, outline: [[0, 0], [1, 0], [1, 1]], z: 0, thickness: 0.2, ...extra }] });
+const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test("read refuses an include that is not an array of part names", { timeout: 20000 }, async () => {
+  const reader = await createReader({ base: dist.href });
+  try {
+    const bytes = new Uint8Array(read(new URL("testdata/two_storey_spanning.ifc", root)));
+    for (const include of ["psets", {}, new Set(["nodes"]), [() => 1], ["nodes", 1]]) {
+      await assert.rejects(reader.read(bytes, { include }), (e) => e.code === "invalid_input", String(include));
+    }
+    const { answer } = await reader.read(bytes, { include: ["nodes"] });
+    assert.deepEqual(answer.parts, ["nodes"]);
+  } finally {
+    reader.close();
+  }
+});
+
+test("a request that cannot be sent rejects, and the next one works", { timeout: 20000 }, async () => {
+  const builder = await createBuilder({ base: dist.href });
+  try {
+    await assert.rejects(builder.build(slab("x", { note: UNCLONABLE_MARKER })), (e) => e.name === "DataCloneError");
+    const { answer } = await builder.build(slab("s"));
+    assert.equal(answer.ok, true);
+  } finally {
+    builder.close();
+  }
+});
+
+test("a retry after a dead worker starts one worker, not two", { timeout: 20000 }, async () => {
+  const before = { ...workerCount };
+  const builder = await createBuilder({ base: dist.href });
+  const crash = builder.build(slab("x", { note: CRASH_MARKER }));
+  const queued = builder.build(slab("q"));
+  const retried = crash.catch(() => builder.build(slab("r")));
+  assert.equal((await queued).answer.ok, true);
+  assert.equal((await retried).answer.ok, true);
+  assert.equal(workerCount.started - before.started, 2, "the first worker and one replacement");
+  builder.close();
+  await settle(200);
+  assert.equal(workerCount.terminated - before.terminated, workerCount.started - before.started, "every worker terminated");
+});
+
+test("close() while a worker starts terminates it", { timeout: 20000 }, async () => {
+  const before = { ...workerCount };
+  const builder = await createBuilder({ base: dist.href });
+  const crash = builder.build(slab("x", { note: CRASH_MARKER }));
+  const queued = builder.build(slab("q"));
+  await assert.rejects(crash);
+  builder.close();
+  await assert.rejects(queued, (e) => e.code === "worker_failed");
+  await settle(1000);
+  assert.equal(workerCount.terminated - before.terminated, workerCount.started - before.started, "every worker terminated");
+});
+
+test("base defaults to the folder of goifc.js, not the page", { timeout: 20000 }, async () => {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, "location");
+  globalThis.location = { href: "file:///nowhere/app/page.html" };
+  try {
+    const { createBuilder: create } = await import(new URL("goifc.js", dist).href);
+    const builder = await create();
+    try {
+      assert.equal((await builder.build(slab("s"))).answer.ok, true);
+    } finally {
+      builder.close();
+    }
+  } finally {
+    if (saved) Object.defineProperty(globalThis, "location", saved);
+    else Reflect.deleteProperty(globalThis, "location");
   }
 });

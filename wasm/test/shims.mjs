@@ -7,6 +7,13 @@ import { Worker as NodeWorker } from "node:worker_threads";
 // CRASH_MARKER kills the thread, so a test can see a worker die mid-request.
 export const CRASH_MARKER = "__goifc_test_crash__";
 
+// A request whose text holds UNCLONABLE_MARKER makes postMessage throw, as
+// a browser does for a value it cannot clone.
+export const UNCLONABLE_MARKER = "__goifc_test_unclonable__";
+
+// How many workers were started and terminated, so a test can see a leak.
+export const workerCount = { started: 0, terminated: 0 };
+
 const bootstrap = `
 const { parentPort, workerData } = require("node:worker_threads");
 const fs = require("node:fs");
@@ -32,8 +39,10 @@ import(workerData.url);
 class Worker extends EventTarget {
   #thread;
   #terminated = false;
+  #stopped = false;
   constructor(url) {
     super();
+    workerCount.started++;
     this.#thread = new NodeWorker(bootstrap, { eval: true, workerData: { url: String(url) } });
     this.#thread.on("message", (data) => this.dispatchEvent(new MessageEvent("message", { data })));
     this.#thread.on("error", (err) => this.#fail(err.message));
@@ -47,9 +56,14 @@ class Worker extends EventTarget {
     this.dispatchEvent(e);
   }
   postMessage(message, transfer) {
+    if (typeof message?.request === "string" && message.request.includes(UNCLONABLE_MARKER)) {
+      throw new DOMException("the message could not be cloned", "DataCloneError");
+    }
     this.#thread.postMessage(message, transfer);
   }
   terminate() {
+    if (!this.#stopped) workerCount.terminated++;
+    this.#stopped = true;
     this.#terminated = true;
     this.#thread.terminate();
   }

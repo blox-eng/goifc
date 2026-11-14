@@ -37,7 +37,7 @@ wasm: ## Build the WebAssembly release files into dist/
 
 wasm-test: wasm ## Test the WebAssembly files: Node tests, the contract suite as wasm, the size gate
 	node --test "wasm/test/*.test.mjs"
-	GOOS=js GOARCH=wasm go test -exec="bash $$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/wasmapi/
+	GOOS=js GOARCH=wasm go test -exec="bash $$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/wasmapi/ ./cmd/internal/jsbridge/
 	.github/scripts/wasm-size.sh dist/goifc-build.wasm 1200000 dist/goifc-read.wasm
 
 fmt: ## Format code
