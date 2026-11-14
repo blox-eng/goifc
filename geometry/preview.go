@@ -614,20 +614,20 @@ func flatten(s previewShape) previewFlat {
 		f.edges += len(pl)
 	}
 	f.vertices = f.edges
-	// A loop inside an odd number of others is a hole. The region lies to
-	// the left of a counter-clockwise outer loop, and to the right of a
-	// counter-clockwise hole.
-	for i, l := range f.loops {
+	// Loops come from the boundary edges of triangles that face the viewer,
+	// so the region lies on the same side of every loop edge: the side the
+	// largest loop (an outline, never a hole) turns to.
+	largest := 0.0
+	for _, l := range f.loops {
+		if a := signedArea(l); math.Abs(a) > math.Abs(largest) {
+			largest = a
+		}
+	}
+	left := largest > 0
+	for _, l := range f.loops {
 		if len(l) < 3 {
 			continue
 		}
-		depth := 0
-		for j, m := range f.loops {
-			if j != i && pointInLoop(l[0], m) {
-				depth++
-			}
-		}
-		left := (signedArea(l) > 0) != (depth%2 == 1)
 		for k, v := range l {
 			a, b := l[(k+len(l)-1)%len(l)], l[(k+1)%len(l)]
 			n1, n2 := leftNormal(a, v), leftNormal(v, b)

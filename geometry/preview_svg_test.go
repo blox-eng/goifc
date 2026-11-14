@@ -675,3 +675,22 @@ func TestWallOpenings_ManyOpeningsStayFast(t *testing.T) {
 		t.Errorf("wallOpenings took %v", d)
 	}
 }
+
+func TestFlatten_ManyHolesStayFast(t *testing.T) {
+	// One face with 40,000 square holes: telling holes from outlines must not
+	// compare every loop with every other.
+	outer := []v3{{0, 0, 0}, {0, 400, 0}, {400, 400, 0}, {400, 0, 0}}
+	s := previewShape{class: "top", normal: v3{0, 0, 1}, loops: [][]v3{outer}}
+	for i := range 40_000 {
+		x, y := float64(i%200)*2+0.5, float64(i/200)*2+0.5
+		s.loops = append(s.loops, []v3{{x, y, 0}, {x + 1, y, 0}, {x + 1, y + 1, 0}, {x, y + 1, 0}})
+	}
+	start := time.Now()
+	f := flatten(s)
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("flatten took %v", d)
+	}
+	if len(f.inside) != 4+4*40_000 {
+		t.Errorf("%d inside points, want one per vertex", len(f.inside))
+	}
+}
