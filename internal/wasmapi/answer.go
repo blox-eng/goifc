@@ -12,6 +12,7 @@ import (
 const (
 	maxRequestBytes = 16 << 20 // a build request's JSON
 	maxItems        = 10_000   // walls + rooms + slabs in one build request
+	maxElements     = 100_000  // elements one build request builds, layers and room walls counted
 	maxReadBytes    = 48 << 20 // an IFC file given to Read: about 1.7 GiB of wasm memory, measured
 )
 

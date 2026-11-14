@@ -26,6 +26,7 @@ export async function createBuilder({ base } = {}) {
 /** Starts a worker with goifc-read.wasm. */
 export async function createReader({ base } = {}) {
   const w = await start("read", base);
+  let order = Promise.resolve();
   return {
     /** @returns {Promise<{answer: object, glb: ArrayBuffer | null}>} */
     read: async (file, { include } = {}) => {
@@ -39,12 +40,17 @@ export async function createReader({ base } = {}) {
       if (include != null && !(Array.isArray(include) && include.every((p) => typeof p === "string"))) {
         throw failure("invalid_input", "include must be an array of part names, or left out for nodes and glb");
       }
-      const bytes = await copy(file);
-      return w.call({ bytes, include: include ?? null }, [bytes]);
+      // Take a place in line before the copy, which is async for a Blob,
+      // so answers come back in the order read was called.
+      const sent = order.then(() => copy(file)).then((bytes) => ({ answer: w.call({ bytes, include: include ?? null }, [bytes]) }));
+      order = sent.then(noop, noop);
+      return (await sent).answer;
     },
     close: w.close,
   };
 }
+
+const noop = () => {};
 
 function failure(code, message) {
   const e = new Error(message);
@@ -70,6 +76,7 @@ async function start(kind, base) {
   const queue = [];
   let worker = null;
   let starting = null;
+  let loading = null; // the worker that starting waits on
   let busy = false;
   let closed = false;
 
@@ -79,11 +86,13 @@ async function start(kind, base) {
       url.searchParams.set(WORKER_PARAM, kind);
       url.searchParams.set("base", baseURL);
       const w = new Worker(url, { type: "module" });
+      loading = w;
       let ready = false;
       const died = (message) => {
         w.terminate();
         if (!ready) {
           starting = null;
+          loading = null;
           return reject(failure("worker_failed", message));
         }
         if (w !== worker) return;
@@ -98,6 +107,7 @@ async function start(kind, base) {
         if (data.type === "ready") {
           ready = true;
           starting = null;
+          loading = null;
           if (closed) w.terminate();
           else worker = w;
           return resolve();
@@ -143,7 +153,9 @@ async function start(kind, base) {
     close: () => {
       closed = true;
       worker?.terminate();
+      loading?.terminate();
       worker = null;
+      loading = null;
       for (const job of queue.splice(0)) job.reject(failure("worker_failed", "the worker was closed"));
     },
   };

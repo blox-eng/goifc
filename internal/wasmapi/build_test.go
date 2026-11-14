@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -170,6 +171,10 @@ func TestBuild_RejectsBadRequests(t *testing.T) {
 		{"missing height", wall(`"id": "w1", "edge": [[0, 0], [4, 0]], "base": 0, "side": "left", "thickness": 0.2`), "w1", "height"},
 		{"edge with three points", wall(`"id": "w1", "edge": [[0, 0], [4, 0], [5, 0]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2`), "w1", "edge"},
 		{"point with three numbers", wall(`"id": "w1", "edge": [[0, 0, 1], [4, 0]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2`), "w1", "edge"},
+		{"null in an edge point", wall(`"id": "w1", "edge": [[null, 0], [4, 0]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2`), "w1", "edge point 0"},
+		{"null in a room outline", `{"rooms": [{"id": "r1", "outline": [[0, 0], [4, 0], [4, null]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2}]}`, "r1", "outline point 2"},
+		{"null in a slab outline", `{"slabs": [{"id": "s1", "outline": [[0, 0], [1, 0], [null, 1]], "z": 0, "thickness": 0.2}]}`, "s1", "outline point 2"},
+		{"null layer", wall(`"id": "w1", ` + ok + `, "layers": [0.1, null]`), "w1", "layers[1]"},
 		{"opening without width", wall(`"id": "w1", ` + ok + `, "thickness": 0.2, "openings": [{"offset": 1, "sill": 0, "height": 2}]`), "w1", "width"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -237,5 +242,37 @@ func TestValidID(t *testing.T) {
 		if got := validID(id); got != want {
 			t.Errorf("validID(%q) = %v, want %v", id, got, want)
 		}
+	}
+}
+
+func TestBuild_ElementCap(t *testing.T) {
+	var outline, layers strings.Builder
+	for i := range 64 {
+		if i > 0 {
+			outline.WriteByte(',')
+		}
+		a := 2 * math.Pi * float64(i) / 64
+		fmt.Fprintf(&outline, "[%.6f, %.6f]", 10*math.Cos(a), 10*math.Sin(a))
+	}
+	for i := range 16 {
+		if i > 0 {
+			layers.WriteByte(',')
+		}
+		layers.WriteString("0.01")
+	}
+	var sb strings.Builder
+	sb.WriteString(`{"rooms": [`)
+	for i := range 98 { // 98 rooms × 64 walls × 16 layers = 100,352 elements
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		fmt.Fprintf(&sb, `{"id": "r%d", "outline": [%s], "base": 0, "height": 2.7, "side": "left", "layers": [%s]}`, i, outline.String(), layers.String())
+	}
+	sb.WriteString(`]}`)
+	answer, glb := Build(testVersion, []byte(sb.String()))
+	a := decodeAnswer(t, answer)
+	if a.OK || glb != nil || len(a.Errors) != 1 || a.Errors[0].Code != "too_large" ||
+		!strings.Contains(a.Errors[0].Message, "100,352") || !strings.Contains(a.Errors[0].Message, "100,000") {
+		t.Errorf("answer %.300s, want one too_large naming 100,352 elements and the 100,000 limit", answer)
 	}
 }

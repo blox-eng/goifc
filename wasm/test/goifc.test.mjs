@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { CRASH_MARKER, UNCLONABLE_MARKER, workerCount } from "./shims.mjs";
+import { CRASH_MARKER, UNCLONABLE_MARKER, stall, workerCount } from "./shims.mjs";
 import { createBuilder, createReader } from "../goifc.js";
 
 const root = new URL("../../", import.meta.url);
@@ -172,4 +172,31 @@ test("base defaults to the folder of goifc.js, not the page", { timeout: 20000 }
     if (saved) Object.defineProperty(globalThis, "location", saved);
     else Reflect.deleteProperty(globalThis, "location");
   }
+});
+
+test("reads resolve in call order when a Blob comes first", { timeout: 20000 }, async () => {
+  const reader = await createReader({ base: dist.href });
+  try {
+    const bytes = new Uint8Array(read(new URL("testdata/two_storey_spanning.ifc", root)));
+    const done = [];
+    await Promise.all([
+      reader.read(new Blob([bytes]), { include: ["nodes"] }).then(({ answer }) => done.push(answer.parts.join())),
+      reader.read(bytes, { include: ["glb"] }).then(({ answer }) => done.push(answer.parts.join())),
+    ]);
+    assert.deepEqual(done, ["nodes", "glb"]);
+  } finally {
+    reader.close();
+  }
+});
+
+test("close() terminates a replacement worker that never loads", { timeout: 20000 }, async () => {
+  const before = { ...workerCount };
+  const builder = await createBuilder({ base: dist.href });
+  await assert.rejects(builder.build(slab("x", { note: CRASH_MARKER })));
+  stall.next = true;
+  const queued = builder.build(slab("q"));
+  builder.close();
+  await assert.rejects(queued, (e) => e.code === "worker_failed");
+  assert.equal(workerCount.started - before.started, 2, "the first worker and the stalled replacement");
+  assert.equal(workerCount.terminated - before.terminated, 2, "close() terminated the stalled worker");
 });

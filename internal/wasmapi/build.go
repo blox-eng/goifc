@@ -23,32 +23,32 @@ type buildRequest struct {
 
 type wallItem struct {
 	ID        string         `json:"id"`
-	Edge      [][]float64    `json:"edge"`
+	Edge      [][]*float64   `json:"edge"`
 	Base      *float64       `json:"base"`
 	Height    *float64       `json:"height"`
 	Thickness *float64       `json:"thickness"`
-	Layers    []float64      `json:"layers"`
+	Layers    []*float64     `json:"layers"`
 	Side      *string        `json:"side"`
 	Openings  []openingInput `json:"openings"`
 }
 
 type roomItem struct {
 	ID        string           `json:"id"`
-	Outline   [][]float64      `json:"outline"`
+	Outline   [][]*float64     `json:"outline"`
 	Base      *float64         `json:"base"`
 	Height    *float64         `json:"height"`
 	Thickness *float64         `json:"thickness"`
-	Layers    []float64        `json:"layers"`
+	Layers    []*float64       `json:"layers"`
 	Side      *string          `json:"side"`
 	Openings  [][]openingInput `json:"openings"`
 }
 
 type slabItem struct {
-	ID        string      `json:"id"`
-	Outline   [][]float64 `json:"outline"`
-	Z         *float64    `json:"z"`
-	Thickness *float64    `json:"thickness"`
-	Layers    []float64   `json:"layers"`
+	ID        string       `json:"id"`
+	Outline   [][]*float64 `json:"outline"`
+	Z         *float64     `json:"z"`
+	Thickness *float64     `json:"thickness"`
+	Layers    []*float64   `json:"layers"`
 }
 
 type openingInput struct {
@@ -158,6 +158,10 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	if errs := checkIDs(req); errs != nil {
 		return failAnswer(version, errs), nil
 	}
+	if n := countElements(req); n > maxElements {
+		return failAnswer(version, []Error{{Code: "too_large", Message: fmt.Sprintf(
+			"the request builds %s elements, over the %s limit", thousands(n), thousands(maxElements))}}), nil
+	}
 
 	var (
 		errs  []Error
@@ -238,6 +242,23 @@ func decodeRequest(request []byte) (buildRequest, error) {
 	return req, nil
 }
 
+// countElements counts the elements a request builds before any is built:
+// a room builds one wall per outline point, and each layer is an element.
+func countElements(req buildRequest) int {
+	each := func(layers []*float64) int { return max(1, len(layers)) }
+	n := 0
+	for _, it := range req.Walls {
+		n += each(it.Layers)
+	}
+	for _, it := range req.Rooms {
+		n += len(it.Outline) * each(it.Layers)
+	}
+	for _, it := range req.Slabs {
+		n += each(it.Layers)
+	}
+	return n
+}
+
 // checkIDs refuses an id that breaks the pattern or is used twice.
 func checkIDs(req buildRequest) []Error {
 	var ids []string
@@ -291,7 +312,11 @@ func buildWall(it wallItem, add func(string, geometry.Wall)) error {
 		}
 		add(it.ID, w)
 	case it.Thickness == nil && it.Layers != nil:
-		ws, err := geometry.BuildWallLayers(edge, base, height, it.Layers, side, ops)
+		layers, err := numbers("layers", it.Layers)
+		if err != nil {
+			return err
+		}
+		ws, err := geometry.BuildWallLayers(edge, base, height, layers, side, ops)
 		if err != nil {
 			return err
 		}
@@ -332,7 +357,11 @@ func buildRoom(it roomItem, add func(string, geometry.Wall)) error {
 			add(fmt.Sprintf("%s/%d", it.ID, i), w)
 		}
 	case it.Thickness == nil && it.Layers != nil:
-		ws, err := geometry.BuildRoomWallLayers(outline, base, height, it.Layers, side, ops)
+		layers, err := numbers("layers", it.Layers)
+		if err != nil {
+			return err
+		}
+		ws, err := geometry.BuildRoomWallLayers(outline, base, height, layers, side, ops)
 		if err != nil {
 			return err
 		}
@@ -363,7 +392,11 @@ func buildSlab(it slabItem, add func(string, geometry.Slab)) error {
 		}
 		add(it.ID, s)
 	case it.Thickness == nil && it.Layers != nil:
-		ss, err := geometry.BuildSlabLayers(outline, *it.Z, it.Layers)
+		layers, err := numbers("layers", it.Layers)
+		if err != nil {
+			return err
+		}
+		ss, err := geometry.BuildSlabLayers(outline, *it.Z, layers)
 		if err != nil {
 			return err
 		}
@@ -394,7 +427,7 @@ func wallCommon(base, height *float64, side *string) (float64, float64, geometry
 	return *base, *height, s, nil
 }
 
-func points(name string, in [][]float64) ([][2]float64, error) {
+func points(name string, in [][]*float64) ([][2]float64, error) {
 	if in == nil {
 		return nil, fmt.Errorf("%s is missing", name)
 	}
@@ -403,7 +436,22 @@ func points(name string, in [][]float64) ([][2]float64, error) {
 		if len(p) != 2 {
 			return nil, fmt.Errorf("%s point %d has %d numbers, want 2", name, i, len(p))
 		}
-		out[i] = [2]float64{p[0], p[1]}
+		if p[0] == nil || p[1] == nil {
+			return nil, fmt.Errorf("%s point %d has a null, want 2 numbers", name, i)
+		}
+		out[i] = [2]float64{*p[0], *p[1]}
+	}
+	return out, nil
+}
+
+// numbers refuses a null where a list wants a number, so it never reads as 0.
+func numbers(name string, in []*float64) ([]float64, error) {
+	out := make([]float64, len(in))
+	for i, v := range in {
+		if v == nil {
+			return nil, fmt.Errorf("%s[%d] is null, want a number", name, i)
+		}
+		out[i] = *v
 	}
 	return out, nil
 }

@@ -221,6 +221,19 @@ jobs:
           ref: refs/tags/${{ steps.tag.outputs.tag }}
           fetch-depth: 1
           persist-credentials: false
+      # The provenance names the commit this run started from (github.sha),
+      # so the tag must point there. A retry runs from the tag itself:
+      # gh workflow run release.yml --ref v1.2.3 -f tag=v1.2.3
+      - name: Check the tag is the commit this run attests
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          tag_sha="$(git rev-parse HEAD)"
+          if [[ "$tag_sha" != "$RUN_SHA" ]]; then
+            echo "::error::${TAG} is ${tag_sha}, but this run is from ${RUN_SHA}, so its provenance would name the wrong commit. Run it from the tag: gh workflow run release.yml --ref ${TAG} -f tag=${TAG}"
+            exit 1
+          fi
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod

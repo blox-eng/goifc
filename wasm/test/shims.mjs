@@ -11,6 +11,9 @@ export const CRASH_MARKER = "__goifc_test_crash__";
 // a browser does for a value it cannot clone.
 export const UNCLONABLE_MARKER = "__goifc_test_unclonable__";
 
+// Set stall.next to make the next worker never load, as a hung fetch does.
+export const stall = { next: false };
+
 // How many workers were started and terminated, so a test can see a leak.
 export const workerCount = { started: 0, terminated: 0 };
 
@@ -33,7 +36,7 @@ globalThis.fetch = async (url) => {
   if (!u.startsWith("file:")) return realFetch(url);
   return new Response(fs.readFileSync(fileURLToPath(u)), { headers: { "content-type": "application/wasm" } });
 };
-import(workerData.url);
+if (!workerData.stall) import(workerData.url);
 `;
 
 class Worker extends EventTarget {
@@ -43,7 +46,9 @@ class Worker extends EventTarget {
   constructor(url) {
     super();
     workerCount.started++;
-    this.#thread = new NodeWorker(bootstrap, { eval: true, workerData: { url: String(url) } });
+    const stalled = stall.next;
+    stall.next = false;
+    this.#thread = new NodeWorker(bootstrap, { eval: true, workerData: { url: String(url), stall: stalled } });
     this.#thread.on("message", (data) => this.dispatchEvent(new MessageEvent("message", { data })));
     this.#thread.on("error", (err) => this.#fail(err.message));
     this.#thread.on("exit", (code) => this.#fail(`the worker thread exited with code ${code}`));

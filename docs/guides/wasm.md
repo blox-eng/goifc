@@ -27,16 +27,22 @@ Every [release](https://github.com/blox-eng/goifc/releases) has six files:
 | `goifc-contract.schema.json` | The request and answers as JSON Schema |
 | `SHA256SUMS` | Checksums of the five files above |
 
-Check them before you serve them:
+Check them before you serve them. First prove `SHA256SUMS` came from the
+release workflow, run on the tag's commit; then check the other five files
+against it:
 
 ```sh
+tag=v0.19.0
+gh attestation verify SHA256SUMS --repo blox-eng/goifc \
+  --signer-workflow blox-eng/goifc/.github/workflows/release.yml \
+  --source-digest "$(gh api "repos/blox-eng/goifc/commits/$tag" --jq .sha)"
 sha256sum -c SHA256SUMS
-gh attestation verify goifc-build.wasm --repo blox-eng/goifc
 ```
 
-The second command proves the release workflow built the file from the
-tag. Keep the six files in one folder, and serve `.wasm` as
-`Content-Type: application/wasm`.
+Checking `SHA256SUMS` alone proves nothing: anyone who changes a file can
+write new sums. Each of the six files has its own attestation too, so the
+same `gh attestation verify` works on any one of them. Keep the six files
+in one folder, and serve `.wasm` as `Content-Type: application/wasm`.
 
 ## Build walls and slabs
 
@@ -132,7 +138,7 @@ await reader.read(file, { include: ["nodes", "glb", "psets", "storeyPlans", "typ
 |---|---|
 | `nodes` | The project, site, storeys and elements, parents first. Each has its class, name, quantities and where they came from, net area, material, type and bounding box. `parentIndex` points at an earlier node, `null` for the root. |
 | `glb` | The meshes. Each node is named by the element's `GlobalId`. |
-| `psets` | Every property set, by `GlobalId`. |
+| `psets` | Each element's property sets, by the element's `GlobalId`. Storeys and other spatial nodes are not included. |
 | `storeyPlans` | Each storey's floor plan outlines. |
 | `typeLayers` | The layer build-up of each type, by type `GlobalId`. |
 
@@ -172,14 +178,21 @@ a person.
 | `nothing_to_draw` | The preview had no elements. Add one, or leave `preview` out. |
 | `worker_failed` | From `goifc.js` only: the worker died, for example out of memory. The next request starts a fresh worker. |
 
-`goifc.js` rejects its Promise with an `Error` whose `code` is
-`worker_failed`, or `too_large` for a file over the read limit. Every
-other refusal is an answer with `"ok": false`.
+`goifc.js` rejects its Promise, without asking the worker, with an `Error`
+whose `code` is:
+
+- `worker_failed` when the worker died or was closed;
+- `too_large` for a file over the read limit;
+- `invalid_input` when `read` gets something that is not a file, or an
+  `include` that is not an array of part names.
+
+Every other refusal is an answer with `"ok": false`.
 
 ## Limits
 
-- A build request: 16 MiB of JSON and 10,000 items. Each item keeps the Go
-  builders' limits.
+- A build request: 16 MiB of JSON, 10,000 items and 100,000 elements
+  (each layer and each room wall counts). Each item keeps the Go builders'
+  limits.
 - An IFC file: 48 MiB. Reading takes about 35 times the file's size in
   memory, and a browser tab gives WebAssembly at most 4 GiB. Read bigger
   files with the Go library on a server.
