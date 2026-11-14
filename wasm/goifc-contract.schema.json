@@ -1,0 +1,942 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/blox-eng/goifc/wasm/goifc-contract.schema.json",
+  "title": "goifc WebAssembly contract",
+  "description": "Requests and answers of goifc-build.wasm and goifc-read.wasm. Use #/$defs/buildRequest, #/$defs/buildAnswer and #/$defs/readAnswer.",
+  "$defs": {
+    "point": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "enum": [
+            "too_wide",
+            "overlaps",
+            "above_wall",
+            "in_corner",
+            "layer_sliver",
+            "invalid_input",
+            "invalid_ifc",
+            "too_large",
+            "nothing_to_draw"
+          ]
+        },
+        "item": {
+          "type": "string"
+        },
+        "wall": {
+          "type": "integer"
+        },
+        "opening": {
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "failed": {
+      "type": "object",
+      "properties": {
+        "goifcVersion": {
+          "type": "string"
+        },
+        "ok": {
+          "const": false
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/error"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "goifcVersion",
+        "ok",
+        "errors"
+      ]
+    },
+    "buildRequest": {
+      "type": "object",
+      "properties": {
+        "walls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+              },
+              "edge": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/point"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "base": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "thickness": {
+                "type": "number"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "side": {
+                "enum": [
+                  "left",
+                  "right"
+                ]
+              },
+              "openings": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "offset": {
+                      "type": "number"
+                    },
+                    "sill": {
+                      "type": "number"
+                    },
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    },
+                    "depth": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "offset",
+                    "sill",
+                    "width",
+                    "height"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "edge",
+              "base",
+              "height",
+              "side"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "thickness"
+                ]
+              },
+              {
+                "required": [
+                  "layers"
+                ]
+              }
+            ]
+          }
+        },
+        "rooms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+              },
+              "outline": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/point"
+                }
+              },
+              "base": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "thickness": {
+                "type": "number"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "side": {
+                "enum": [
+                  "left",
+                  "right"
+                ]
+              },
+              "openings": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "offset": {
+                        "type": "number"
+                      },
+                      "sill": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number"
+                      },
+                      "height": {
+                        "type": "number"
+                      },
+                      "depth": {
+                        "type": "number"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "offset",
+                      "sill",
+                      "width",
+                      "height"
+                    ]
+                  }
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "outline",
+              "base",
+              "height",
+              "side"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "thickness"
+                ]
+              },
+              {
+                "required": [
+                  "layers"
+                ]
+              }
+            ]
+          }
+        },
+        "slabs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+              },
+              "outline": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/point"
+                }
+              },
+              "z": {
+                "type": "number"
+              },
+              "thickness": {
+                "type": "number"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "outline",
+              "z"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "thickness"
+                ]
+              },
+              {
+                "required": [
+                  "layers"
+                ]
+              }
+            ]
+          }
+        },
+        "preview": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": []
+    },
+    "face": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "u": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "v": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "normal": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "outline": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "openings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "offset": {
+                "type": "number"
+              },
+              "sill": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "depth": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "offset",
+              "sill",
+              "width",
+              "height",
+              "depth"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "origin",
+        "u",
+        "v",
+        "normal",
+        "outline",
+        "openings"
+      ]
+    },
+    "wallQuantities": {
+      "type": "object",
+      "properties": {
+        "length": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "measuredGross": {
+          "type": "number"
+        },
+        "measuredNet": {
+          "type": "number"
+        },
+        "otherGross": {
+          "type": "number"
+        },
+        "otherNet": {
+          "type": "number"
+        },
+        "revealPerimeter": {
+          "type": "number"
+        },
+        "grossVolume": {
+          "type": "number"
+        },
+        "netVolume": {
+          "type": "number"
+        },
+        "nicheBack": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "length",
+        "height",
+        "measuredGross",
+        "measuredNet",
+        "otherGross",
+        "otherNet",
+        "revealPerimeter",
+        "grossVolume",
+        "netVolume",
+        "nicheBack"
+      ]
+    },
+    "slabQuantities": {
+      "type": "object",
+      "properties": {
+        "area": {
+          "type": "number"
+        },
+        "perimeter": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "area",
+        "perimeter",
+        "volume"
+      ]
+    },
+    "buildOK": {
+      "type": "object",
+      "properties": {
+        "goifcVersion": {
+          "type": "string"
+        },
+        "ok": {
+          "const": true
+        },
+        "walls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "quantities": {
+                "$ref": "#/$defs/wallQuantities"
+              },
+              "measured": {
+                "$ref": "#/$defs/face"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "quantities",
+              "measured"
+            ]
+          }
+        },
+        "slabs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "quantities": {
+                "$ref": "#/$defs/slabQuantities"
+              },
+              "top": {
+                "$ref": "#/$defs/face"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "quantities",
+              "top"
+            ]
+          }
+        },
+        "preview": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "enum": [
+                    "exact",
+                    "boxes"
+                  ]
+                },
+                "svg": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "detail",
+                "svg"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "$ref": "#/$defs/error"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "error"
+              ]
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "goifcVersion",
+        "ok",
+        "walls",
+        "slabs"
+      ]
+    },
+    "buildAnswer": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/buildOK"
+        },
+        {
+          "$ref": "#/$defs/failed"
+        }
+      ]
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "globalId": {
+          "type": "string"
+        },
+        "expressId": {
+          "type": "integer"
+        },
+        "ifcClass": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parentIndex": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "qto": {
+          "type": "object",
+          "properties": {
+            "area": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "volume": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "length": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "width": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "height": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "perimeter": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "area",
+            "volume",
+            "length",
+            "width",
+            "height",
+            "perimeter"
+          ]
+        },
+        "quantitySource": {
+          "enum": [
+            "qto",
+            "geometry",
+            "none"
+          ]
+        },
+        "originMin": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "bboxMin": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "bboxMax": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "material": {
+          "type": "string"
+        },
+        "isExternal": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "netArea": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "openingPerimeter": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "openingDeduction": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "projectedGross": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "hasOpenings": {
+          "type": "boolean"
+        },
+        "typeGlobalId": {
+          "type": "string"
+        },
+        "typeName": {
+          "type": "string"
+        },
+        "typeClass": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "globalId",
+        "expressId",
+        "ifcClass",
+        "name",
+        "parentIndex",
+        "qto",
+        "quantitySource",
+        "originMin",
+        "bboxMin",
+        "bboxMax",
+        "material",
+        "isExternal",
+        "netArea",
+        "openingPerimeter",
+        "openingDeduction",
+        "projectedGross",
+        "hasOpenings",
+        "typeGlobalId",
+        "typeName",
+        "typeClass"
+      ]
+    },
+    "readOK": {
+      "type": "object",
+      "properties": {
+        "goifcVersion": {
+          "type": "string"
+        },
+        "ok": {
+          "const": true
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "nodes",
+              "glb",
+              "psets",
+              "storeyPlans",
+              "typeLayers"
+            ]
+          },
+          "minItems": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "psets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "storeyPlans": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "storeyGlobalId": {
+                "type": "string"
+              },
+              "elevation": {
+                "type": "number"
+              },
+              "entities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "globalId": {
+                      "type": "string"
+                    },
+                    "ifcClass": {
+                      "type": "string"
+                    },
+                    "loops": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "role": {
+                            "type": "string"
+                          },
+                          "points": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/$defs/point"
+                            }
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "role",
+                          "points"
+                        ]
+                      }
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "globalId",
+                    "ifcClass",
+                    "loops"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "storeyGlobalId",
+              "elevation",
+              "entities"
+            ]
+          }
+        },
+        "typeLayers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "materialName": {
+                      "type": "string"
+                    },
+                    "thicknessMm": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "isVentilated": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "category": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "materialName",
+                    "thicknessMm",
+                    "isVentilated",
+                    "category"
+                  ]
+                }
+              },
+              "direction": {
+                "type": "string"
+              },
+              "sense": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "layers",
+              "direction",
+              "sense"
+            ]
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "goifcVersion",
+        "ok",
+        "parts",
+        "warnings"
+      ]
+    },
+    "readAnswer": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/readOK"
+        },
+        {
+          "$ref": "#/$defs/failed"
+        }
+      ]
+    }
+  }
+}
