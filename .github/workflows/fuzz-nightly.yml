@@ -52,6 +52,10 @@ jobs:
             package: ./geometry/
           - target: FuzzWritePreviewSVG
             package: ./geometry/
+          - target: FuzzBuildRequest
+            package: ./internal/wasmapi/
+          - target: FuzzReadInclude
+            package: ./internal/wasmapi/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

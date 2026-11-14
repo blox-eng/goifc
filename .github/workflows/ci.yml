@@ -345,6 +345,14 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzWritePreviewSVG 60s
+      - name: Fuzz the wasm build request
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./internal/wasmapi/ FuzzBuildRequest 60s
+      - name: Fuzz the wasm read parts
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./internal/wasmapi/ FuzzReadInclude 60s
       - name: Upload crashers
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
