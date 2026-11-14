@@ -108,6 +108,10 @@ Each built element gets an id from it:
 `answer.walls` lists the walls of `walls` and `rooms`, in request order;
 `answer.slabs` lists the slabs.
 
+three.js's `GLTFLoader` removes `[ ] . : /` from node names, so `w1/0`
+loads as `w10`. Read the element id from `node.userData.name`: it keeps
+the name as the GLB has it.
+
 ## Read an IFC file
 
 ```js
