@@ -28,3 +28,6 @@ parity/bench/.cache/
 parity/bench/node_modules/
 parity/bench/.venv/
 parity/bench/__pycache__/
+
+# make wasm output
+dist/

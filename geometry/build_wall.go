@@ -119,7 +119,7 @@ type wallSpan struct {
 // not wall, and the reveal behind a touching edge would not exist.
 func checkOpenings(wall int, span wallSpan, height, thickness float64, ops []Opening) error {
 	if len(ops) > maxOpenings {
-		return fmt.Errorf("wall %d has %d openings, more than %d", wall, len(ops), maxOpenings)
+		return tooLarge("wall %d has %d openings, more than %d", wall, len(ops), maxOpenings)
 	}
 	for i, o := range ops {
 		for _, f := range [...]struct {

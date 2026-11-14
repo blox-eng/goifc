@@ -1,0 +1,1 @@
+{"goifcVersion":"v0.0.0-test","ok":true,"walls":[],"slabs":[{"id":"s1","quantities":{"area":20,"perimeter":18,"volume":4},"top":{"origin":[0,0,0],"u":[1,0,0],"v":[0,1,0],"normal":[0,0,1],"outline":[[0,0],[5,0],[5,4],[0,4]],"openings":[]}}]}

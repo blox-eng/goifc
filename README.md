@@ -45,6 +45,10 @@ compatibility policy ·
   IFC: a mesh, exact quantities, and a refusal that names the misplaced
   opening and why. Each can be built in layers, with quantities per layer.
   `WritePreviewSVG` draws them as a small isometric SVG that your CSS colours.
+- **In the browser** — `goifc-build.wasm` builds a whole plan from one JSON
+  request and `goifc-read.wasm` reads IFC, each in a Web Worker behind
+  `goifc.js`. Each release attaches them with checksums and signed
+  provenance; see [Running in the browser](docs/guides/wasm.md).
 - **Untrusted files** — tessellation, extraction and storey plans are bounded
   by the file's size, and a budget that runs out says so.
 

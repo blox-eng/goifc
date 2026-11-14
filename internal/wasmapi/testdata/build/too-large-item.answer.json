@@ -1,0 +1,1 @@
+{"goifcVersion":"v0.0.0-test","ok":false,"errors":[{"code":"too_large","item":"w1","message":"height 1000.5 m is over the 1000 m maximum"}]}

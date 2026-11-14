@@ -1,0 +1,1 @@
+{"goifcVersion":"v0.0.0-test","ok":false,"errors":[{"code":"overlaps","item":"w1","wall":0,"opening":1,"message":"wall 0 opening 1: overlaps"},{"code":"above_wall","item":"w1","wall":0,"opening":2,"message":"wall 0 opening 2: above_wall"}]}

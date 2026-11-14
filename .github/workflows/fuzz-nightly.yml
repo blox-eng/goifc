@@ -52,6 +52,10 @@ jobs:
             package: ./geometry/
           - target: FuzzWritePreviewSVG
             package: ./geometry/
+          - target: FuzzBuildRequest
+            package: ./internal/wasmapi/
+          - target: FuzzReadInclude
+            package: ./internal/wasmapi/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -99,3 +103,30 @@ jobs:
         with:
           path: ~/.cache/go-build/fuzz
           key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+
+  # goifc-read.wasm caps files at 48 MiB because a synthetic file at the cap
+  # takes about 1.7 GiB of wasm memory (measured 2026-11-14). This reads one
+  # at the cap inside wasm every night and fails over 2 GiB, so a change that
+  # makes reading heavier is seen before a browser tab runs out of memory.
+  wasm-memory:
+    name: Wasm Read Memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+      - name: Read a file at the cap inside wasm
+        env:
+          GOIFC_WASM_BIG: '1'
+          GOOS: js
+          GOARCH: wasm
+        run: go test -count=1 -v -run TestRead_BigFileFitsInMemory -timeout 20m -exec="bash $(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/wasmapi/
