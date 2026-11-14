@@ -2,9 +2,11 @@ package geometry
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 )
@@ -23,6 +25,9 @@ const (
 	maxPreviewBytes     = 1 << 20
 	maxPreviewElements  = 100_000
 	maxPreviewTriangles = 4_000_000
+	// maxPreviewPairs bounds the shape pairs paintOrder compares by plane.
+	// Past it, the remaining pairs keep centroid order.
+	maxPreviewPairs = 20_000_000
 )
 
 // The preview's fixed view: the viewer looks along previewDir, from the
@@ -40,6 +45,7 @@ const (
 	previewZeroArea   = 1e-12
 	previewWeldPerM   = 1 / gridSnap // weld grid: the mesh grid snap
 	previewTopNormalZ = 0.5          // n.z at or over this: within 60° of up
+	previewHullTol    = 1e-6         // m²: a smaller turn on the plan hull is straight
 )
 
 // previewShape is one flat face of one element as it is drawn: one or more
@@ -114,6 +120,9 @@ func elementShapes(e Element, elem int) ([]previewShape, error) {
 		return len(pos) - 1
 	}
 	var groups []*previewGroup
+	// Groups are found through a coarse plane key, then checked exactly, so
+	// a mesh of many planes is not scanned group by group.
+	bucket := map[planeKey][]*previewGroup{}
 	for t := 0; t+2 < len(e.Tris); t += 3 {
 		var c [3]v3
 		for k := range 3 {
@@ -133,7 +142,8 @@ func elementShapes(e Element, elem int) ([]previewShape, error) {
 		}
 		off := dotv(n, c[0])
 		var g *previewGroup
-		for _, h := range groups {
+		k := keyOfPlane(n, off)
+		for _, h := range bucket[k] {
 			if samePlane(n, off, previewShape{normal: h.normal, offset: h.offset}) {
 				g = h
 				break
@@ -142,6 +152,7 @@ func elementShapes(e Element, elem int) ([]previewShape, error) {
 		if g == nil {
 			g = &previewGroup{normal: n, offset: off}
 			groups = append(groups, g)
+			bucket[k] = append(bucket[k], g)
 		}
 		tri := [3]int{id(c[0]), id(c[1]), id(c[2])}
 		if tri[0] == tri[1] || tri[1] == tri[2] || tri[0] == tri[2] {
@@ -247,23 +258,40 @@ func previewLoops(tris [][3]int, pos []v3) [][]v3 {
 }
 
 // dropCollinear removes each loop vertex that lies on the line through its
-// neighbours.
+// neighbours, in one pass.
 func dropCollinear(ids []int, pos []v3) []int {
-	for changed := true; changed && len(ids) >= 3; {
-		changed = false
-		for i := 0; i < len(ids) && len(ids) >= 3; i++ {
-			a, b, c := pos[ids[(i+len(ids)-1)%len(ids)]], pos[ids[i]], pos[ids[(i+1)%len(ids)]]
-			u, w := subv(b, a), subv(c, b)
-			lu, lw := math.Sqrt(dotv(u, u)), math.Sqrt(dotv(w, w))
-			x := crossv(u, w)
-			if lu == 0 || lw == 0 || math.Sqrt(dotv(x, x)) <= previewCollinear*lu*lw && dotv(u, w) > 0 {
-				ids = append(ids[:i], ids[i+1:]...)
-				changed = true
-				i--
-			}
+	straight := func(a, b, c int) bool {
+		u, w := subv(pos[b], pos[a]), subv(pos[c], pos[b])
+		lu, lw := math.Sqrt(dotv(u, u)), math.Sqrt(dotv(w, w))
+		x := crossv(u, w)
+		return lu == 0 || lw == 0 || math.Sqrt(dotv(x, x)) <= previewCollinear*lu*lw && dotv(u, w) > 0
+	}
+	out := make([]int, 0, len(ids))
+	for _, v := range ids {
+		out = append(out, v)
+		for len(out) >= 3 && straight(out[len(out)-3], out[len(out)-2], out[len(out)-1]) {
+			out[len(out)-2] = out[len(out)-1]
+			out = out[:len(out)-1]
 		}
 	}
-	return ids
+	for changed := true; changed && len(out) >= 3; {
+		changed = false
+		if straight(out[len(out)-2], out[len(out)-1], out[0]) {
+			out, changed = out[:len(out)-1], true
+		}
+		if len(out) >= 3 && straight(out[len(out)-1], out[0], out[1]) {
+			out, changed = out[1:], true
+		}
+	}
+	return out
+}
+
+// planeKey is a coarse key for a plane: planes that pass samePlane almost
+// always share it. A pair split across two keys draws as two shapes.
+type planeKey [4]int64
+
+func keyOfPlane(n v3, off float64) planeKey {
+	return planeKey{int64(math.Round(n[0] * 1e5)), int64(math.Round(n[1] * 1e5)), int64(math.Round(n[2] * 1e5)), int64(math.Round(off * 1e3))}
 }
 
 // samePlane is the merge test: unit normals and plane offsets match.
@@ -297,6 +325,13 @@ func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
 		}
 		shift, normal = best, back
 	}
+	onPlane := map[planeKey][]previewShape{}
+	for _, s := range shapes {
+		if s.elem == elem {
+			k := keyOfPlane(s.normal, s.offset)
+			onPlane[k] = append(onPlane[k], s)
+		}
+	}
 	var out []previewShape
 	for _, o := range f.Openings {
 		if shift > 0 && o.Depth != 0 {
@@ -309,8 +344,8 @@ func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
 		}
 		off := dotv(normal, loop[0])
 		seq := -1
-		for _, s := range shapes {
-			if s.elem == elem && samePlane(normal, off, s) {
+		for _, s := range onPlane[keyOfPlane(normal, off)] {
+			if samePlane(normal, off, s) {
 				seq = s.seq
 				break
 			}
@@ -330,35 +365,47 @@ func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
 // style them under .goifc-preview. The root's data-detail names the Detail
 // returned. On an error w gets nothing.
 func WritePreviewSVG(w io.Writer, walls []Wall, slabs []Slab) (Detail, error) {
-	shapes, err := previewShapesFor(walls, slabs)
-	if err != nil {
-		return "", err
-	}
 	var buf bytes.Buffer
-	writePreview(&buf, shapes, DetailExact)
-	if _, err := w.Write(buf.Bytes()); err != nil {
-		return "", err
+	for _, d := range []Detail{DetailExact, DetailBoxes} {
+		shapes, err := previewShapesFor(walls, slabs, d)
+		if err != nil {
+			return "", err
+		}
+		buf.Reset()
+		writePreview(&buf, shapes, d)
+		if buf.Len() <= maxPreviewBytes {
+			if _, err := w.Write(buf.Bytes()); err != nil {
+				return "", err
+			}
+			return d, nil
+		}
 	}
-	return DetailExact, nil
+	return "", fmt.Errorf("preview is %s bytes as boxes, over the %s-byte cap", thousands(buf.Len()), thousands(maxPreviewBytes))
 }
 
 // previewShapesFor checks the input and returns every drawn shape in paint
-// order. Elements are indexed walls first, then slabs.
-func previewShapesFor(walls []Wall, slabs []Slab) ([]previewShape, error) {
+// order, at the given detail. Elements are indexed walls first, then slabs.
+func previewShapesFor(walls []Wall, slabs []Slab, detail Detail) ([]previewShape, error) {
 	if err := checkPreview(walls, slabs); err != nil {
 		return nil, err
 	}
+	shapesOf := elementShapes
+	if detail == DetailBoxes {
+		shapesOf = boxShapes
+	}
 	var shapes []previewShape
 	for i, w := range walls {
-		s, err := elementShapes(w.Element, i)
+		s, err := shapesOf(w.Element, i)
 		if err != nil {
 			return nil, fmt.Errorf("wall %d: %w", i, err)
 		}
 		shapes = append(shapes, s...)
-		shapes = append(shapes, wallOpenings(w, s, i)...)
+		if detail == DetailExact {
+			shapes = append(shapes, wallOpenings(w, s, i)...)
+		}
 	}
 	for i, sl := range slabs {
-		s, err := elementShapes(sl.Element, len(walls)+i)
+		s, err := shapesOf(sl.Element, len(walls)+i)
 		if err != nil {
 			return nil, fmt.Errorf("slab %d: %w", i, err)
 		}
@@ -382,7 +429,7 @@ func checkPreview(walls []Wall, slabs []Slab) error {
 	}
 	tris := 0
 	for _, w := range walls {
-		tris += len(w.Element.Tris) / 3
+		tris += len(w.Element.Tris)/3 + 2*len(w.Measured.Openings) // an opening draws as 2 triangles' worth
 	}
 	for _, s := range slabs {
 		tris += len(s.Element.Tris) / 3
@@ -447,7 +494,7 @@ func paintOrder(shapes []previewShape) {
 		}
 		return a.opening < b.opening
 	})
-	order := refinePaintOrder(shapes)
+	order, _ := refinePaintOrder(shapes)
 	sorted := make([]previewShape, len(shapes))
 	for i, k := range order {
 		sorted[i] = shapes[k]
@@ -492,8 +539,9 @@ func inFront(a, b previewShape) bool {
 
 // refinePaintOrder returns the indices of shapes (in centroid order) in an
 // order that honours every decided pair, by a topological sort that always
-// takes the earliest ready shape in centroid order.
-func refinePaintOrder(shapes []previewShape) []int {
+// takes the earliest ready shape in centroid order. It also returns how many
+// pairs it compared.
+func refinePaintOrder(shapes []previewShape) ([]int, int) {
 	n := len(shapes)
 	type box struct{ lo, hi [2]float64 }
 	boxes := make([]box, n)
@@ -520,11 +568,17 @@ func refinePaintOrder(shapes []previewShape) []int {
 		after[a] = append(after[a], b)
 		need[b]++
 	}
+	pairs := 0
+pairing:
 	for x, i := range byX {
 		for _, j := range byX[x+1:] {
 			if boxes[j].lo[0] >= boxes[i].hi[0] {
 				break
 			}
+			if pairs == maxPreviewPairs {
+				break pairing
+			}
+			pairs++
 			if boxes[j].lo[1] >= boxes[i].hi[1] || boxes[i].lo[1] >= boxes[j].hi[1] {
 				continue
 			}
@@ -575,7 +629,7 @@ func refinePaintOrder(shapes []previewShape) []int {
 			}
 		}
 	}
-	return out
+	return out, pairs
 }
 
 // intHeap is a min-heap of ints.
@@ -688,4 +742,83 @@ func thousands(n int) string {
 		s = s[:i] + "," + s[i:]
 	}
 	return s
+}
+
+// boxShapes draws an element as a prism: the convex hull of its vertices in
+// plan, from its lowest to its highest point. A wall's prism is its exact
+// footprint; a slab's fills in any concave corner.
+func boxShapes(e Element, elem int) ([]previewShape, error) {
+	world, err := previewWorld(e)
+	if err != nil || len(world) == 0 {
+		return nil, err
+	}
+	lo, hi := math.Inf(1), math.Inf(-1)
+	plan := make([][2]float64, len(world))
+	for i, p := range world {
+		plan[i] = [2]float64{p[0], p[1]}
+		lo, hi = math.Min(lo, p[2]), math.Max(hi, p[2])
+	}
+	h := planHull(plan)
+	if len(h) < 3 || hi-lo < previewZeroArea {
+		return nil, nil
+	}
+	shape := func(class string, n v3, loop []v3) previewShape {
+		var c v3
+		for _, p := range loop {
+			c = addv(c, p)
+		}
+		c = scalev(c, 1/float64(len(loop)))
+		return previewShape{class: class, loops: [][]v3{loop}, normal: n, offset: dotv(n, loop[0]),
+			depth: dotv(c, previewDir), elem: elem}
+	}
+	top := make([]v3, len(h))
+	for i, p := range h {
+		top[i] = v3{p[0], p[1], hi}
+	}
+	shapes := []previewShape{shape("top", v3{0, 0, 1}, top)}
+	for i, a := range h {
+		b := h[(i+1)%len(h)]
+		n := normv(v3{b[1] - a[1], a[0] - b[0], 0}) // outward: the hull runs counter-clockwise
+		if dotv(n, previewDir) >= -previewEdgeOn {
+			continue
+		}
+		shapes = append(shapes, shape(previewClass(n), n, []v3{{a[0], a[1], lo}, {b[0], b[1], lo}, {b[0], b[1], hi}, {a[0], a[1], hi}}))
+	}
+	for i := range shapes {
+		shapes[i].seq = i
+	}
+	return shapes, nil
+}
+
+// planHull is the convex hull of pts, counter-clockwise, by the monotone
+// chain. Points on a hull edge are left out.
+func planHull(pts [][2]float64) [][2]float64 {
+	ps := slices.Clone(pts)
+	slices.SortFunc(ps, func(a, b [2]float64) int {
+		if c := cmp.Compare(a[0], b[0]); c != 0 {
+			return c
+		}
+		return cmp.Compare(a[1], b[1])
+	})
+	ps = slices.Compact(ps)
+	if len(ps) < 3 {
+		return ps
+	}
+	// A turn under previewHullTol (m²) is straight: float32 vertices leave a
+	// point on a hull edge a few micrometres off the line.
+	turn := func(o, a, b [2]float64) float64 { return (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]) }
+	var h [][2]float64
+	for _, p := range ps {
+		for len(h) >= 2 && turn(h[len(h)-2], h[len(h)-1], p) <= previewHullTol {
+			h = h[:len(h)-1]
+		}
+		h = append(h, p)
+	}
+	for i, k := len(ps)-2, len(h)+1; i >= 0; i-- {
+		for len(h) >= k && turn(h[len(h)-2], h[len(h)-1], ps[i]) <= previewHullTol {
+			h = h[:len(h)-1]
+		}
+		h = append(h, ps[i])
+	}
+	return h[:len(h)-1]
 }
