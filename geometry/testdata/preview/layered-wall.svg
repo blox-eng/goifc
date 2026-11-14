@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.079 -3.917 3.21 4.125" data-detail="exact">
+<g class="goifc-preview">
+<polygon class="left" points="2.192 -2.082 2.199 -2.078 2.199 -2.405 2.192 -2.409"/>
+<polygon class="top" points="2.192 -2.082 1.768 -1.837 1.775 -1.833 2.199 -2.078"/>
+<polygon class="top" points="0.364 -0.933 1.213 -1.423 1.202 -1.429 0.354 -0.939"/>
+<polygon class="left" points="1.213 -1.423 1.213 -2.566 1.202 -2.572 1.202 -1.429"/>
+<path class="right" fill-rule="evenodd" d="M0.011 0.006L2.839 -1.627L2.839 -3.831L0.011 -2.198Z M0.364 -0.933L0.364 -2.076L1.213 -2.566L1.213 -1.423Z"/>
+<polygon class="top" points="0.506 -0.851 1.354 -1.341 1.213 -1.423 0.364 -0.933"/>
+<polygon class="opening" points="0.364 -0.933 1.213 -1.423 1.213 -2.566 0.364 -2.076"/>
+<polygon class="left" points="1.354 -1.341 1.354 -2.484 1.213 -2.566 1.213 -1.423"/>
+<path class="right" fill-rule="evenodd" d="M0.152 0.088L2.98 -1.545L2.98 -3.75L0.152 -2.117Z M0.506 -0.851L0.506 -1.994L1.354 -2.484L1.354 -1.341Z"/>
+<polygon class="top" points="0.576 -0.81 1.425 -1.3 1.354 -1.341 0.506 -0.851"/>
+<polygon class="opening" points="0.506 -0.851 1.354 -1.341 1.354 -2.484 0.506 -1.994"/>
+<polygon class="left" points="1.425 -1.3 1.425 -2.443 1.354 -2.484 1.354 -1.341"/>
+<path class="right" fill-rule="evenodd" d="M0.223 0.129L3.051 -1.504L3.051 -3.709L0.223 -2.076Z M0.576 -0.81L0.576 -1.953L1.425 -2.443L1.425 -1.3Z"/>
+<polygon class="opening" points="0.576 -0.81 1.425 -1.3 1.425 -2.443 0.576 -1.953"/>
+<polygon class="top" points="0.011 -2.198 2.839 -3.831 2.828 -3.838 0 -2.205"/>
+<polygon class="top" points="0.152 -2.117 2.98 -3.75 2.839 -3.831 0.011 -2.198"/>
+<polygon class="top" points="0.223 -2.076 3.051 -3.709 2.98 -3.75 0.152 -2.117"/>
+<polygon class="left" points="0.011 0.006 0.011 -2.198 0 -2.205 0 0"/>
+<polygon class="left" points="0.152 0.088 0.152 -2.117 0.011 -2.198 0.011 0.006"/>
+<polygon class="left" points="0.223 0.129 0.223 -2.076 0.152 -2.117 0.152 0.088"/>
+</g>
+</svg>

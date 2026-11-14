@@ -25,4 +25,9 @@
 // file's own mesh cuts the openings. [BuildWallLayers], [BuildRoomWallLayers]
 // and [BuildSlabLayers] build the same elements in layers, one Element per
 // layer, with quantities per layer.
+//
+// PREVIEW — [WritePreviewSVG] draws built walls and slabs as one SVG in a
+// fixed isometric view from the south-west. Shapes carry the classes top,
+// left, right and opening and no colours. Over 1 MiB it draws each element as
+// a box and returns [DetailBoxes].
 package geometry

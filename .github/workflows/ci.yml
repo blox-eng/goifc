@@ -341,6 +341,10 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildSlabLayers 60s
+      - name: Fuzz the SVG preview
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzWritePreviewSVG 60s
       - name: Upload crashers
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

@@ -1,7 +1,10 @@
 package geometry
 
 import (
+	"bytes"
+	"encoding/xml"
 	"errors"
+	"io"
 	"math"
 	"testing"
 )
@@ -243,6 +246,56 @@ func FuzzBuildRoomWallLayers(f *testing.F) {
 			if want := whole[i].Quantities.NetVolume; math.Abs(vol-want) > 1e-9*want+1e-12+snap {
 				t.Fatalf("wall %d: layers sum to %v m³, whole wall %v", i, vol, want)
 			}
+		}
+	})
+}
+
+func FuzzWritePreviewSVG(f *testing.F) {
+	f.Add(4.0, 3.0, 4.0, 3.0, 2.7, 0.2, uint8(1), 1.0, 0.9, 1.2, 1.4, 0.0)
+	f.Add(6.0, 2.0, 3.0, 5.0, 2.5, 0.3, uint8(2), 0.5, 0.0, 0.9, 2.1, 0.0)
+	f.Add(1e3, 1.0, 2.0, 1e3, 3.0, 0.1, uint8(1), 0.2, 1.0, 0.4, 0.4, 0.05)
+	f.Fuzz(func(t *testing.T, x1, y1, x2, y2, h, th float64, side uint8, o, s, w, oh, depth float64) {
+		outline := [][2]float64{{0, 0}, {x1, 0}, {x2, y2}, {0, y1}}
+		ops := make([][]Opening, len(outline))
+		ops[0] = []Opening{{o, s, w, oh, depth}}
+		walls, err := BuildRoomWalls(outline, 0, h, th, Side(side), ops)
+		if err != nil {
+			return
+		}
+		var buf bytes.Buffer
+		d, err := WritePreviewSVG(&buf, walls, nil)
+		if err != nil {
+			if d != "" || buf.Len() != 0 {
+				t.Fatalf("error %v with detail %q and %d bytes written", err, d, buf.Len())
+			}
+			return
+		}
+		if d != DetailExact && d != DetailBoxes {
+			t.Fatalf("detail %q, want exact or boxes", d)
+		}
+		dec := xml.NewDecoder(&buf)
+		found := false
+		for {
+			tok, err := dec.Token()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("output is not XML: %v", err)
+			}
+			if se, ok := tok.(xml.StartElement); ok && se.Name.Local == "svg" {
+				for _, a := range se.Attr {
+					if a.Name.Local == "data-detail" {
+						found = true
+						if a.Value != string(d) {
+							t.Fatalf("data-detail %q, returned %q", a.Value, d)
+						}
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatal("the svg root has no data-detail")
 		}
 	})
 }

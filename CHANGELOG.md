@@ -19,6 +19,14 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- **SVG preview.** `geometry.WritePreviewSVG` draws built walls and slabs as
+  an isometric SVG from the south-west, with classes `top`, `left`, `right`
+  and `opening` and no colours. Windows and doors show on the face you see.
+  Over 1 MiB it draws each element as a box and says so in `data-detail` and
+  the returned `Detail`.
+
 ## v0.17.0 — 2026-11-13
 
 ### Added

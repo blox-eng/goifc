@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-5.53 -7.534 11.766 7.964" data-detail="exact">
+<g class="goifc-preview">
+<polygon class="left" points="5.657 -3.266 5.657 -5.471 2.828 -7.104 2.828 -4.899"/>
+<polygon class="right" points="2.828 -4.899 2.828 -7.104 0 -5.471 0 -3.266"/>
+<polygon class="left" points="0 -3.266 0 -5.471 -2.121 -6.695 -2.121 -4.491"/>
+<polygon class="top" points="-4.95 -2.858 0 0 5.657 -3.266 2.828 -4.899 0 -3.266 -2.121 -4.491"/>
+<polygon class="right" points="-2.121 -4.491 -2.121 -6.695 -4.95 -5.062 -4.95 -2.858"/>
+<polygon class="top" points="2.828 -7.104 2.828 -7.308 0 -5.675 0 -5.471"/>
+<polygon class="top" points="2.828 -7.104 5.657 -5.471 6.01 -5.471 2.828 -7.308"/>
+<polygon class="top" points="0 -5.471 0 -5.675 -2.121 -6.899 -2.121 -6.695"/>
+<polygon class="right" points="5.657 -3.266 6.01 -3.266 6.01 -5.471 5.657 -5.471"/>
+<polygon class="top" points="-4.95 -5.062 -2.121 -6.695 -2.121 -6.899 -5.303 -5.062"/>
+<polygon class="right" points="-4.95 -5.062 -5.303 -5.062 -5.303 -2.858 -4.95 -2.858"/>
+<polygon class="right" points="0 0 0 0.163 5.657 -3.103 5.657 -3.266"/>
+<polygon class="top" points="-4.066 -2.878 -3.217 -2.388 -3.041 -2.49 -3.889 -2.98"/>
+<polygon class="right" points="-4.066 -2.878 -3.889 -2.98 -3.889 -4.123 -4.066 -4.021"/>
+<polygon class="left" points="-4.95 -2.858 -4.95 -2.694 0 0.163 0 0"/>
+<path class="left" fill-rule="evenodd" d="M-5.303 -2.858L0 0.204L0 -2L-5.303 -5.062Z M-4.066 -2.878L-4.066 -4.021L-3.217 -3.531L-3.217 -2.388Z"/>
+<polygon class="opening" points="-4.066 -2.878 -3.217 -2.388 -3.217 -3.531 -4.066 -4.021"/>
+<polygon class="top" points="0 -2 6.01 -5.471 5.657 -5.471 0 -2.205"/>
+<polygon class="top" points="1.237 -1.245 2.086 -1.735 1.909 -1.837 1.061 -1.347"/>
+<polygon class="left" points="2.086 -1.735 2.086 -2.878 1.909 -2.98 1.909 -1.837"/>
+<path class="right" fill-rule="evenodd" d="M0 0.204L6.01 -3.266L6.01 -5.471L0 -2Z M1.237 -1.245L1.237 -2.388L2.086 -2.878L2.086 -1.735Z"/>
+<polygon class="opening" points="1.237 -1.245 2.086 -1.735 2.086 -2.878 1.237 -2.388"/>
+<polygon class="top" points="-5.303 -5.062 0 -2 0 -2.205 -4.95 -5.062"/>
+</g>
+</svg>
