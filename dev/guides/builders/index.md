@@ -121,6 +121,34 @@ Each layer's quantities mean what they mean for a whole wall, for that layer alo
 
 At a corner that is almost straight, a layer's face end can snap by under 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.
 
+## Preview
+
+`WritePreviewSVG` draws built walls and slabs as a small SVG for a gallery card or a thumbnail. Pass the builders' results as they are; a layered wall is one `Wall` per layer.
+
+```
+var svg bytes.Buffer
+detail, err := geometry.WritePreviewSVG(&svg, walls, []geometry.Slab{slab})
+```
+
+- **One view.** An isometric view from the south-west, from above, so every card looks the same way. The `viewBox` is in metres and the SVG has no `width` or `height`: size it with CSS.
+- **No colours.** Each shape has one class: `top`, `left` (faces west), `right` (faces south) or `opening`, inside `<g class="goifc-preview">`.
+- **Openings on the face you see.** A window or door draws on whichever face of its wall the viewer sees. A niche draws only on its own face.
+- **Size.** Over 1 MiB, the preview draws each element as a box (its plan outline, raised from its lowest to its highest point) with no openings. `detail` is then `boxes`, and the root's `data-detail` says so. A preview still over 1 MiB is an error that names its size. A model of 2,000 layered elements draws exact at about 950 KB.
+- **Safe to inline.** The SVG holds only fixed tags, classes and numbers, never text from the input.
+
+```
+.goifc-preview .top     { fill: #e8e6e1; }
+.goifc-preview .left    { fill: #b9b5ad; }
+.goifc-preview .right   { fill: #d3d0c9; }
+.goifc-preview .opening { fill: #7fa7c9; }
+@media (prefers-color-scheme: dark) {
+  .goifc-preview .top     { fill: #4a4845; }
+  .goifc-preview .left    { fill: #2e2d2b; }
+  .goifc-preview .right   { fill: #3c3a37; }
+  .goifc-preview .opening { fill: #3d5a73; }
+}
+```
+
 ## Not yet
 
 Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a separate wall for now; see [limitations](https://docs.goifc.org/latest/limitations/index.md).

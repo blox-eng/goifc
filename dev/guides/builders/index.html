@@ -746,6 +746,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#preview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1302,6 +1313,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#preview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-yet" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1528,6 +1550,40 @@ volumes add up to the whole wall's.</p>
 </ul>
 <p>At a corner that is almost straight, a layer's face end can snap by under
 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.</p>
+<h2 id="preview">Preview<a class="headerlink" href="#preview" title="Permanent link">&para;</a></h2>
+<p><code>WritePreviewSVG</code> draws built walls and slabs as a small SVG for a gallery
+card or a thumbnail. Pass the builders' results as they are; a layered wall is
+one <code>Wall</code> per layer.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">svg</span><span class="w"> </span><span class="nx">bytes</span><span class="p">.</span><span class="nx">Buffer</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nx">detail</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">WritePreviewSVG</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">svg</span><span class="p">,</span><span class="w"> </span><span class="nx">walls</span><span class="p">,</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Slab</span><span class="p">{</span><span class="nx">slab</span><span class="p">})</span>
+</code></pre></div>
+<ul>
+<li><strong>One view.</strong> An isometric view from the south-west, from above, so every
+  card looks the same way. The <code>viewBox</code> is in metres and the SVG has no
+  <code>width</code> or <code>height</code>: size it with CSS.</li>
+<li><strong>No colours.</strong> Each shape has one class: <code>top</code>, <code>left</code> (faces west),
+  <code>right</code> (faces south) or <code>opening</code>, inside <code>&lt;g class="goifc-preview"&gt;</code>.</li>
+<li><strong>Openings on the face you see.</strong> A window or door draws on whichever face
+  of its wall the viewer sees. A niche draws only on its own face.</li>
+<li><strong>Size.</strong> Over 1 MiB, the preview draws each element as a box (its plan
+  outline, raised from its lowest to its highest point) with no openings.
+  <code>detail</code> is then <code>boxes</code>, and the root's <code>data-detail</code> says so. A preview
+  still over 1 MiB is an error that names its size. A model of 2,000 layered
+  elements draws exact at about 950 KB.</li>
+<li><strong>Safe to inline.</strong> The SVG holds only fixed tags, classes and numbers,
+  never text from the input.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">top</span><span class="w">     </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#e8e6e1</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">left</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#b9b5ad</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">right</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#d3d0c9</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#7fa7c9</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">@</span><span class="k">media</span><span class="w"> </span><span class="o">(</span><span class="nt">prefers-color-scheme</span><span class="o">:</span><span class="w"> </span><span class="nt">dark</span><span class="o">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">top</span><span class="w">     </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#4a4845</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">left</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#2e2d2b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">right</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3c3a37</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3d5a73</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">}</span>
+</code></pre></div>
 <h2 id="not-yet">Not yet<a class="headerlink" href="#not-yet" title="Permanent link">&para;</a></h2>
 <p>Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a
 separate wall for now; see <a href="../../limitations/">limitations</a>.</p>
