@@ -142,6 +142,7 @@ nav:
       - Storey plans: guides/storey-plans.md
       - Measuring silhouettes: guides/measuring-silhouettes.md
       - Building from numbers: guides/builders.md
+      - Running in the browser: guides/wasm.md
   - Reference:
       - The step package: step.md
       - Limitations: limitations.md

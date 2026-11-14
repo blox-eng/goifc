@@ -452,3 +452,9 @@ answer shapes, the element id scheme and the error codes.
 - 2026-11-14: the whole contract suite, compiled to wasm and run under
   Node, gives the same bytes as on amd64, floats included. No `geometry`
   change was needed for parity.
+- 2026-11-14: the Node test compares parsed answers and GLB bytes; byte
+  identity of the JSON is proven by the contract suite run as wasm against
+  the same goldens. `wasm/test/version.mjs` prints the built file's
+  version for the release job's tag check.
+- 2026-11-14: a number JSON cannot hold (not finite) becomes `null` with a
+  warning in node quantities and net areas too, not only in property sets.
