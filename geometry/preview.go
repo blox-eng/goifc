@@ -122,8 +122,7 @@ func elementShapes(e Element, elem int) ([]previewShape, error) {
 		off := dotv(n, c[0])
 		var g *previewGroup
 		for _, h := range groups {
-			if math.Abs(h.normal[0]-n[0]) < previewNormalTol && math.Abs(h.normal[1]-n[1]) < previewNormalTol &&
-				math.Abs(h.normal[2]-n[2]) < previewNormalTol && math.Abs(h.offset-off) < gridSnap {
+			if samePlane(n, off, previewShape{normal: h.normal, offset: h.offset}) {
 				g = h
 				break
 			}
@@ -253,4 +252,60 @@ func dropCollinear(ids []int, pos []v3) []int {
 		}
 	}
 	return ids
+}
+
+// samePlane is the merge test: unit normals and plane offsets match.
+func samePlane(n v3, off float64, s previewShape) bool {
+	return math.Abs(s.normal[0]-n[0]) < previewNormalTol && math.Abs(s.normal[1]-n[1]) < previewNormalTol &&
+		math.Abs(s.normal[2]-n[2]) < previewNormalTol && math.Abs(s.offset-off) < gridSnap
+}
+
+// wallOpenings draws each of a wall's openings on the face of that wall the
+// viewer sees: the measured face when it faces the viewer, else, for a
+// through-opening, the opposite face. A niche on a hidden face is not drawn.
+// Each opening's seq is the seq of the shape it lies on, or -1.
+func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
+	f := w.Measured
+	n := f.Normal
+	shift := 0.0 // how far the rectangle moves along -n
+	normal := n
+	if dotv(n, previewDir) >= -previewEdgeOn {
+		back := scalev(n, -1)
+		best := math.Inf(1)
+		for _, s := range shapes {
+			if math.Abs(s.normal[0]-back[0]) < previewNormalTol && math.Abs(s.normal[1]-back[1]) < previewNormalTol &&
+				math.Abs(s.normal[2]-back[2]) < previewNormalTol {
+				if d := dotv(n, f.Origin) + s.offset; d > 0 && d < best {
+					best = d
+				}
+			}
+		}
+		if math.IsInf(best, 1) {
+			return nil
+		}
+		shift, normal = best, back
+	}
+	var out []previewShape
+	for _, o := range f.Openings {
+		if shift > 0 && o.Depth != 0 {
+			continue
+		}
+		var loop []v3
+		for _, c := range [4][2]float64{{o.Offset, o.Sill}, {o.Offset + o.Width, o.Sill}, {o.Offset + o.Width, o.Sill + o.Height}, {o.Offset, o.Sill + o.Height}} {
+			p := addv(addv(f.Origin, scalev(f.U, c[0])), scalev(f.V, c[1]))
+			loop = append(loop, subv(p, scalev(n, shift)))
+		}
+		off := dotv(normal, loop[0])
+		seq := -1
+		for _, s := range shapes {
+			if s.elem == elem && samePlane(normal, off, s) {
+				seq = s.seq
+				break
+			}
+		}
+		c := scalev(addv(addv(loop[0], loop[1]), addv(loop[2], loop[3])), 0.25)
+		out = append(out, previewShape{class: "opening", loops: [][]v3{loop}, normal: normal, offset: off,
+			depth: dotv(c, previewDir), elem: elem, seq: seq})
+	}
+	return out
 }

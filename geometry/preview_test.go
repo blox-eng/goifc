@@ -169,3 +169,53 @@ func TestElementShapes_RefusesBadMesh(t *testing.T) {
 		t.Errorf("index 99: err %v, want one naming the index", err)
 	}
 }
+
+func mustOpenings(t *testing.T, w Wall) ([]previewShape, []previewShape) {
+	t.Helper()
+	shapes := mustShapes(t, w.Element)
+	return shapes, wallOpenings(w, shapes, 0)
+}
+
+var previewWindow = []Opening{{Offset: 1, Sill: 0.9, Width: 1, Height: 1.2}}
+
+func TestWallOpenings_OnTheMeasuredFaceWhenItFacesTheViewer(t *testing.T) {
+	_, got := mustOpenings(t, mustWall(t, [2][2]float64{{0, 0}, {3, 0}}, 0, 2.5, 0.2, SideRight, previewWindow))
+	if len(got) != 1 || got[0].class != "opening" || len(got[0].loops) != 1 || len(got[0].loops[0]) != 4 {
+		t.Fatalf("openings %v, want one opening of 4 points", got)
+	}
+	for _, p := range got[0].loops[0] {
+		if math.Abs(p[1]) > 1e-9 {
+			t.Errorf("corner %v is off the measured plane y = 0", p)
+		}
+	}
+}
+
+func TestWallOpenings_OnTheOtherFaceWhenMeasuredInside(t *testing.T) {
+	// The same solid twice, y in [-0.2, 0]: measured on the north face, then on the south face.
+	_, inside := mustOpenings(t, mustWall(t, [2][2]float64{{0, 0}, {3, 0}}, 0, 2.5, 0.2, SideLeft, previewWindow))
+	_, outside := mustOpenings(t, mustWall(t, [2][2]float64{{0, -0.2}, {3, -0.2}}, 0, 2.5, 0.2, SideRight, previewWindow))
+	if len(inside) != 1 || len(outside) != 1 {
+		t.Fatalf("%d openings measured inside, %d outside, want 1 each", len(inside), len(outside))
+	}
+	for k, p := range inside[0].loops[0] {
+		q := outside[0].loops[0][k]
+		if math.Abs(p[0]-q[0]) > 1e-3 || math.Abs(p[1]-q[1]) > 1e-3 || math.Abs(p[2]-q[2]) > 1e-3 {
+			t.Errorf("corner %d: %v measured inside, %v outside", k, p, q)
+		}
+	}
+}
+
+func TestWallOpenings_NicheOnAHiddenFaceIsNotDrawn(t *testing.T) {
+	niche := []Opening{{Offset: 1, Sill: 0.9, Width: 1, Height: 1.2, Depth: 0.05}}
+	if _, got := mustOpenings(t, mustWall(t, [2][2]float64{{0, 0}, {3, 0}}, 0, 2.5, 0.2, SideLeft, niche)); len(got) != 0 {
+		t.Errorf("openings %v, want none", got)
+	}
+}
+
+func TestWallOpenings_OnFaceInFrontOfFaceSeq(t *testing.T) {
+	shapes, got := mustOpenings(t, mustWall(t, [2][2]float64{{0, 0}, {3, 0}}, 0, 2.5, 0.2, SideLeft, previewWindow))
+	south := shapeFacing(t, shapes, [3]float64{0, -1, 0})
+	if len(got) != 1 || got[0].seq != south.seq || got[0].elem != south.elem {
+		t.Fatalf("opening %v, want seq %d (the south face)", got, south.seq)
+	}
+}
