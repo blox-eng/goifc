@@ -23,6 +23,9 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Added
 
+- **Limit errors.** `geometry.ErrTooLarge` and `geometry.ErrNothingToDraw`
+  let `errors.Is` tell a broken limit, or a preview with nothing to draw,
+  from bad input. The messages stay the same.
 - **SVG preview.** `geometry.WritePreviewSVG` draws built walls and slabs as
   an isometric SVG from the south-west, with classes `top`, `left`, `right`
   and `opening` and no colours. Windows and doors show on the face you see.

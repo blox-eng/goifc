@@ -16,7 +16,7 @@ func checkLayers(layers []float64) (total float64, err error) {
 		return 0, errors.New("no layers: a layered element needs at least one layer")
 	}
 	if len(layers) > maxLayers {
-		return 0, fmt.Errorf("%d layers, more than %d", len(layers), maxLayers)
+		return 0, tooLarge("%d layers, more than %d", len(layers), maxLayers)
 	}
 	for k, t := range layers {
 		if err := checkDim(fmt.Sprintf("layer %d: thickness", k), t); err != nil {

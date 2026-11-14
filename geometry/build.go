@@ -68,7 +68,7 @@ func checkDim(name string, v float64) error {
 	case v < minDim:
 		return fmt.Errorf("%s %.6g m is under the 1 mm minimum", name, v)
 	case v > maxLocalExtent:
-		return fmt.Errorf("%s %.6g m is over the %g m maximum", name, v, maxLocalExtent)
+		return tooLarge("%s %.6g m is over the %g m maximum", name, v, maxLocalExtent)
 	}
 	return nil
 }
@@ -80,7 +80,7 @@ func checkOrigin(name string, v float64) error {
 		return fmt.Errorf("%s is not a finite number", name)
 	}
 	if math.Abs(v) > maxOrigin {
-		return fmt.Errorf("%s %.6g m is more than %g m from the origin", name, v, maxOrigin)
+		return tooLarge("%s %.6g m is more than %g m from the origin", name, v, maxOrigin)
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func checkPoints(pts [][2]float64) error {
 			return fmt.Errorf("point %d is not finite", i)
 		}
 		if math.Hypot(p[0]-pts[0][0], p[1]-pts[0][1]) > maxLocalExtent {
-			return fmt.Errorf("point %d is more than %g m from the first point", i, maxLocalExtent)
+			return tooLarge("point %d is more than %g m from the first point", i, maxLocalExtent)
 		}
 	}
 	return nil

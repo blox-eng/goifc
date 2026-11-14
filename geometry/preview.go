@@ -105,7 +105,7 @@ func previewWorld(e Element) ([]v3, error) {
 		}
 		out[i] = applyMat(e.Placement, p)
 		if !inPreviewRange(out[i]) {
-			return nil, fmt.Errorf("vertex %d is out of range in the world", i)
+			return nil, tooLarge("vertex %d is out of range in the world", i)
 		}
 	}
 	return out, nil
@@ -404,7 +404,7 @@ func WritePreviewSVG(w io.Writer, walls []Wall, slabs []Slab) (Detail, error) {
 		}
 		return d, nil
 	}
-	return "", fmt.Errorf("preview is %s bytes as boxes, over the %s-byte cap", thousands(size), thousands(maxPreviewBytes))
+	return "", tooLarge("preview is %s bytes as boxes, over the %s-byte cap", thousands(size), thousands(maxPreviewBytes))
 }
 
 // previewShapesFor checks the input and returns every drawn shape in paint
@@ -447,7 +447,7 @@ func previewShapes(walls []Wall, slabs []Slab, detail Detail) ([]previewShape, e
 		shapes = append(shapes, s...)
 	}
 	if len(shapes) == 0 {
-		return nil, fmt.Errorf("nothing to draw")
+		return nil, ErrNothingToDraw
 	}
 	return shapes, nil
 }
@@ -456,10 +456,10 @@ func previewShapes(walls []Wall, slabs []Slab, detail Detail) ([]previewShape, e
 func checkPreview(walls []Wall, slabs []Slab) error {
 	n := len(walls) + len(slabs)
 	if n == 0 {
-		return fmt.Errorf("nothing to draw")
+		return ErrNothingToDraw
 	}
 	if n > maxPreviewElements {
-		return fmt.Errorf("%s elements, over the %s limit", thousands(n), thousands(maxPreviewElements))
+		return tooLarge("%s elements, over the %s limit", thousands(n), thousands(maxPreviewElements))
 	}
 	tris := 0
 	for _, w := range walls {
@@ -469,7 +469,7 @@ func checkPreview(walls []Wall, slabs []Slab) error {
 		tris += len(s.Element.Tris) / 3
 	}
 	if tris > maxPreviewTriangles {
-		return fmt.Errorf("%s triangles, over the %s limit", thousands(tris), thousands(maxPreviewTriangles))
+		return tooLarge("%s triangles, over the %s limit", thousands(tris), thousands(maxPreviewTriangles))
 	}
 	verts := 0
 	for _, w := range walls {
@@ -479,7 +479,7 @@ func checkPreview(walls []Wall, slabs []Slab) error {
 		verts += len(s.Element.Verts) / 3
 	}
 	if verts > maxPreviewVertices {
-		return fmt.Errorf("%s vertices, over the %s limit", thousands(verts), thousands(maxPreviewVertices))
+		return tooLarge("%s vertices, over the %s limit", thousands(verts), thousands(maxPreviewVertices))
 	}
 	for i, w := range walls {
 		f := w.Measured
@@ -496,7 +496,7 @@ func checkPreview(walls []Wall, slabs []Slab) error {
 			}
 			for _, c := range [2][2]float64{{o.Offset, o.Sill}, {o.Offset + o.Width, o.Sill + o.Height}} {
 				if !inPreviewRange(addv(addv(f.Origin, scalev(f.U, c[0])), scalev(f.V, c[1]))) {
-					return fmt.Errorf("wall %d: opening %d is out of range in the world", i, k)
+					return tooLarge("wall %d: opening %d is out of range in the world", i, k)
 				}
 			}
 		}
