@@ -1,6 +1,6 @@
 # WebAssembly: goifc-build.wasm and goifc-read.wasm
 
-Status: approved by Martin, 2026-11-14.
+Status: approved, 2026-11-14.
 
 ## Intent
 
@@ -68,7 +68,7 @@ Go's `wasm_exec.js` adds about 17 KB.
 
 ## Approaches
 
-Decided with Martin, one question at a time:
+Decided with the maintainer, one question at a time:
 
 1. **What build returns for the 3D view.** Picked: one GLB plus a JSON
    answer. Rejected: mesh arrays inside the JSON (about 3 times bigger,
@@ -255,7 +255,7 @@ lists and no GLB:
 
 ### geometry error values
 
-Decided with Martin, 2026-11-14 (picked over mapping every Go error to
+Decided with the maintainer, 2026-11-14 (picked over mapping every Go error to
 `invalid_input`): `geometry` exports two error values, so the wasm layer
 and Go callers tell a broken limit from bad input with `errors.Is`.
 
@@ -394,7 +394,7 @@ The `wasm` job, which today runs `go build ./...` for `js/wasm`, also:
   verify a release.
 - README bullet, a `CHANGELOG.md` Unreleased entry.
 
-## Calls made by Claude (for Martin to check)
+## Calls made by Claude (for the maintainer to check)
 
 - Error codes: the five `PlacementReason` values, plus `invalid_input`,
   `invalid_ifc`, `too_large`, `nothing_to_draw` and the JS-only
@@ -404,7 +404,7 @@ The `wasm` job, which today runs `go build ./...` for `js/wasm`, also:
 - If the worker dies, `goifc.js` rejects with `worker_failed` and starts
   a fresh worker for queued requests.
 - The read cap was 256 MiB, measured to not fit, and is now 48 MiB;
-  then Martin hears the number first.
+  then the maintainer hears the number first.
 - Build parity passes the same version to both sides and compares full
   float64; a last-digit difference is fixed in `geometry`.
 - The read answer is all-or-nothing, and `nodes` is the flat list with
@@ -437,7 +437,7 @@ answer shapes, the element id scheme and the error codes.
 
 ## Build notes
 
-- 2026-11-14, Martin: the read cap is 48 MiB, not 256 MiB. Measured in
+- 2026-11-14, the maintainer: the read cap is 48 MiB, not 256 MiB. Measured in
   Node, Go 1.25 wasm, `runtime.MemStats.Sys` after one `Read` of a
   synthetic file of dense walls (about 1 KB each, one property set each):
   16 MiB → 585 MiB, 32 → 1,159, 48 → 1,669, 64 → 2,295, 96 → 3,070; 128
