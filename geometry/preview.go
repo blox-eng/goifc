@@ -26,9 +26,9 @@ const (
 	maxPreviewElements  = 100_000
 	maxPreviewTriangles = 4_000_000
 	maxPreviewVertices  = 4_000_000
-	// maxPreviewPairs bounds the shape pairs paintOrder compares by plane.
-	// Past it, the remaining pairs keep centroid order.
-	maxPreviewPairs = 20_000_000
+	// maxPreviewWork bounds the point-by-point steps paintOrder spends
+	// comparing shapes. Past it, the remaining pairs keep centroid order.
+	maxPreviewWork = 50_000_000
 )
 
 // The preview's fixed view: the viewer looks along previewDir, from the
@@ -76,6 +76,19 @@ func previewClass(n v3) string {
 	return "right"
 }
 
+// previewMaxCoord bounds a world coordinate: twice the builders' 1e7 m
+// origin limit, so every number in the SVG stays short and finite.
+const previewMaxCoord = 2 * maxOrigin
+
+func inPreviewRange(p v3) bool {
+	for _, c := range p {
+		if !finite(c) || math.Abs(c) > previewMaxCoord {
+			return false
+		}
+	}
+	return true
+}
+
 // previewWorld takes an element's vertices to world in float64. WorldVerts
 // rounds to float32, which loses millimetres at a large placement.
 func previewWorld(e Element) ([]v3, error) {
@@ -91,6 +104,9 @@ func previewWorld(e Element) ([]v3, error) {
 			return nil, fmt.Errorf("vertex %d is not finite", i)
 		}
 		out[i] = applyMat(e.Placement, p)
+		if !inPreviewRange(out[i]) {
+			return nil, fmt.Errorf("vertex %d is out of range in the world", i)
+		}
 	}
 	return out, nil
 }
@@ -366,30 +382,48 @@ func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
 // style them under .goifc-preview. The root's data-detail names the Detail
 // returned. On an error w gets nothing.
 func WritePreviewSVG(w io.Writer, walls []Wall, slabs []Slab) (Detail, error) {
-	var buf bytes.Buffer
+	if err := checkPreview(walls, slabs); err != nil {
+		return "", err
+	}
+	var size int
 	for _, d := range []Detail{DetailExact, DetailBoxes} {
-		shapes, err := previewShapesFor(walls, slabs, d)
+		shapes, err := previewShapes(walls, slabs, d)
 		if err != nil {
 			return "", err
 		}
-		buf.Reset()
-		writePreview(&buf, shapes, d)
-		if buf.Len() <= maxPreviewBytes {
-			if _, err := w.Write(buf.Bytes()); err != nil {
-				return "", err
-			}
-			return d, nil
+		var sink previewSink
+		if !writePreview(&sink, shapes, d) {
+			size = sink.n
+			continue
 		}
+		paintOrder(shapes)
+		sink = previewSink{}
+		writePreview(&sink, shapes, d)
+		if _, err := w.Write(sink.buf.Bytes()); err != nil {
+			return "", err
+		}
+		return d, nil
 	}
-	return "", fmt.Errorf("preview is %s bytes as boxes, over the %s-byte cap", thousands(buf.Len()), thousands(maxPreviewBytes))
+	return "", fmt.Errorf("preview is %s bytes as boxes, over the %s-byte cap", thousands(size), thousands(maxPreviewBytes))
 }
 
 // previewShapesFor checks the input and returns every drawn shape in paint
-// order, at the given detail. Elements are indexed walls first, then slabs.
+// order, at the given detail.
 func previewShapesFor(walls []Wall, slabs []Slab, detail Detail) ([]previewShape, error) {
 	if err := checkPreview(walls, slabs); err != nil {
 		return nil, err
 	}
+	shapes, err := previewShapes(walls, slabs, detail)
+	if err != nil {
+		return nil, err
+	}
+	paintOrder(shapes)
+	return shapes, nil
+}
+
+// previewShapes returns every drawn shape at the given detail, not yet in
+// paint order. Elements are indexed walls first, then slabs.
+func previewShapes(walls []Wall, slabs []Slab, detail Detail) ([]previewShape, error) {
 	shapesOf := elementShapes
 	if detail == DetailBoxes {
 		shapesOf = boxShapes
@@ -415,7 +449,6 @@ func previewShapesFor(walls []Wall, slabs []Slab, detail Detail) ([]previewShape
 	if len(shapes) == 0 {
 		return nil, fmt.Errorf("nothing to draw")
 	}
-	paintOrder(shapes)
 	return shapes, nil
 }
 
@@ -459,6 +492,11 @@ func checkPreview(walls []Wall, slabs []Slab) error {
 			for _, x := range []float64{o.Offset, o.Sill, o.Width, o.Height, o.Depth} {
 				if !finite(x) {
 					return fmt.Errorf("wall %d: opening %d is not finite", i, k)
+				}
+			}
+			for _, c := range [2][2]float64{{o.Offset, o.Sill}, {o.Offset + o.Width, o.Sill + o.Height}} {
+				if !inPreviewRange(addv(addv(f.Origin, scalev(f.U, c[0])), scalev(f.V, c[1]))) {
+					return fmt.Errorf("wall %d: opening %d is out of range in the world", i, k)
 				}
 			}
 		}
@@ -548,55 +586,185 @@ func inFront(a, b previewShape) bool {
 	return true
 }
 
-// refinePaintOrder returns the indices of shapes (in centroid order) in an
-// order that honours every decided pair, by a topological sort that always
-// takes the earliest ready shape in centroid order. It also returns how many
-// pairs it compared.
-func refinePaintOrder(shapes []previewShape) ([]int, int) {
-	n := len(shapes)
-	type box struct{ lo, hi [2]float64 }
-	boxes := make([]box, n)
-	for i, s := range shapes {
-		b := box{[2]float64{math.Inf(1), math.Inf(1)}, [2]float64{math.Inf(-1), math.Inf(-1)}}
-		for _, l := range s.loops {
-			for _, p := range l {
-				q := previewPoint(p)
-				for k := range 2 {
-					b.lo[k], b.hi[k] = math.Min(b.lo[k], q[k]), math.Max(b.hi[k], q[k])
+// previewFlat is a shape on screen: its loops, its box, and one point just
+// inside its region next to each vertex.
+type previewFlat struct {
+	loops    [][][2]float64
+	lo, hi   [2]float64
+	inside   [][2]float64
+	edges    int
+	vertices int
+}
+
+// previewInsideStep is how far inside its region a shape's sample points
+// sit, in screen metres.
+const previewInsideStep = 1e-4
+
+func flatten(s previewShape) previewFlat {
+	f := previewFlat{lo: [2]float64{math.Inf(1), math.Inf(1)}, hi: [2]float64{math.Inf(-1), math.Inf(-1)}}
+	for _, l := range s.loops {
+		pl := make([][2]float64, len(l))
+		for i, p := range l {
+			pl[i] = previewPoint(p)
+			for k := range 2 {
+				f.lo[k], f.hi[k] = math.Min(f.lo[k], pl[i][k]), math.Max(f.hi[k], pl[i][k])
+			}
+		}
+		f.loops = append(f.loops, pl)
+		f.edges += len(pl)
+	}
+	f.vertices = f.edges
+	// A loop inside an odd number of others is a hole. The region lies to
+	// the left of a counter-clockwise outer loop, and to the right of a
+	// counter-clockwise hole.
+	for i, l := range f.loops {
+		if len(l) < 3 {
+			continue
+		}
+		depth := 0
+		for j, m := range f.loops {
+			if j != i && pointInLoop(l[0], m) {
+				depth++
+			}
+		}
+		left := (signedArea(l) > 0) != (depth%2 == 1)
+		for k, v := range l {
+			a, b := l[(k+len(l)-1)%len(l)], l[(k+1)%len(l)]
+			n1, n2 := leftNormal(a, v), leftNormal(v, b)
+			d := [2]float64{n1[0] + n2[0], n1[1] + n2[1]}
+			if !left {
+				d = [2]float64{-d[0], -d[1]}
+			}
+			if l := math.Hypot(d[0], d[1]); l > 0 {
+				f.inside = append(f.inside, [2]float64{v[0] + d[0]/l*previewInsideStep, v[1] + d[1]/l*previewInsideStep})
+			}
+		}
+	}
+	return f
+}
+
+func signedArea(l [][2]float64) float64 {
+	a := 0.0
+	for i, p := range l {
+		q := l[(i+1)%len(l)]
+		a += p[0]*q[1] - q[0]*p[1]
+	}
+	return a / 2
+}
+
+func leftNormal(a, b [2]float64) [2]float64 {
+	dx, dy := b[0]-a[0], b[1]-a[1]
+	l := math.Hypot(dx, dy)
+	if l == 0 {
+		return [2]float64{}
+	}
+	return [2]float64{-dy / l, dx / l}
+}
+
+func pointInLoop(q [2]float64, l [][2]float64) bool {
+	in := false
+	for i, a := range l {
+		b := l[(i+1)%len(l)]
+		if (a[1] > q[1]) != (b[1] > q[1]) && q[0] < a[0]+(q[1]-a[1])*(b[0]-a[0])/(b[1]-a[1]) {
+			in = !in
+		}
+	}
+	return in
+}
+
+func pointIn(q [2]float64, f previewFlat) bool {
+	in := false
+	for _, l := range f.loops {
+		if pointInLoop(q, l) {
+			in = !in
+		}
+	}
+	return in
+}
+
+// orient is twice the signed area of a, b, c.
+func orient(a, b, c [2]float64) float64 {
+	return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0])
+}
+
+// overlaps reports whether two shapes' regions overlap on screen: an edge of
+// one properly crosses an edge of the other, or a point just inside one lies
+// inside the other. Shapes that only touch along an edge do not overlap.
+func overlaps(a, b previewFlat) bool {
+	const eps = 1e-12
+	for _, la := range a.loops {
+		for i, a1 := range la {
+			a2 := la[(i+1)%len(la)]
+			for _, lb := range b.loops {
+				for j, b1 := range lb {
+					b2 := lb[(j+1)%len(lb)]
+					o1, o2 := orient(a1, a2, b1), orient(a1, a2, b2)
+					o3, o4 := orient(b1, b2, a1), orient(b1, b2, a2)
+					if (o1 > eps && o2 < -eps || o1 < -eps && o2 > eps) && (o3 > eps && o4 < -eps || o3 < -eps && o4 > eps) {
+						return true
+					}
 				}
 			}
 		}
-		boxes[i] = b
+	}
+	for _, q := range a.inside {
+		if pointIn(q, b) {
+			return true
+		}
+	}
+	for _, q := range b.inside {
+		if pointIn(q, a) {
+			return true
+		}
+	}
+	return false
+}
+
+// refinePaintOrder returns the indices of shapes (in centroid order) in an
+// order that honours every decided pair, by a topological sort that always
+// takes the earliest ready shape in centroid order. A pair is decided only
+// when the two shapes overlap on screen. It also returns the steps of work
+// it spent, at most maxPreviewWork: past that, pairs keep centroid order.
+func refinePaintOrder(shapes []previewShape) ([]int, int) {
+	n := len(shapes)
+	flats := make([]previewFlat, n)
+	for i, s := range shapes {
+		flats[i] = flatten(s)
 	}
 	byX := make([]int, n)
 	for i := range byX {
 		byX[i] = i
 	}
-	sort.SliceStable(byX, func(i, j int) bool { return boxes[byX[i]].lo[0] < boxes[byX[j]].lo[0] })
+	sort.SliceStable(byX, func(i, j int) bool { return flats[byX[i]].lo[0] < flats[byX[j]].lo[0] })
 	after := make([][]int, n) // after[a]: shapes drawn after a
 	need := make([]int, n)    // how many shapes must come first
 	edge := func(a, b int) {
 		after[a] = append(after[a], b)
 		need[b]++
 	}
-	pairs := 0
+	work := 0
 pairing:
 	for x, i := range byX {
 		for _, j := range byX[x+1:] {
-			if boxes[j].lo[0] >= boxes[i].hi[0] {
+			fi, fj := flats[i], flats[j]
+			if fj.lo[0] >= fi.hi[0] {
 				break
 			}
-			if pairs == maxPreviewPairs {
-				break pairing
-			}
-			pairs++
-			if boxes[j].lo[1] >= boxes[i].hi[1] || boxes[i].lo[1] >= boxes[j].hi[1] {
+			if fj.lo[1] >= fi.hi[1] || fi.lo[1] >= fj.hi[1] {
 				continue
 			}
 			a, b := min(i, j), max(i, j)
 			sa, sb := shapes[a], shapes[b]
 			if sb.class == "opening" && sb.elem == sa.elem && sb.seq == sa.seq && sa.class != "opening" {
 				edge(a, b) // an opening stays on its own face
+				continue
+			}
+			cost := fi.edges*fj.edges + len(fi.inside)*fj.edges + len(fj.inside)*fi.edges + 2*(fi.vertices+fj.vertices)
+			if work+cost > maxPreviewWork {
+				break pairing
+			}
+			work += cost
+			if !overlaps(fi, fj) {
 				continue
 			}
 			ab, ba := drawnBefore(sa, sb), drawnBefore(sb, sa)
@@ -640,7 +808,7 @@ pairing:
 			}
 		}
 	}
-	return out, pairs
+	return out, work
 }
 
 // intHeap is a min-heap of ints.
@@ -682,8 +850,33 @@ func (h *intHeap) pop() int {
 	return top
 }
 
-// writePreview writes the document for shapes, already in paint order.
-func writePreview(buf *bytes.Buffer, shapes []previewShape, detail Detail) {
+// previewSink keeps at most maxPreviewBytes of a document and counts the
+// rest, so an over-size drawing costs no memory past the cap.
+type previewSink struct {
+	buf bytes.Buffer
+	n   int
+}
+
+func (s *previewSink) WriteString(x string) {
+	s.n += len(x)
+	if s.n <= maxPreviewBytes {
+		s.buf.WriteString(x)
+	}
+}
+
+func (s *previewSink) WriteByte(c byte) error {
+	s.WriteString(string(c))
+	return nil
+}
+
+func (s *previewSink) Write(p []byte) (int, error) {
+	s.WriteString(string(p))
+	return len(p), nil
+}
+
+// writePreview writes the document for shapes into s and reports whether it
+// fits the cap. The size does not depend on the shapes' order.
+func writePreview(buf *previewSink, shapes []previewShape, detail Detail) bool {
 	lo, hi := [2]float64{math.Inf(1), math.Inf(1)}, [2]float64{math.Inf(-1), math.Inf(-1)}
 	for _, s := range shapes {
 		for _, l := range s.loops {
@@ -728,9 +921,10 @@ func writePreview(buf *bytes.Buffer, shapes []previewShape, detail Detail) {
 		buf.WriteString("\"/>\n")
 	}
 	buf.WriteString("</g>\n</svg>\n")
+	return buf.n <= maxPreviewBytes
 }
 
-func writePoint(buf *bytes.Buffer, p v3) {
+func writePoint(buf *previewSink, p v3) {
 	q := previewPoint(p)
 	buf.WriteString(mm(q[0]))
 	buf.WriteByte(' ')

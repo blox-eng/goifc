@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"flag"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -212,9 +213,57 @@ func mustOrdered(t *testing.T, walls []Wall, slabs []Slab) []previewShape {
 	return s
 }
 
+// previewRoomGrid is rows × cols layered rooms with a door, two windows, a
+// niche and a slab each, 0.5 m apart.
+func previewRoomGrid(t *testing.T, rows, cols int) previewFixture {
+	t.Helper()
+	walls, slabs := []Wall{}, []Slab{}
+	ops := [][]Opening{
+		{{Offset: 0.5, Sill: 0, Width: 0.9, Height: 2.1}},
+		{{Offset: 1.2, Sill: 0.9, Width: 1.2, Height: 1.4}},
+		{{Offset: 1.0, Sill: 0.9, Width: 1.5, Height: 1.4}},
+		{{Offset: 1.0, Sill: 1.0, Width: 0.6, Height: 0.4, Depth: 0.01}},
+	}
+	for r := range rows {
+		for c := range cols {
+			x0, y0 := float64(c)*5, float64(r)*4.5
+			out := [][2]float64{{x0, y0}, {x0 + 4.5, y0}, {x0 + 4.5, y0 + 4}, {x0, y0 + 4}}
+			ws, err := BuildRoomWallLayers(out, 0, 2.7, []float64{0.015, 0.20, 0.10}, SideLeft, ops)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, l := range ws {
+				walls = append(walls, l...)
+			}
+			slabs = append(slabs, mustSlab(t, out, 0, 0.2))
+		}
+	}
+	return previewFixture{fmt.Sprintf("%dx%d rooms", rows, cols), walls, slabs}
+}
+
+// previewLHouseTurned is the L-shaped house turned by deg about the origin.
+func previewLHouseTurned(t *testing.T, deg float64) previewFixture {
+	t.Helper()
+	a := deg * math.Pi / 180
+	var outline [][2]float64
+	for _, p := range [][2]float64{{0, 0}, {8, 0}, {8, 4}, {4, 4}, {4, 7}, {0, 7}} {
+		outline = append(outline, [2]float64{p[0]*math.Cos(a) - p[1]*math.Sin(a), p[0]*math.Sin(a) + p[1]*math.Cos(a)})
+	}
+	win := []Opening{{Offset: 1.5, Sill: 0.9, Width: 1.2, Height: 1.4}}
+	ws, err := BuildRoomWalls(outline, 0, 2.7, 0.25, SideLeft, [][]Opening{win, nil, nil, nil, nil, win})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return previewFixture{fmt.Sprintf("l-house turned %g°", deg), ws, []Slab{mustSlab(t, outline, 0, 0.2)}}
+}
+
 func TestWritePreviewSVG_VisibleSurface(t *testing.T) {
 	fs := append(previewFixtures(t), previewLayeredWall(t, [2][2]float64{{4, 0}, {0, 0}}))
 	fs[len(fs)-1].name = "layered-wall-measured-south"
+	fs = append(fs, previewRoomGrid(t, 2, 2), previewRoomGrid(t, 2, 3), previewRoomGrid(t, 3, 2))
+	for _, deg := range []float64{105, 165, 195} {
+		fs = append(fs, previewLHouseTurned(t, deg))
+	}
 	for _, f := range fs {
 		visibleSurface(t, f.name, mustOrdered(t, f.walls, f.slabs))
 	}
@@ -422,9 +471,9 @@ func TestWritePreviewSVG_BigModelDrawsBoxes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var eb bytes.Buffer
+	var eb previewSink
 	writePreview(&eb, exact, DetailExact)
-	t.Logf("exact size %d bytes", eb.Len())
+	t.Logf("exact size %d bytes", eb.n)
 	out, d := mustPreview(t, walls, slabs)
 	t.Logf("boxes size %d bytes", len(out))
 	if d != DetailBoxes || !bytes.Contains(out, []byte(`data-detail="boxes"`)) {
@@ -497,20 +546,78 @@ func TestElementShapes_ManyPlanesStayFast(t *testing.T) {
 	}
 }
 
-func TestRefinePaintOrder_PairsAreBounded(t *testing.T) {
-	// 8,000 squares stacked on one spot would need 32 million comparisons.
-	shapes := make([]previewShape, 8000)
+func TestRefinePaintOrder_WorkIsBounded(t *testing.T) {
+	// 6,300 stacked 630-gons: comparing every pair point by point would take
+	// over 1.5e11 steps.
+	shapes := make([]previewShape, 6300)
 	for i := range shapes {
 		z := float64(i) * 0.001
-		shapes[i] = previewShape{class: "top", normal: v3{0, 0, 1}, offset: z, seq: i,
-			loops: [][]v3{{{0, 0, z}, {1, 0, z}, {1, 1, z}, {0, 1, z}}}}
+		var loop []v3
+		for k := range 630 {
+			a := 2 * math.Pi * float64(k) / 630
+			loop = append(loop, v3{math.Cos(a), math.Sin(a), z})
+		}
+		shapes[i] = previewShape{class: "top", normal: v3{0, 0, 1}, offset: z, seq: i, loops: [][]v3{loop}}
 	}
-	order, pairs := refinePaintOrder(shapes)
-	if pairs > maxPreviewPairs {
-		t.Errorf("%d pair comparisons, over the %d budget", pairs, maxPreviewPairs)
+	start := time.Now()
+	order, work := refinePaintOrder(shapes)
+	if work > maxPreviewWork+2*630*630 {
+		t.Errorf("%d steps of work, over the %d budget", work, maxPreviewWork)
+	}
+	if d := time.Since(start); d > 10*time.Second {
+		t.Errorf("refinePaintOrder took %v", d)
 	}
 	if len(order) != len(shapes) {
 		t.Errorf("%d shapes ordered, want %d", len(order), len(shapes))
+	}
+}
+
+func TestWritePreview_StopsAtTheCap(t *testing.T) {
+	walls, slabs := previewRoomsModel(t, 240)
+	shapes, err := previewShapesFor(walls, slabs, DetailExact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sink previewSink
+	if writePreview(&sink, shapes, DetailExact) {
+		t.Fatal("writePreview says the 3,120-element exact drawing fits")
+	}
+	if sink.buf.Len() > maxPreviewBytes {
+		t.Errorf("kept %d bytes, want at most the %d cap", sink.buf.Len(), maxPreviewBytes)
+	}
+	if sink.n <= maxPreviewBytes {
+		t.Errorf("counted %d bytes, want the full size past the cap", sink.n)
+	}
+}
+
+func TestWritePreviewSVG_RefusesHugeCoordinates(t *testing.T) {
+	room := previewRoom(t)
+	far := slices.Clone(room.walls)
+	far[0].Measured.Openings = []Opening{{Offset: 1e308, Width: 1e308, Height: 1}}
+	scaled := slices.Clone(room.walls)
+	scaled[1].Element.Placement[0] = 1e300
+	for _, c := range []struct {
+		name  string
+		walls []Wall
+		want  []string
+	}{
+		{"opening", far, []string{"wall 0", "opening 0"}},
+		{"placement", scaled, []string{"wall 1", "vertex"}},
+	} {
+		var buf bytes.Buffer
+		d, err := WritePreviewSVG(&buf, c.walls, room.slabs)
+		if err == nil {
+			t.Errorf("%s: no error, wrote %d bytes", c.name, buf.Len())
+			continue
+		}
+		for _, w := range c.want {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("%s: error %q does not name %q", c.name, err, w)
+			}
+		}
+		if d != "" || buf.Len() != 0 {
+			t.Errorf("%s: detail %q and %d bytes written", c.name, d, buf.Len())
+		}
 	}
 }
 

@@ -114,7 +114,9 @@ func WritePreviewSVG(w io.Writer, walls []Wall, slabs []Slab) (Detail, error)
 ### What is drawn
 
 - A triangle is drawn only if its world normal `n` gives `n·d < 0` (it faces
-  the viewer). A triangle with `|n·d| ≤ 1e-9` is edge-on and dropped.
+  the viewer). A triangle with `|n·d| ≤ 1e-6` is edge-on and dropped (build
+  ruling, 2026-11-14: 1e-9 kept float32 mitre end faces as zero-width
+  slivers).
 - In one element, the kept triangles that share a plane are merged into one
   shape. Two triangles share a plane when their unit normals differ by under
   1e-6 and their plane offsets by under 1e-4 m (the mesh grid snap). The
@@ -152,7 +154,13 @@ that is in front of part of it. The painter-order test below is fixed and is
 not relaxed to pass. If centroid order fails it on a fixture, the sort is
 improved: each pair of shapes whose screen outlines overlap is ordered by
 exact depth at a point in the overlap, then a topological sort, with
-centroid order breaking any cycle (build ruling, 2026-11-14). A layout
+centroid order breaking any cycle (build ruling, 2026-11-14). As built, a
+pair is ordered by the plane test (a shape wholly behind the other's plane,
+or with the other wholly in front of its own, is drawn first), and only when
+the two outlines really overlap on screen: deciding pairs whose boxes merely
+overlap made cycles on grids of rooms (final review, 2026-11-14). The
+comparison spends at most 50 million point steps; past that, pairs keep
+centroid order. A layout
 outside the fixtures can still draw with a wrong overlap, not a crash or a
 missing shape.
 
@@ -183,8 +191,12 @@ missing shape.
 - Measured 2026-11-14 with a throwaway program on the builders: 154 rooms of
   three-layer walls plus a slab each, 2,002 elements, 120,736 triangles,
   1,540 openings. Exact: about 1.36 MB (677 bytes per element, 221 KB
-  gzipped). Boxes: 511 KB (255 bytes per element, 61 KB gzipped). So a model
-  that size draws as boxes, and boxes reach the cap near 4,000 elements.
+  gzipped). Boxes: 511 KB (255 bytes per element, 61 KB gzipped).
+- Build measurement, 2026-11-14: the real exact drawing of that model is
+  950,998 bytes, so it stays exact. 240 such rooms (3,120 elements) are
+  1,503,765 bytes exact and draw as boxes at 761,683 bytes.
+- The size is measured before the drawing is put in paint order, and an
+  over-size document is counted, not kept.
 - A gallery card is about 300 px wide. At that size the boxes drawing and the
   exact one look the same, and a card over 1 MB slows every page that shows
   it.
@@ -203,8 +215,11 @@ missing shape.
 Each refusal is an error that says what is wrong. No partial output.
 
 - `walls` and `slabs` both empty: `nothing to draw`.
-- More than 100,000 elements, or more than 4,000,000 triangles in all:
-  refused before any work, naming the count and the limit.
+- More than 100,000 elements, more than 4,000,000 triangles in all (an
+  opening counts as 2), or more than 4,000,000 vertices in all: refused
+  before any work, naming the count and the limit.
+- A world vertex or opening corner more than 2e7 m from the origin: refused,
+  naming the wall or slab.
 - A vertex, a placement entry, a face vector or an opening number that is
   not finite: refused, naming the wall or slab index.
 - A triangle index out of range: refused, naming the wall or slab index.
@@ -233,7 +248,7 @@ All fixtures are synthetic and built in the test from the builders.
 - **Allow-list:** parse each output with `encoding/xml`; every element and
   attribute is in the list above.
 - **Determinism:** two calls give the same bytes.
-- **Simplify:** the measured 2,000-element model above returns `DetailBoxes`, has
+- **Simplify:** a 3,120-element model of the measured rooms returns `DetailBoxes`, has
   `data-detail="boxes"`, holds no `opening`, and is at most the cap.
 - **Still too big:** a model past the boxes cap returns the named error and
   writes nothing.
