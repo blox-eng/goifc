@@ -1,0 +1,1 @@
+{"goifcVersion":"v0.0.0-test","ok":false,"errors":[{"code":"too_wide","item":"r1","wall":2,"opening":0,"message":"wall 2 opening 0: too_wide"}]}

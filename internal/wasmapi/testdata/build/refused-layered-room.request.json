@@ -1,0 +1,2 @@
+{"rooms": [{"id": "r1", "outline": [[0, 0], [5, 0], [5, 4], [0, 4]], "base": 0, "height": 2.7, "layers": [0.02, 0.2], "side": "right",
+  "openings": [[], [], [{"offset": 1, "sill": 0.9, "width": 9, "height": 1.2}], []]}]}

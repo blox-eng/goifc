@@ -1,0 +1,1 @@
+{"goifcVersion":"v0.0.0-test","ok":false,"errors":[{"code":"invalid_input","item":"w1","message":"height 0 m is under the 1 mm minimum"},{"code":"invalid_input","item":"s1","message":"outline has zero area"}]}
