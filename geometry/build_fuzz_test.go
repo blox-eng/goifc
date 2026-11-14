@@ -270,7 +270,11 @@ func FuzzWritePreviewSVG(f *testing.F) {
 			}
 			return
 		}
+		if d != DetailExact && d != DetailBoxes {
+			t.Fatalf("detail %q, want exact or boxes", d)
+		}
 		dec := xml.NewDecoder(&buf)
+		found := false
 		for {
 			tok, err := dec.Token()
 			if err == io.EOF {
@@ -281,11 +285,17 @@ func FuzzWritePreviewSVG(f *testing.F) {
 			}
 			if se, ok := tok.(xml.StartElement); ok && se.Name.Local == "svg" {
 				for _, a := range se.Attr {
-					if a.Name.Local == "data-detail" && a.Value != string(d) {
-						t.Fatalf("data-detail %q, returned %q", a.Value, d)
+					if a.Name.Local == "data-detail" {
+						found = true
+						if a.Value != string(d) {
+							t.Fatalf("data-detail %q, returned %q", a.Value, d)
+						}
 					}
 				}
 			}
+		}
+		if !found {
+			t.Fatal("the svg root has no data-detail")
 		}
 	})
 }
