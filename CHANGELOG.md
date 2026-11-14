@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.18.0 — 2026-11-14
+
 ### Added
 
 - **SVG preview.** `geometry.WritePreviewSVG` draws built walls and slabs as
