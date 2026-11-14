@@ -1,8 +1,12 @@
 package geometry
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"math"
+	"sort"
+	"strconv"
 )
 
 // Detail is how exactly a preview draws its elements.
@@ -11,6 +15,14 @@ type Detail string
 const (
 	DetailExact Detail = "exact" // every flat face, with its openings
 	DetailBoxes Detail = "boxes" // one prism per element, no openings
+)
+
+// Bounds on a preview: the work is checked before it starts, the output
+// before it is written.
+const (
+	maxPreviewBytes     = 1 << 20
+	maxPreviewElements  = 100_000
+	maxPreviewTriangles = 4_000_000
 )
 
 // The preview's fixed view: the viewer looks along previewDir, from the
@@ -22,7 +34,7 @@ var (
 )
 
 const (
-	previewEdgeOn     = 1e-9 // |n·d| at or under this: the triangle is edge-on
+	previewEdgeOn     = 1e-6 // |n·d| at or under this: the triangle is edge-on (float32 noise)
 	previewNormalTol  = 1e-6 // unit normals closer than this share a plane
 	previewCollinear  = 1e-6 // sine of the angle under which a loop vertex is dropped
 	previewZeroArea   = 1e-12
@@ -308,4 +320,372 @@ func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
 			depth: dotv(c, previewDir), elem: elem, seq: seq})
 	}
 	return out
+}
+
+// WritePreviewSVG draws walls and slabs, with the walls' openings, as one
+// SVG document in a fixed isometric view from the south-west. Pass the
+// builders' results as they are: a layered wall is one Wall per layer.
+//
+// Every shape has one class, top, left, right or opening, and no colour:
+// style them under .goifc-preview. The root's data-detail names the Detail
+// returned. On an error w gets nothing.
+func WritePreviewSVG(w io.Writer, walls []Wall, slabs []Slab) (Detail, error) {
+	shapes, err := previewShapesFor(walls, slabs)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	writePreview(&buf, shapes, DetailExact)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return "", err
+	}
+	return DetailExact, nil
+}
+
+// previewShapesFor checks the input and returns every drawn shape in paint
+// order. Elements are indexed walls first, then slabs.
+func previewShapesFor(walls []Wall, slabs []Slab) ([]previewShape, error) {
+	if err := checkPreview(walls, slabs); err != nil {
+		return nil, err
+	}
+	var shapes []previewShape
+	for i, w := range walls {
+		s, err := elementShapes(w.Element, i)
+		if err != nil {
+			return nil, fmt.Errorf("wall %d: %w", i, err)
+		}
+		shapes = append(shapes, s...)
+		shapes = append(shapes, wallOpenings(w, s, i)...)
+	}
+	for i, sl := range slabs {
+		s, err := elementShapes(sl.Element, len(walls)+i)
+		if err != nil {
+			return nil, fmt.Errorf("slab %d: %w", i, err)
+		}
+		shapes = append(shapes, s...)
+	}
+	if len(shapes) == 0 {
+		return nil, fmt.Errorf("nothing to draw")
+	}
+	paintOrder(shapes)
+	return shapes, nil
+}
+
+// checkPreview refuses input that is too big or not finite, before any work.
+func checkPreview(walls []Wall, slabs []Slab) error {
+	n := len(walls) + len(slabs)
+	if n == 0 {
+		return fmt.Errorf("nothing to draw")
+	}
+	if n > maxPreviewElements {
+		return fmt.Errorf("%s elements, over the %s limit", thousands(n), thousands(maxPreviewElements))
+	}
+	tris := 0
+	for _, w := range walls {
+		tris += len(w.Element.Tris) / 3
+	}
+	for _, s := range slabs {
+		tris += len(s.Element.Tris) / 3
+	}
+	if tris > maxPreviewTriangles {
+		return fmt.Errorf("%s triangles, over the %s limit", thousands(tris), thousands(maxPreviewTriangles))
+	}
+	for i, w := range walls {
+		f := w.Measured
+		for _, v := range [][3]float64{f.Origin, f.U, f.V, f.Normal} {
+			if !finite(v[0]) || !finite(v[1]) || !finite(v[2]) {
+				return fmt.Errorf("wall %d: the measured face is not finite", i)
+			}
+		}
+		for k, o := range f.Openings {
+			for _, x := range []float64{o.Offset, o.Sill, o.Width, o.Height, o.Depth} {
+				if !finite(x) {
+					return fmt.Errorf("wall %d: opening %d is not finite", i, k)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// paintOrder sorts shapes from the farthest to the nearest. It starts from
+// centroid depth (ties by element, then order in the element; an opening
+// right after the shape it lies on). Then, for each pair whose screen boxes
+// overlap, a shape that lies wholly behind the other's plane, or has the
+// other wholly in front of its own plane, is drawn first. A cycle of such
+// rules breaks by centroid order.
+func paintOrder(shapes []previewShape) {
+	type key struct {
+		depth     float64
+		elem, seq int
+		opening   int
+	}
+	depthOf := map[[2]int]float64{}
+	for _, s := range shapes {
+		if s.class != "opening" {
+			depthOf[[2]int{s.elem, s.seq}] = s.depth
+		}
+	}
+	keyOf := func(s previewShape) key {
+		if s.class != "opening" {
+			return key{s.depth, s.elem, s.seq, 0}
+		}
+		if d, ok := depthOf[[2]int{s.elem, s.seq}]; ok && s.seq >= 0 {
+			return key{d, s.elem, s.seq, 1}
+		}
+		return key{s.depth, s.elem, math.MaxInt, 1}
+	}
+	sort.SliceStable(shapes, func(i, j int) bool {
+		a, b := keyOf(shapes[i]), keyOf(shapes[j])
+		switch {
+		case a.depth != b.depth:
+			return a.depth > b.depth
+		case a.elem != b.elem:
+			return a.elem < b.elem
+		case a.seq != b.seq:
+			return a.seq < b.seq
+		}
+		return a.opening < b.opening
+	})
+	order := refinePaintOrder(shapes)
+	sorted := make([]previewShape, len(shapes))
+	for i, k := range order {
+		sorted[i] = shapes[k]
+	}
+	copy(shapes, sorted)
+}
+
+// previewPlaneTol is how far a vertex may stray off the near side of a plane
+// and still count as behind it: float32 mesh vertices are local to the
+// element, so a few micrometres of noise.
+const previewPlaneTol = gridSnap / 10
+
+// behind reports whether every vertex of a is behind (or on) b's plane, as
+// the viewer sees it. b faces the viewer, so its near side is where
+// normal·p > offset.
+func behind(a, b previewShape) bool {
+	for _, l := range a.loops {
+		for _, p := range l {
+			if dotv(b.normal, p) > b.offset+previewPlaneTol {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// drawnBefore reports whether a must be drawn before b, by their planes.
+func drawnBefore(a, b previewShape) bool {
+	return behind(a, b) || inFront(b, a)
+}
+
+func inFront(a, b previewShape) bool {
+	for _, l := range a.loops {
+		for _, p := range l {
+			if dotv(b.normal, p) < b.offset-previewPlaneTol {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// refinePaintOrder returns the indices of shapes (in centroid order) in an
+// order that honours every decided pair, by a topological sort that always
+// takes the earliest ready shape in centroid order.
+func refinePaintOrder(shapes []previewShape) []int {
+	n := len(shapes)
+	type box struct{ lo, hi [2]float64 }
+	boxes := make([]box, n)
+	for i, s := range shapes {
+		b := box{[2]float64{math.Inf(1), math.Inf(1)}, [2]float64{math.Inf(-1), math.Inf(-1)}}
+		for _, l := range s.loops {
+			for _, p := range l {
+				q := previewPoint(p)
+				for k := range 2 {
+					b.lo[k], b.hi[k] = math.Min(b.lo[k], q[k]), math.Max(b.hi[k], q[k])
+				}
+			}
+		}
+		boxes[i] = b
+	}
+	byX := make([]int, n)
+	for i := range byX {
+		byX[i] = i
+	}
+	sort.SliceStable(byX, func(i, j int) bool { return boxes[byX[i]].lo[0] < boxes[byX[j]].lo[0] })
+	after := make([][]int, n) // after[a]: shapes drawn after a
+	need := make([]int, n)    // how many shapes must come first
+	edge := func(a, b int) {
+		after[a] = append(after[a], b)
+		need[b]++
+	}
+	for x, i := range byX {
+		for _, j := range byX[x+1:] {
+			if boxes[j].lo[0] >= boxes[i].hi[0] {
+				break
+			}
+			if boxes[j].lo[1] >= boxes[i].hi[1] || boxes[i].lo[1] >= boxes[j].hi[1] {
+				continue
+			}
+			a, b := min(i, j), max(i, j)
+			sa, sb := shapes[a], shapes[b]
+			if sb.class == "opening" && sb.elem == sa.elem && sb.seq == sa.seq && sa.class != "opening" {
+				edge(a, b) // an opening stays on its own face
+				continue
+			}
+			ab, ba := drawnBefore(sa, sb), drawnBefore(sb, sa)
+			switch {
+			case ab && !ba:
+				edge(a, b)
+			case ba && !ab:
+				edge(b, a)
+			}
+		}
+	}
+	// Ready shapes in a min-heap of their centroid-order index.
+	ready := &intHeap{}
+	for i := range n {
+		if need[i] == 0 {
+			ready.push(i)
+		}
+	}
+	done := make([]bool, n)
+	out := make([]int, 0, n)
+	next := 0 // the earliest shape not yet placed, to break a cycle
+	for len(out) < n {
+		var i int
+		if ready.len() > 0 {
+			i = ready.pop()
+		} else {
+			for done[next] {
+				next++
+			}
+			i = next
+		}
+		if done[i] {
+			continue
+		}
+		done[i] = true
+		out = append(out, i)
+		for _, j := range after[i] {
+			need[j]--
+			if need[j] == 0 && !done[j] {
+				ready.push(j)
+			}
+		}
+	}
+	return out
+}
+
+// intHeap is a min-heap of ints.
+type intHeap struct{ a []int }
+
+func (h *intHeap) len() int { return len(h.a) }
+
+func (h *intHeap) push(x int) {
+	h.a = append(h.a, x)
+	for i := len(h.a) - 1; i > 0; {
+		p := (i - 1) / 2
+		if h.a[p] <= h.a[i] {
+			break
+		}
+		h.a[p], h.a[i] = h.a[i], h.a[p]
+		i = p
+	}
+}
+
+func (h *intHeap) pop() int {
+	top := h.a[0]
+	last := len(h.a) - 1
+	h.a[0] = h.a[last]
+	h.a = h.a[:last]
+	for i := 0; ; {
+		l, r, m := 2*i+1, 2*i+2, i
+		if l < last && h.a[l] < h.a[m] {
+			m = l
+		}
+		if r < last && h.a[r] < h.a[m] {
+			m = r
+		}
+		if m == i {
+			break
+		}
+		h.a[m], h.a[i] = h.a[i], h.a[m]
+		i = m
+	}
+	return top
+}
+
+// writePreview writes the document for shapes, already in paint order.
+func writePreview(buf *bytes.Buffer, shapes []previewShape, detail Detail) {
+	lo, hi := [2]float64{math.Inf(1), math.Inf(1)}, [2]float64{math.Inf(-1), math.Inf(-1)}
+	for _, s := range shapes {
+		for _, l := range s.loops {
+			for _, p := range l {
+				q := previewPoint(p)
+				for k := range 2 {
+					lo[k], hi[k] = math.Min(lo[k], q[k]), math.Max(hi[k], q[k])
+				}
+			}
+		}
+	}
+	m := 0.02 * math.Max(hi[0]-lo[0], hi[1]-lo[1])
+	fmt.Fprintf(buf, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="%s %s %s %s" data-detail="%s">`+"\n",
+		mm(lo[0]-m), mm(lo[1]-m), mm(hi[0]-lo[0]+2*m), mm(hi[1]-lo[1]+2*m), detail)
+	buf.WriteString(`<g class="goifc-preview">` + "\n")
+	for _, s := range shapes {
+		if len(s.loops) == 1 {
+			buf.WriteString(`<polygon class="` + s.class + `" points="`)
+			for i, p := range s.loops[0] {
+				if i > 0 {
+					buf.WriteByte(' ')
+				}
+				writePoint(buf, p)
+			}
+		} else {
+			buf.WriteString(`<path class="` + s.class + `" fill-rule="evenodd" d="`)
+			for i, l := range s.loops {
+				if i > 0 {
+					buf.WriteByte(' ')
+				}
+				for k, p := range l {
+					if k == 0 {
+						buf.WriteByte('M')
+					} else {
+						buf.WriteByte('L')
+					}
+					writePoint(buf, p)
+				}
+				buf.WriteByte('Z')
+			}
+		}
+		buf.WriteString("\"/>\n")
+	}
+	buf.WriteString("</g>\n</svg>\n")
+}
+
+func writePoint(buf *bytes.Buffer, p v3) {
+	q := previewPoint(p)
+	buf.WriteString(mm(q[0]))
+	buf.WriteByte(' ')
+	buf.WriteString(mm(q[1]))
+}
+
+// mm writes a length in metres rounded to 1 mm, with no trailing zeros.
+func mm(v float64) string {
+	r := math.Round(v*1000) / 1000
+	if r == 0 {
+		return "0"
+	}
+	return strconv.FormatFloat(r, 'f', -1, 64)
+}
+
+// thousands writes n with comma separators: 1,048,576.
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
 }
