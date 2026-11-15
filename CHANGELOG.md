@@ -19,6 +19,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.19.0 — 2026-11-15
+
 ### Added
 
 - **WebAssembly.** `goifc-build.wasm` builds walls, rooms and slabs from
