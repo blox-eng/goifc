@@ -8,6 +8,10 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Changed
+
+- Releases no longer open a changelog PR, which got no CI and never merged. After a release, run `make promote` in a PR of its own; CI fails until then. (#140)
+
 ## v0.19.0 — 2026-11-15
 
 ### Added
