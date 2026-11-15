@@ -11,14 +11,18 @@
 set -euo pipefail
 
 here="$(dirname "$0")"
+mapfile -t tags < <("$here/release-tags.sh")
 version="${1:-}"
 if [[ -z "$version" ]]; then
-  tag="$(git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n 1)"
-  if [[ -z "$tag" ]]; then
-    echo "promote-release: no v* tag to promote; run git fetch --tags" >&2
+  if [[ ${#tags[@]} -eq 0 ]]; then
+    echo "promote-release: no release tag to promote; run git fetch --tags" >&2
     exit 1
   fi
-  version="${tag#v}"
+  version="${tags[0]#v}"
+fi
+if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+  echo "promote-release: no tag v$version here; run git fetch --tags" >&2
+  exit 1
 fi
 date="${2:-$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%d "v$version")}"
 
@@ -33,10 +37,7 @@ fi
 # next release, so refuse rather than credit it to this one.
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
-if ! git show "v$version:CHANGELOG.md" >"$tmp" 2>/dev/null; then
-  echo "promote-release: no tag v$version here to compare with; run git fetch --tags" >&2
-  exit 1
-fi
+git show "v$version:CHANGELOG.md" >"$tmp"
 if [[ "$("$here/release-notes.sh" Unreleased "$tmp" 2>/dev/null)" != "$("$here/release-notes.sh" Unreleased CHANGELOG.md)" ]]; then
   echo "promote-release: ## Unreleased differs from v$version's, so it holds entries the release did not ship." >&2
   echo "Promote on a branch with no entries of its own: git switch -c docs/promote-v$version origin/main && make promote" >&2
@@ -44,11 +45,30 @@ if [[ "$("$here/release-notes.sh" Unreleased "$tmp" 2>/dev/null)" != "$("$here/r
   exit 1
 fi
 
+# Two releases cut before a promotion share one Unreleased; only a person can
+# split them.
+for i in "${!tags[@]}"; do
+  if [[ "${tags[$i]}" == "v$version" && -n "${tags[$((i + 1))]:-}" ]]; then
+    prev="${tags[$((i + 1))]}"
+    if ! "$here/changelog-guard.sh" "$prev" CHANGELOG.md >/dev/null 2>&1; then
+      echo "promote-release: CHANGELOG.md has no heading for $prev either, so ## Unreleased holds two releases." >&2
+      echo "Split them by hand: add \"## v$version — $date\" above the entries git show v$version:CHANGELOG.md adds since $prev, and a $prev heading above the rest." >&2
+      exit 1
+    fi
+  fi
+done
+
 "$here/promote-changelog.sh" "$version" "$date"
 echo "CHANGELOG.md: ## Unreleased is now ## v$version — $date"
 
-if ! "$here/announce-release.sh" "$version" CHANGELOG.md www/index.html; then
+# announce-release.sh exits 2 when the release has no headline, which most
+# patch releases do; any other failure is real.
+status=0
+"$here/announce-release.sh" "$version" CHANGELOG.md www/index.html || status=$?
+if [[ $status -eq 2 ]]; then
   echo "www/index.html keeps the last headline. To announce v$version, add a \"- **...**\" line to its section and run .github/scripts/announce-release.sh $version." >&2
   exit 0
+elif [[ $status -ne 0 ]]; then
+  exit "$status"
 fi
 echo "www/index.html: the news line names v$version"

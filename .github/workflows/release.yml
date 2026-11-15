@@ -110,7 +110,7 @@ jobs:
             echo "::warning::Could not fetch tags; ${tag} keeps its generated notes."
             exit 0
           fi
-          if prev="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null)"; then
+          if prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${tag}^" 2>/dev/null)"; then
             # A PR that merged before the previous release was promoted leaves
             # that release's entries under Unreleased too. Publishing them
             # would repeat its notes.

@@ -221,7 +221,7 @@ func TestChangelogGuardNoTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := scriptIn(t, dir, "changelog-guard.sh")
-	if err != nil || !strings.Contains(out, "no v* tag") {
+	if err != nil || out != "OK: no release tag, nothing to check\n" {
 		t.Fatalf("%v: %s", err, out)
 	}
 }
@@ -305,23 +305,26 @@ func TestReleaseWorkflowOpensNoPR(t *testing.T) {
 	}
 }
 
+// gitIn runs git in dir with a throwaway identity and no signing.
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"}, args...)...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v %s", args, err, out)
+	}
+}
+
 // tagged makes a git repo whose CHANGELOG.md is changelog, with the tags on
 // its one commit.
 func tagged(t *testing.T, changelog string, tags ...string) string {
 	t.Helper()
 	dir := repo(t, changelog)
-	git := func(args ...string) {
-		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"}, args...)...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, out)
-		}
-	}
-	git("init", "-q")
-	git("add", ".")
-	git("commit", "-q", "-m", "c")
+	gitIn(t, dir, "init", "-q")
+	gitIn(t, dir, "add", ".")
+	gitIn(t, dir, "commit", "-q", "-m", "c")
 	for _, tag := range tags {
-		git("tag", tag)
+		gitIn(t, dir, "tag", tag)
 	}
 	return dir
 }
@@ -349,6 +352,9 @@ func TestPromoteReleaseRefusalNamesFetch(t *testing.T) {
 // entries, so the workflow keeps the generated notes instead.
 func TestReleaseNotesCheckThePreviousHeading(t *testing.T) {
 	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
+	if !strings.Contains(wf, `--match 'v[0-9]*'`) {
+		t.Error("release.yml takes any tag as the previous release")
+	}
 	if !strings.Contains(wf, `changelog-guard.sh "$prev"`) {
 		t.Error(`release.yml does not check "$prev" has a heading before publishing Unreleased`)
 	}
@@ -368,5 +374,96 @@ func TestPromoteReleaseRefusesEntriesAfterTheTag(t *testing.T) {
 	}
 	if read(t, filepath.Join(dir, "CHANGELOG.md")) != cl || read(t, filepath.Join(dir, "www/index.html")) != site {
 		t.Fatal("a refused promote changed a file")
+	}
+}
+
+// Two releases cut before a promotion leave the older one with no heading.
+// The guard names it, not only the newest.
+func TestChangelogGuardChecksThePreviousTag(t *testing.T) {
+	dir := tagged(t, "## Unreleased\n\n## v0.6.0 — 2026-01-02\n", "v0.5.0", "v0.6.0")
+	out, err := scriptIn(t, dir, "changelog-guard.sh")
+	if err == nil || !strings.Contains(out, "v0.5.0,") {
+		t.Fatalf("v0.5.0 has no heading and passed: %v %s", err, out)
+	}
+}
+
+// Only vX.Y.Z tags on this branch are releases: a stray tag elsewhere, or
+// one that is not a version, never fails every PR.
+func TestChangelogGuardIgnoresOtherTags(t *testing.T) {
+	dir := tagged(t, released, "v0.3.0", "v0.4.0", "vnext")
+	gitIn(t, dir, "switch", "-q", "-c", "side")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "side")
+	gitIn(t, dir, "tag", "v9.0.0")
+	gitIn(t, dir, "switch", "-q", "-")
+	if out, err := scriptIn(t, dir, "changelog-guard.sh"); err != nil || !strings.Contains(out, "v0.4.0") {
+		t.Fatalf("%v: %s", err, out)
+	}
+}
+
+// make promote passes no arguments: the version is the newest tag and the
+// date its commit date in UTC.
+func TestPromoteReleaseDefaults(t *testing.T) {
+	dir := tagged(t, unreleased, "v0.5.0")
+	cmd := exec.Command("git", "log", "-1", "--format=%cd", "--date=format-local:%Y-%m-%d", "v0.5.0")
+	cmd.Dir, cmd.Env = dir, append(os.Environ(), "TZ=UTC")
+	day, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, err := scriptIn(t, dir, "promote-release.sh"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if want := "## v0.5.0 — " + strings.TrimSpace(string(day)) + "\n"; !strings.Contains(read(t, filepath.Join(dir, "CHANGELOG.md")), want) {
+		t.Fatalf("no %q", want)
+	}
+}
+
+// A missing tag names the fix, never git's own error.
+func TestPromoteReleaseMissingTag(t *testing.T) {
+	for name, args := range map[string][]string{"no tags at all": nil, "version with no local tag": {"0.9.0"}} {
+		dir := tagged(t, unreleased)
+		out, err := scriptIn(t, dir, "promote-release.sh", args...)
+		if err == nil || !strings.Contains(out, "git fetch --tags") || strings.Contains(out, "fatal:") {
+			t.Errorf("%s: %v %s", name, err, out)
+		}
+		if read(t, filepath.Join(dir, "CHANGELOG.md")) != unreleased {
+			t.Errorf("%s: the changelog changed", name)
+		}
+	}
+}
+
+// Two releases under one Unreleased cannot be told apart by a script.
+func TestPromoteReleaseRefusesTwoReleases(t *testing.T) {
+	dir := tagged(t, unreleased, "v0.5.0", "v0.6.0")
+	out, err := scriptIn(t, dir, "promote-release.sh")
+	if err == nil || !strings.Contains(out, "v0.5.0") || !strings.Contains(out, "by hand") {
+		t.Fatalf("promoted two releases as one: %v %s", err, out)
+	}
+	if read(t, filepath.Join(dir, "CHANGELOG.md")) != unreleased {
+		t.Fatal("a refused promote changed the changelog")
+	}
+}
+
+// Only a missing headline is soft: a broken page fails promote.
+func TestPromoteReleaseFailsOnABrokenPage(t *testing.T) {
+	dir := tagged(t, unreleased, "v0.5.0")
+	if err := os.WriteFile(filepath.Join(dir, "www/index.html"), []byte(site+site), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := scriptIn(t, dir, "promote-release.sh"); err == nil {
+		t.Fatalf("a page with two news lines passed: %s", out)
+	}
+}
+
+// Without tags the guard passes, so its checkout must fetch them.
+func TestCIRunsChangelogGuardWithTags(t *testing.T) {
+	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "ci.yml"))
+	i := strings.Index(wf, ".github/scripts/changelog-guard.sh")
+	if i < 0 {
+		t.Fatal("ci.yml does not run changelog-guard.sh")
+	}
+	j := strings.LastIndex(wf[:i], "actions/checkout")
+	if j < 0 || !strings.Contains(wf[j:i], "fetch-depth: 0") {
+		t.Fatal("the checkout before the guard does not fetch tags")
 	}
 }

@@ -90,6 +90,10 @@ Then `## Unreleased` on `main` holds more than the release shipped, and:
   the entries that `git show vX.Y.Z:CHANGELOG.md` lists under
   `## Unreleased`, and keep the later entries under `## Unreleased`.
 
+If two releases were cut before anyone promoted, the guard names the older
+one and `make promote` refuses. Split `## Unreleased` by hand: one heading
+per release, each above the entries its tag added.
+
 ## Pull requests
 
 Keep PRs focused on one change. Include a test for any bug fix or new
