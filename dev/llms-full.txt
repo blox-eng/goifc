@@ -1056,6 +1056,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.19.0 — 2026-11-15
+
 ### Added
 
 - **WebAssembly.** `goifc-build.wasm` builds walls, rooms and slabs from one JSON request and `goifc-read.wasm` reads IFC files up to 48 MiB in the browser, with a Web Worker API in `goifc.js` and the contract as JSON Schema. Each release attaches them with `SHA256SUMS` and signed build provenance.
