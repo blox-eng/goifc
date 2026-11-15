@@ -304,3 +304,52 @@ func TestReleaseWorkflowOpensNoPR(t *testing.T) {
 		t.Error("release.yml no longer publishes the Unreleased section as the notes")
 	}
 }
+
+// tagged makes a git repo whose CHANGELOG.md is changelog, with the tags on
+// its one commit.
+func tagged(t *testing.T, changelog string, tags ...string) string {
+	t.Helper()
+	dir := repo(t, changelog)
+	git := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"}, args...)...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "c")
+	for _, tag := range tags {
+		git("tag", tag)
+	}
+	return dir
+}
+
+// v1.0.0 is newer than its release candidates, though git sorts a suffix
+// after the bare version by default.
+func TestChangelogGuardFinalAfterRC(t *testing.T) {
+	dir := tagged(t, "## Unreleased\n\n## v1.0.0-rc.2 — 2026-01-02\n", "v1.0.0-rc.1", "v1.0.0-rc.2", "v1.0.0")
+	out, err := scriptIn(t, dir, "changelog-guard.sh")
+	if err == nil || !strings.Contains(out, "v1.0.0,") {
+		t.Fatalf("v1.0.0 was not the tag checked: %v %s", err, out)
+	}
+}
+
+// A contributor whose tags are older than CI's is told how to catch up.
+func TestPromoteReleaseRefusalNamesFetch(t *testing.T) {
+	dir := tagged(t, released, "v0.4.0")
+	out, err := scriptIn(t, dir, "promote-release.sh")
+	if err == nil || !strings.Contains(out, "v0.4.0") || !strings.Contains(out, "git fetch --tags") {
+		t.Fatalf("%v: %s", err, out)
+	}
+}
+
+// A release whose previous tag has no heading would publish two releases'
+// entries, so the workflow keeps the generated notes instead.
+func TestReleaseNotesCheckThePreviousHeading(t *testing.T) {
+	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
+	if !strings.Contains(wf, `changelog-guard.sh "$prev"`) {
+		t.Error(`release.yml does not check "$prev" has a heading before publishing Unreleased`)
+	}
+}

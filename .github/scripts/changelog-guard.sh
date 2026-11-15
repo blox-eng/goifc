@@ -5,14 +5,15 @@
 # the next release's notes would repeat this one's (#140).
 #
 # Usage: changelog-guard.sh [tag] [changelog]
-#   tag       - e.g. v0.19.0; default: the newest v* tag in git
+#   tag       - e.g. v0.19.0; default: the newest v* tag in git, where
+#               v1.0.0 is newer than v1.0.0-rc.1
 #   changelog - default: CHANGELOG.md at the repository root
 set -euo pipefail
 
 tag="${1:-}"
 changelog="${2:-}"
 if [[ -z "$tag" ]]; then
-  tag="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+  tag="$(git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n 1)"
   if [[ -z "$tag" ]]; then
     echo "OK: no v* tag, nothing to check"
     exit 0

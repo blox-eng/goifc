@@ -69,6 +69,11 @@ next pull request runs `make promote` before it adds its own entries, and
 commits `CHANGELOG.md` and `www/index.html`. Until then, the Conventional
 Commits Check fails on every pull request and names the command.
 
+Wait for the Release run to finish before you merge the next pull request.
+A pull request whose checks passed before the tag existed can still merge,
+and its entries would then be promoted under the earlier release. If that
+happens, the next release keeps its generated notes and the workflow warns.
+
 ## Pull requests
 
 Keep PRs focused on one change. Include a test for any bug fix or new

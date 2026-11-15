@@ -41,6 +41,11 @@ failure instead of a warning.
   release, and the guard stops any PR merging while the latest tag has no
   heading. So at release time `## Unreleased` holds only that release's
   entries, and the workflow keeps publishing it as the notes.
+  One race is left (found in review): a PR whose checks passed before the
+  tag existed can still merge. The notes step then finds no heading for the
+  previous tag, warns, and keeps the generated notes instead of repeating
+  entries. CONTRIBUTING.md says to wait for the Release run before merging
+  the next PR.
 - **`.github/workflows/release.yml`.** Delete the "Promote Unreleased
   changelog section" step. Drop `pull-requests: write`. Keep the notes step.
 - **`.github/scripts/changelog-guard.sh [tag] [changelog]`.** `tag` defaults

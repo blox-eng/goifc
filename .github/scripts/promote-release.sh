@@ -13,7 +13,7 @@ set -euo pipefail
 here="$(dirname "$0")"
 version="${1:-}"
 if [[ -z "$version" ]]; then
-  tag="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+  tag="$(git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n 1)"
   if [[ -z "$tag" ]]; then
     echo "promote-release: no v* tag to promote; run git fetch --tags" >&2
     exit 1
@@ -23,7 +23,8 @@ fi
 date="${2:-$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%d "v$version")}"
 
 if "$here/changelog-guard.sh" "v$version" CHANGELOG.md >/dev/null 2>&1; then
-  echo "promote-release: CHANGELOG.md already has a heading for v$version; nothing to do" >&2
+  echo "promote-release: CHANGELOG.md already has a heading for v$version, the newest tag here." >&2
+  echo "If CI names a newer tag, run git fetch --tags and try again." >&2
   exit 1
 fi
 

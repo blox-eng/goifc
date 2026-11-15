@@ -111,6 +111,13 @@ jobs:
             exit 0
           fi
           if prev="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null)"; then
+            # A PR that merged before the previous release was promoted leaves
+            # that release's entries under Unreleased too. Publishing them
+            # would repeat its notes.
+            if ! .github/scripts/changelog-guard.sh "$prev" CHANGELOG.md >/dev/null 2>&1; then
+              echo "::warning::CHANGELOG.md has no heading for ${prev}, so Unreleased holds more than ${tag}; ${tag} keeps its generated notes. Fix the notes by hand."
+              exit 0
+            fi
             notes+=$'\n\n'"**Full diff**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
           fi
 
