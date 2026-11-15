@@ -8,6 +8,11 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- **WebAssembly.** `goifc-build.wasm` builds walls, rooms and slabs from one JSON request and `goifc-read.wasm` reads IFC files up to 48 MiB in the browser, with a Web Worker API in `goifc.js` and the contract as JSON Schema. Each release attaches them with `SHA256SUMS` and signed build provenance.
+- **Limit errors.** `geometry.ErrTooLarge` and `geometry.ErrNothingToDraw` let `errors.Is` tell a broken limit, or a preview with nothing to draw, from bad input. The messages stay the same.
+
 ## v0.18.0 — 2026-11-14
 
 ### Added
