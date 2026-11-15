@@ -225,3 +225,68 @@ func TestChangelogGuardNoTags(t *testing.T) {
 		t.Fatalf("%v: %s", err, out)
 	}
 }
+
+const unreleased = "# Changelog\n\n## Unreleased\n\n- **Shiny thing.** (#1)\n\n" + "## v0.4.0 — 2026-11-12\n\n- **Faster parsing.**\n"
+
+// repo makes a folder with CHANGELOG.md and www/index.html, as promote
+// finds them at the repository root.
+func repo(t *testing.T, changelog string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "www"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, s := range map[string]string{"CHANGELOG.md": changelog, "www/index.html": site} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(s), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func TestPromoteRelease(t *testing.T) {
+	dir := repo(t, unreleased)
+	if out, err := scriptIn(t, dir, "promote-release.sh", "0.5.0", "2026-11-15"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	want := strings.Replace(unreleased, "## Unreleased\n", "## Unreleased\n\n## v0.5.0 — 2026-11-15\n", 1)
+	if got := read(t, filepath.Join(dir, "CHANGELOG.md")); got != want {
+		t.Fatalf("got\n%s\nwant\n%s", got, want)
+	}
+	if page := read(t, filepath.Join(dir, "www/index.html")); !strings.Contains(page, "v0.5.0 · Shiny thing<") {
+		t.Fatalf("the news line does not name v0.5.0:\n%s", page)
+	}
+	if out, err := scriptIn(t, dir, "changelog-guard.sh", "v0.5.0", "CHANGELOG.md"); err != nil {
+		t.Fatalf("the guard fails after promote: %v %s", err, out)
+	}
+}
+
+func TestPromoteReleaseTwiceRefuses(t *testing.T) {
+	dir := repo(t, unreleased)
+	if out, err := scriptIn(t, dir, "promote-release.sh", "0.5.0", "2026-11-15"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	cl, page := read(t, filepath.Join(dir, "CHANGELOG.md")), read(t, filepath.Join(dir, "www/index.html"))
+	out, err := scriptIn(t, dir, "promote-release.sh", "0.5.0", "2026-11-15")
+	if err == nil || !strings.Contains(out, "already has") {
+		t.Fatalf("a second promote ran: %v %s", err, out)
+	}
+	if read(t, filepath.Join(dir, "CHANGELOG.md")) != cl || read(t, filepath.Join(dir, "www/index.html")) != page {
+		t.Fatal("a refused promote changed a file")
+	}
+}
+
+// Most patch releases have no headline: the page keeps the last one.
+func TestPromoteReleaseNoHeadline(t *testing.T) {
+	dir := repo(t, "## Unreleased\n\n- Plain fix.\n\n## v0.4.0 — 2026-11-12\n\n- **Faster parsing.**\n")
+	out, err := scriptIn(t, dir, "promote-release.sh", "0.4.1", "2026-11-15")
+	if err != nil || !strings.Contains(out, "no headline") {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if read(t, filepath.Join(dir, "www/index.html")) != site {
+		t.Fatal("the page changed for a release with no headline")
+	}
+	if !strings.Contains(read(t, filepath.Join(dir, "CHANGELOG.md")), "## v0.4.1 — 2026-11-15\n") {
+		t.Fatal("the changelog was not promoted")
+	}
+}
