@@ -49,9 +49,6 @@ jobs:
       version: ${{ steps.release.outputs.version }}
     permissions:
       contents: write
-      # The changelog promote opens a PR instead of pushing to main, which the
-      # branch ruleset forbids.
-      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -92,7 +89,9 @@ jobs:
       - name: Publish the changelog section as the release notes
         # The generated notes are one line per squash-merge title. The
         # Unreleased section of CHANGELOG.md is the hand-written record of this
-        # release, read here before the promote step below renames it. The
+        # release. This workflow commits nothing: the next PR renames the
+        # section with `make promote`, and CI's changelog guard fails every PR
+        # until it does (#140). A bot PR got no CI and never merged. The
         # release already exists, so a problem with its notes warns rather than
         # failing the job.
         if: steps.release.outputs.version != ''
@@ -111,78 +110,20 @@ jobs:
             echo "::warning::Could not fetch tags; ${tag} keeps its generated notes."
             exit 0
           fi
-          if prev="$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null)"; then
+          if prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*' "${tag}^" 2>/dev/null)"; then
+            # A PR that merged before the previous release was promoted leaves
+            # that release's entries under Unreleased too. Publishing them
+            # would repeat its notes.
+            if ! .github/scripts/changelog-guard.sh "$prev" CHANGELOG.md >/dev/null 2>&1; then
+              echo "::warning::CHANGELOG.md has no heading for ${prev}, so Unreleased holds more than ${tag}; ${tag} keeps its generated notes. Fix the notes by hand."
+              exit 0
+            fi
             notes+=$'\n\n'"**Full diff**: https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
           fi
 
           printf '%s\n' "$notes" > "${RUNNER_TEMP}/release-notes.md"
           gh release edit "$tag" --notes-file "${RUNNER_TEMP}/release-notes.md" \
             || echo "::warning::Could not set ${tag}'s notes from CHANGELOG.md."
-      - name: Promote Unreleased changelog section
-        # steps.release.outputs.version is only set when a new version was
-        # actually released (go-semantic-release/action returns early,
-        # without calling setOutput, when there's nothing to release).
-        #
-        # This opens a PR rather than pushing to main. The main ruleset requires
-        # a pull request and 5 status checks with no bypass actors, so the direct
-        # push this used to do was rejected outright (GH013) — the tag and the
-        # GitHub Release were created and only the changelog commit was lost, so
-        # the job failed AFTER releasing and the drift was silent. Granting the
-        # bot a bypass would have fixed it by letting every workflow in the repo
-        # push to main unreviewed, which is a poor trade for a docs commit.
-        if: steps.release.outputs.version != ''
-        env:
-          RELEASE_VERSION: ${{ steps.release.outputs.version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          date="$(date -u +%Y-%m-%d)"
-          .github/scripts/promote-changelog.sh "$RELEASE_VERSION" "$date"
-
-          # goifc.org's news line names the release. A release with no
-          # headline in its changelog section (most patch releases) keeps the
-          # line of the last one that had one, and the pull request says so.
-          news=""
-          if ! .github/scripts/announce-release.sh "$RELEASE_VERSION"; then
-            news="**goifc.org keeps announcing the last release with a headline:** v${RELEASE_VERSION} has no \`- **...**\` line in CHANGELOG.md. To announce it, add one, run \`.github/scripts/announce-release.sh ${RELEASE_VERSION}\` on this branch, and push."
-          fi
-
-          if git diff --quiet -- CHANGELOG.md; then
-            echo "CHANGELOG.md unchanged — nothing to promote."
-            exit 0
-          fi
-
-          branch="chore/changelog-v${RELEASE_VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          git add CHANGELOG.md www/index.html
-          git commit -m "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md"
-          git push origin "$branch"
-
-          # --fill would reuse the commit message; the body is worth spelling
-          # out because whoever sees this PR did not run the release. Built with
-          # printf so the text is not indented by this block's YAML indentation.
-          body="$(printf '%s\n' \
-            "Automated by the Release workflow after cutting v${RELEASE_VERSION}." \
-            "" \
-            "Moves the \`## Unreleased\` section under a \`## v${RELEASE_VERSION}\` heading." \
-            "The tag and GitHub Release already exist; this only records them in" \
-            "the changelog, so merging is safe whenever convenient." \
-            "" \
-            "$news")"
-
-          gh pr create \
-            --base main \
-            --head "$branch" \
-            --title "docs: promote Unreleased to v${RELEASE_VERSION} in CHANGELOG.md" \
-            --body "$body"
-
-          # Auto-merge so the changelog does not drift while PRs queue up. It
-          # merges once the required checks pass; if auto-merge is disabled on
-          # the repo, say so and leave the PR open rather than failing a release
-          # that has already succeeded.
-          gh pr merge "$branch" --squash --auto \
-            || echo "::warning::Could not enable auto-merge; merge the changelog PR by hand."
 
   # Builds goifc-build.wasm and goifc-read.wasm from the tag and attaches them
   # to its release with SHA256SUMS and signed build provenance, so anyone can

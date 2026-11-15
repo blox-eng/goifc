@@ -24,8 +24,8 @@ toggle on an error page.
 The news line over the headline names the newest release that has a
 headline, and links to its notes. A release without one, such as most fixes,
 leaves the line as it is. Nobody writes it by hand: `.github/scripts/announce-release.sh` writes it
-from the release's first bold changelog bullet, in the changelog pull request
-the release workflow opens, and `.github/scripts/news-guard.sh` fails the
+from the release's first bold changelog bullet, when `make promote` runs in
+the pull request after the release, and `.github/scripts/news-guard.sh` fails the
 Landing check when it drifts. It is static HTML for the same reason the page
 loads nothing else from another origin.
 

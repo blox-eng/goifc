@@ -113,6 +113,16 @@ jobs:
        with:
          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
          allowed-commit-types: "feat,fix,cicd,chore,patch,release,test,docs,refactor,ci,dev"
+     # The Release workflow commits nothing to CHANGELOG.md, so the PR after a
+     # release must promote "## Unreleased" with `make promote` (#140). This
+     # job is required and runs on docs-only PRs, unlike Lint, so the check
+     # lives here. fetch-depth 0 brings the tags.
+     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+       with:
+         fetch-depth: 0
+         persist-credentials: false
+     - name: Changelog names the latest release
+       run: .github/scripts/changelog-guard.sh
 
   lint:
     name: Lint

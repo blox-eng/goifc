@@ -2,8 +2,9 @@
 # Writes goifc.org's news line from a release's changelog section: its
 # version and its headline (the first "- **...**" run), linking to the
 # release. The page loads nothing from another origin, so the line is written
-# here, at release time. A section without a headline, or a page without
-# exactly one news line, leaves the page as it is and fails.
+# here, when make promote runs after a release. A section without a headline
+# (exit 2), or a page without exactly one news line (exit 1), leaves the page
+# as it is and fails.
 #
 # Ported from matchblox's script of the same name, for goifc's headings
 # ("## vX.Y.Z — date").
@@ -35,7 +36,7 @@ headline="${headline//\`/}"
 headline="${headline%.}"
 if [ -z "$headline" ]; then
   echo "announce-release: no headline (a \"- **...**\" line) under v$version in $changelog; the news line is left as it is" >&2
-  exit 1
+  exit 2
 fi
 
 if [ "$(grep -c 'class="news"' "$page" || true)" != 1 ]; then

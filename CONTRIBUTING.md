@@ -50,7 +50,7 @@ The landing page at <https://goifc.org> is a separate site: hand-written HTML in
 before changing it. It never links into the docs by relative path.
 
 Its news line names the newest release that has a headline: the first bold
-bullet of its changelog section. The release workflow writes it. A change worth
+bullet of its changelog section. `make promote` writes it. A change worth
 announcing opens its `## Unreleased` entry with one:
 
 ```markdown
@@ -61,6 +61,38 @@ announcing opens its `## Unreleased` entry with one:
 A release without a headline, such as most fixes, leaves the line on the last
 release that had one. The Landing check fails when the line drifts from that
 rule; the failure prints the command that fixes it.
+
+### After a release
+
+A release publishes `## Unreleased` as its notes and commits nothing. Until
+the next commit on `main` promotes that section, the Conventional Commits
+Check fails on every pull request and names the command. Promote it in a
+pull request of its own, from `main`:
+
+```sh
+git fetch --tags
+git switch -c docs/promote-vX.Y.Z origin/main
+make promote
+git commit -am "docs: promote Unreleased to vX.Y.Z in CHANGELOG.md"
+```
+
+Then rebase your open pull requests onto `main`; their own entries stay
+under `## Unreleased`. `make promote` refuses when `## Unreleased` holds
+entries the release did not ship, such as your branch's own entries, so it
+never credits them to the wrong release.
+
+Wait for the Release run to finish before you merge the next pull request.
+A pull request whose checks passed before the tag existed can still merge.
+Then `## Unreleased` on `main` holds more than the release shipped, and:
+
+- the next release keeps GitHub's generated notes, and the workflow warns;
+- `make promote` refuses. Add the `## vX.Y.Z — date` heading by hand, above
+  the entries that `git show vX.Y.Z:CHANGELOG.md` lists under
+  `## Unreleased`, and keep the later entries under `## Unreleased`.
+
+If two releases were cut before anyone promoted, the guard names the older
+one and `make promote` refuses. Split `## Unreleased` by hand: one heading
+per release, each above the entries its tag added.
 
 ## Pull requests
 
