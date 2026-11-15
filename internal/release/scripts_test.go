@@ -88,9 +88,9 @@ func TestAnnounceEscapesTheHeadline(t *testing.T) {
 // code in it; the code marks go, the words stay.
 func TestAnnounceTakesTheWholeHeadline(t *testing.T) {
 	for changelog, want := range map[string]string{
-		"## v0.6.0 — 2026-11-13\n\n- **A wall that\n  wraps.** More.\n":            "v0.6.0 · A wall that wraps<",
+		"## v0.6.0 — 2026-11-13\n\n- **A wall that\n  wraps.** More.\n":           "v0.6.0 · A wall that wraps<",
 		"## v0.6.0 — 2026-11-13\n\n- **Call `BuildSlab` once.** More **bold**.\n": "v0.6.0 · Call BuildSlab once<",
-		"## v0.6.0\n\n- **No date on the heading.**\n":                                "v0.6.0 · No date on the heading<",
+		"## v0.6.0\n\n- **No date on the heading.**\n":                            "v0.6.0 · No date on the heading<",
 	} {
 		page := file(t, site)
 		if out, err := script(t, "announce-release.sh", "0.6.0", file(t, changelog), page); err != nil || !strings.Contains(read(t, page), want) {
@@ -171,5 +171,57 @@ func TestAnnounceSkipsPlainBullets(t *testing.T) {
 	cl := "## v0.7.0 — 2026-11-13\n\n- A plain line.\n- **Don't call `Old` again.**\n"
 	if out, err := script(t, "announce-release.sh", "0.7.0", file(t, cl), page); err != nil || !strings.Contains(read(t, page), "v0.7.0 · Don&#39;t call Old again<") {
 		t.Fatalf("%v %s\n%s", err, out, read(t, page))
+	}
+}
+
+// scriptIn runs a script with dir as its working directory.
+func scriptIn(t *testing.T, dir, name string, args ...string) (string, error) {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", "..", ".github", "scripts", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(abs, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// The guard passes only when the changelog has the tag's own heading: a
+// longer version that starts with it does not count.
+func TestChangelogGuard(t *testing.T) {
+	for name, c := range map[string]struct {
+		tag, changelog string
+		pass           bool
+	}{
+		"the heading is there":   {"v0.4.0", released, true},
+		"no heading for the tag": {"v0.5.0", released, false},
+		"v0.1.1 is not v0.1.10":  {"v0.1.1", "## Unreleased\n\n## v0.1.10 — 2026-01-01\n", false},
+		"a pre-release tag":      {"v1.0.0-rc.1", "## v1.0.0-rc.1 — 2026-01-01\n", true},
+		"a heading with no date": {"v0.6.0", "## v0.6.0\n", true},
+		"Unreleased only":        {"v0.1.0", "## Unreleased\n\n- **Soon.**\n", false},
+	} {
+		out, err := script(t, "changelog-guard.sh", c.tag, file(t, c.changelog))
+		if c.pass && err != nil {
+			t.Errorf("%s: failed: %v %s", name, err, out)
+		}
+		if !c.pass && (err == nil || !strings.Contains(out, c.tag) || !strings.Contains(out, "make promote")) {
+			t.Errorf("%s: passed or named no fix: %v %s", name, err, out)
+		}
+	}
+}
+
+// A clone with no v* tags, such as a fork, has nothing to check.
+func TestChangelogGuardNoTags(t *testing.T) {
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "CHANGELOG.md"), []byte(released), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := scriptIn(t, dir, "changelog-guard.sh")
+	if err != nil || !strings.Contains(out, "no v* tag") {
+		t.Fatalf("%v: %s", err, out)
 	}
 }
