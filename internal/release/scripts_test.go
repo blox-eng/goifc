@@ -290,3 +290,17 @@ func TestPromoteReleaseNoHeadline(t *testing.T) {
 		t.Fatal("the changelog was not promoted")
 	}
 }
+
+// The Release workflow publishes the notes and commits nothing: a bot PR
+// gets no CI and never merges (#140).
+func TestReleaseWorkflowOpensNoPR(t *testing.T) {
+	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
+	for _, s := range []string{"gh pr create", "pull-requests: write", "promote-changelog.sh"} {
+		if strings.Contains(wf, s) {
+			t.Errorf("release.yml has %q", s)
+		}
+	}
+	if !strings.Contains(wf, "release-notes.sh Unreleased") {
+		t.Error("release.yml no longer publishes the Unreleased section as the notes")
+	}
+}

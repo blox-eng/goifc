@@ -6,11 +6,10 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 <!-- Entries are written under "## Unreleased" by hand as part of each PR.
      Versions and tags are cut automatically by go-semantic-release from
      conventional commits on every green CI run on main; when a release
-     happens, the release workflow renames "## Unreleased" to that version's
-     heading and inserts a fresh empty "## Unreleased" above it, then opens a
-     PR ("docs: promote Unreleased to vX.Y.Z in CHANGELOG.md") because the
-     main ruleset forbids the bot pushing straight to main. Generated release
-     notes also live on GitHub Releases.
+     happens, the release workflow publishes "## Unreleased" as its notes and
+     commits nothing. The next PR runs `make promote`, which renames
+     "## Unreleased" to that version's heading and inserts a fresh empty
+     "## Unreleased" above it; CI fails every PR until it is done.
 
      Write the entry BELOW this comment, under the "## Unreleased" heading —
      never inside it. An entry added after the first "## Unreleased" the eye
@@ -18,6 +17,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
      the v0.9.2 entry was lost until this commit. -->
 
 ## Unreleased
+
+### Changed
+
+- Releases no longer open a changelog PR, which got no CI and never merged.
+  Run `make promote` in the PR after a release; CI fails until you do. (#140)
 
 ## v0.19.0 — 2026-11-15
 

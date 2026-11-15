@@ -50,7 +50,7 @@ The landing page at <https://goifc.org> is a separate site: hand-written HTML in
 before changing it. It never links into the docs by relative path.
 
 Its news line names the newest release that has a headline: the first bold
-bullet of its changelog section. The release workflow writes it. A change worth
+bullet of its changelog section. `make promote` writes it. A change worth
 announcing opens its `## Unreleased` entry with one:
 
 ```markdown
@@ -61,6 +61,13 @@ announcing opens its `## Unreleased` entry with one:
 A release without a headline, such as most fixes, leaves the line on the last
 release that had one. The Landing check fails when the line drifts from that
 rule; the failure prints the command that fixes it.
+
+### After a release
+
+A release publishes `## Unreleased` as its notes and commits nothing. The
+next pull request runs `make promote` before it adds its own entries, and
+commits `CHANGELOG.md` and `www/index.html`. Until then, the Conventional
+Commits Check fails on every pull request and names the command.
 
 ## Pull requests
 
