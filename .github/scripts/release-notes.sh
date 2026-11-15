@@ -3,19 +3,20 @@
 # the lines under its "## " heading up to the next one, without leading or
 # trailing blank lines. Prints nothing when the section is empty.
 #
-# Usage: release-notes.sh <section>
+# Usage: release-notes.sh <section> [changelog]
 #   section - "Unreleased", or a released version without a leading "v"
 #             (e.g. "0.15.3"), matching the "## v0.15.3 — <date>" heading
+#   changelog - default: CHANGELOG.md
 #
 # Run from a repo checkout.
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <section>" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 <section> [changelog]" >&2
   exit 1
 fi
 
-file="CHANGELOG.md"
+file="${2:-CHANGELOG.md}"
 if [[ "$1" == "Unreleased" ]]; then
   heading="## Unreleased"
 else

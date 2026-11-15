@@ -40,7 +40,7 @@ wasm-test: wasm ## Test the WebAssembly files: Node tests, the contract suite as
 	GOOS=js GOARCH=wasm go test -exec="bash $$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/wasmapi/ ./cmd/internal/jsbridge/
 	.github/scripts/wasm-size.sh dist/goifc-build.wasm 1200000 dist/goifc-read.wasm
 
-promote: ## Promote Unreleased to the latest tag in CHANGELOG.md and goifc.org (run in the PR after a release)
+promote: ## Promote Unreleased to the latest tag in CHANGELOG.md and goifc.org (on a branch from main, after a release)
 	.github/scripts/promote-release.sh
 
 fmt: ## Format code

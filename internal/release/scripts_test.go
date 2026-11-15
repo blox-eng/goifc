@@ -245,7 +245,7 @@ func repo(t *testing.T, changelog string) string {
 }
 
 func TestPromoteRelease(t *testing.T) {
-	dir := repo(t, unreleased)
+	dir := tagged(t, unreleased, "v0.5.0")
 	if out, err := scriptIn(t, dir, "promote-release.sh", "0.5.0", "2026-11-15"); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
@@ -262,7 +262,7 @@ func TestPromoteRelease(t *testing.T) {
 }
 
 func TestPromoteReleaseTwiceRefuses(t *testing.T) {
-	dir := repo(t, unreleased)
+	dir := tagged(t, unreleased, "v0.5.0")
 	if out, err := scriptIn(t, dir, "promote-release.sh", "0.5.0", "2026-11-15"); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
@@ -278,7 +278,7 @@ func TestPromoteReleaseTwiceRefuses(t *testing.T) {
 
 // Most patch releases have no headline: the page keeps the last one.
 func TestPromoteReleaseNoHeadline(t *testing.T) {
-	dir := repo(t, "## Unreleased\n\n- Plain fix.\n\n## v0.4.0 — 2026-11-12\n\n- **Faster parsing.**\n")
+	dir := tagged(t, "## Unreleased\n\n- Plain fix.\n\n## v0.4.0 — 2026-11-12\n\n- **Faster parsing.**\n", "v0.4.1")
 	out, err := scriptIn(t, dir, "promote-release.sh", "0.4.1", "2026-11-15")
 	if err != nil || !strings.Contains(out, "no headline") {
 		t.Fatalf("%v: %s", err, out)
@@ -351,5 +351,22 @@ func TestReleaseNotesCheckThePreviousHeading(t *testing.T) {
 	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 	if !strings.Contains(wf, `changelog-guard.sh "$prev"`) {
 		t.Error(`release.yml does not check "$prev" has a heading before publishing Unreleased`)
+	}
+}
+
+// An entry added after the tag belongs to the next release. Promote refuses
+// rather than crediting it to this one, and leaves both files as they are.
+func TestPromoteReleaseRefusesEntriesAfterTheTag(t *testing.T) {
+	dir := tagged(t, unreleased, "v0.5.0")
+	cl := strings.Replace(unreleased, "- **Shiny thing.** (#1)\n", "- **Shiny thing.** (#1)\n- **Later thing.** (#2)\n", 1)
+	if err := os.WriteFile(filepath.Join(dir, "CHANGELOG.md"), []byte(cl), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := scriptIn(t, dir, "promote-release.sh", "0.5.0", "2026-11-15")
+	if err == nil || !strings.Contains(out, "differs from v0.5.0") || !strings.Contains(out, "origin/main") {
+		t.Fatalf("promoted entries added after the tag: %v %s", err, out)
+	}
+	if read(t, filepath.Join(dir, "CHANGELOG.md")) != cl || read(t, filepath.Join(dir, "www/index.html")) != site {
+		t.Fatal("a refused promote changed a file")
 	}
 }

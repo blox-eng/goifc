@@ -46,6 +46,10 @@ failure instead of a warning.
   previous tag, warns, and keeps the generated notes instead of repeating
   entries. CONTRIBUTING.md says to wait for the Release run before merging
   the next PR.
+  `make promote` refuses when `## Unreleased` differs from the tag's, so an
+  open PR's own entries, or a racing merge's, are never credited to the
+  wrong release. Promotion happens in its own PR from main. (Added after
+  PR review.)
 - **`.github/workflows/release.yml`.** Delete the "Promote Unreleased
   changelog section" step. Drop `pull-requests: write`. Keep the notes step.
 - **`.github/scripts/changelog-guard.sh [tag] [changelog]`.** `tag` defaults

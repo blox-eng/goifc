@@ -21,7 +21,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 ### Changed
 
 - Releases no longer open a changelog PR, which got no CI and never merged.
-  Run `make promote` in the PR after a release; CI fails until you do. (#140)
+  After a release, run `make promote` in a PR of its own; CI fails until then. (#140)
 
 ## v0.19.0 — 2026-11-15
 

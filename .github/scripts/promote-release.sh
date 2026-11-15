@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Promotes CHANGELOG.md's "## Unreleased" section to the newest release and
-# writes goifc.org's news line for it. Run it in the PR after a release,
-# before adding new entries: the Release workflow commits nothing (#140),
-# and changelog-guard.sh fails every PR until this is done.
+# writes goifc.org's news line for it. Run it on a branch from main after a
+# release, with no entries of its own: the Release workflow commits nothing
+# (#140), and changelog-guard.sh fails every PR until this is done.
 #
 # Usage: promote-release.sh [version] [date]   (make promote)
 #   version - without the v (0.19.0); default: the newest v* tag
@@ -25,6 +25,22 @@ date="${2:-$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%d "v$vers
 if "$here/changelog-guard.sh" "v$version" CHANGELOG.md >/dev/null 2>&1; then
   echo "promote-release: CHANGELOG.md already has a heading for v$version, the newest tag here." >&2
   echo "If CI names a newer tag, run git fetch --tags and try again." >&2
+  exit 1
+fi
+
+# Only the entries the release shipped move. An entry added since the tag,
+# by this branch or by a PR that merged before the promotion, belongs to the
+# next release, so refuse rather than credit it to this one.
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+if ! git show "v$version:CHANGELOG.md" >"$tmp" 2>/dev/null; then
+  echo "promote-release: no tag v$version here to compare with; run git fetch --tags" >&2
+  exit 1
+fi
+if [[ "$("$here/release-notes.sh" Unreleased "$tmp" 2>/dev/null)" != "$("$here/release-notes.sh" Unreleased CHANGELOG.md)" ]]; then
+  echo "promote-release: ## Unreleased differs from v$version's, so it holds entries the release did not ship." >&2
+  echo "Promote on a branch with no entries of its own: git switch -c docs/promote-v$version origin/main && make promote" >&2
+  echo "If origin/main itself differs, an entry merged after the tag: add \"## v$version — $date\" by hand above the entries in git show v$version:CHANGELOG.md." >&2
   exit 1
 fi
 

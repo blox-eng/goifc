@@ -64,15 +64,31 @@ rule; the failure prints the command that fixes it.
 
 ### After a release
 
-A release publishes `## Unreleased` as its notes and commits nothing. The
-next pull request runs `make promote` before it adds its own entries, and
-commits `CHANGELOG.md` and `www/index.html`. Until then, the Conventional
-Commits Check fails on every pull request and names the command.
+A release publishes `## Unreleased` as its notes and commits nothing. Until
+the next commit on `main` promotes that section, the Conventional Commits
+Check fails on every pull request and names the command. Promote it in a
+pull request of its own, from `main`:
+
+```sh
+git fetch --tags
+git switch -c docs/promote-vX.Y.Z origin/main
+make promote
+git commit -am "docs: promote Unreleased to vX.Y.Z in CHANGELOG.md"
+```
+
+Then rebase your open pull requests onto `main`; their own entries stay
+under `## Unreleased`. `make promote` refuses when `## Unreleased` holds
+entries the release did not ship, such as your branch's own entries, so it
+never credits them to the wrong release.
 
 Wait for the Release run to finish before you merge the next pull request.
-A pull request whose checks passed before the tag existed can still merge,
-and its entries would then be promoted under the earlier release. If that
-happens, the next release keeps its generated notes and the workflow warns.
+A pull request whose checks passed before the tag existed can still merge.
+Then `## Unreleased` on `main` holds more than the release shipped, and:
+
+- the next release keeps GitHub's generated notes, and the workflow warns;
+- `make promote` refuses. Add the `## vX.Y.Z — date` heading by hand, above
+  the entries that `git show vX.Y.Z:CHANGELOG.md` lists under
+  `## Unreleased`, and keep the later entries under `## Unreleased`.
 
 ## Pull requests
 
