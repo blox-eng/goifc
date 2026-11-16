@@ -2,6 +2,7 @@ package geometry
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"reflect"
 	"testing"
@@ -602,5 +603,50 @@ func TestJoinSnapKeepsOpenings(t *testing.T) {
 	at := [2]float64{m.Origin[0] + m.Openings[0].Offset*m.U[0], m.Origin[1] + m.Openings[0].Offset*m.U[1]}
 	if want := [2]float64{a[0] + u[0], a[1] + u[1]}; !near(at[0], want[0], 1e-9) || !near(at[1], want[1], 1e-9) {
 		t.Errorf("opening starts at %v, want %v", at, want)
+	}
+}
+
+// Two long walls with more partitions between them than maxOpenings: each
+// wall is refused as too large, and once it is over the cap no more strips
+// are taken onto it, so no overlap scan runs over more than maxOpenings strips.
+func TestStripCapStopsEarly(t *testing.T) {
+	const n = 3 * maxOpenings
+	l := 0.3 * float64(n+1)
+	p := Plan{Walls: []PlanWall{
+		{ID: "T1", Edge: [2][2]float64{{0, 0}, {l, 0}}, Height: 2.5, Thickness: 0.2, Side: SideLeft},
+		{ID: "T2", Edge: [2][2]float64{{0, 3}, {l, 3}}, Height: 2.5, Thickness: 0.2, Side: SideRight},
+	}}
+	for i := range n {
+		x := 0.3 * float64(i+1)
+		p.Walls = append(p.Walls, PlanWall{ID: fmt.Sprintf("P%d", i), Edge: [2][2]float64{{x, 0}, {x, 3}}, Height: 2.5, Thickness: 0.1, Side: SideLeft,
+			Joins: []Join{{End: EndA, Wall: "T1"}, {End: EndB, Wall: "T2"}}})
+	}
+
+	_, err := BuildPlan(p)
+	refused := map[string]bool{}
+	for _, e := range unjoin(err) {
+		var ie *ItemError
+		if !errors.As(e, &ie) || !errors.Is(e, ErrTooLarge) {
+			t.Fatalf("got %v, want only too-large item refusals", e)
+		}
+		refused[ie.Item] = true
+	}
+	if !refused["T1"] || !refused["T2"] || len(refused) != 2 {
+		t.Errorf("refused %v, want T1 and T2", refused)
+	}
+
+	trims, errs := trimJoins(p, map[string]bool{})
+	if errs != nil {
+		t.Fatal(errs)
+	}
+	strips, _ := stripJoins(p, map[string]bool{}, trims)
+	on := map[string]int{}
+	for _, s := range strips {
+		on[s.face.wall]++
+	}
+	for _, w := range []string{"T1", "T2"} {
+		if on[w] > maxOpenings+1 {
+			t.Errorf("%s holds %d strips, want at most %d", w, on[w], maxOpenings+1)
+		}
 	}
 }

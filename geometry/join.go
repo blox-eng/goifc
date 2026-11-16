@@ -427,12 +427,9 @@ type strip struct {
 
 func (s strip) area() float64 { return (s.hi - s.lo) * (s.top - s.bottom) }
 
-// touches reports whether s and o lie on the same face and overlap or touch:
-// the gap between them is under minDim along both u and z.
-func (s strip) touches(o strip) bool {
-	if s.face.wall != o.face.wall || s.face.measured != o.face.measured {
-		return false
-	}
+// touches reports whether s and o, on the same face, overlap or touch: the
+// gap between them is under minDim along both u and z.
+func (s *strip) touches(o *strip) bool {
 	du := math.Max(s.lo, o.lo) - math.Min(s.hi, o.hi)
 	dv := math.Max(s.bottom, o.bottom) - math.Min(s.top, o.top)
 	return du < minDim && dv < minDim
@@ -461,16 +458,24 @@ func joinStrip(it PlanWall, tw trimmedWall, j Join, f face) strip {
 // stripJoins computes the strip of every join of every trimmed partition and
 // runs checks 5 and 6 on it against the trimmed faces, in plan and join
 // order. It then checks each through wall's openings against the strips that
-// passed. It returns those strips and every refusal.
+// passed. It returns those strips and every refusal. A through wall stops
+// taking strips once its openings and strips pass maxOpenings, which bounds
+// each overlap check by maxOpenings; checkStrips then refuses it.
 func stripJoins(p Plan, failed map[string]bool, trims []trimmedWall) ([]strip, []error) {
 	x := newJoinTargets(p, failed)
 	x.trims = make(map[int]trimmedWall, len(trims))
 	for _, tw := range trims {
 		x.trims[tw.item] = tw
 	}
+	type faceKey struct {
+		wall     string
+		measured bool
+	}
 	var (
-		out  []strip
-		errs []error
+		out    []strip
+		errs   []error
+		onFace = map[faceKey][]int{} // indices into out
+		used   = map[string]int{}    // openings and strips on each through wall
 	)
 	for _, tw := range trims {
 		it := p.Walls[tw.item]
@@ -484,17 +489,27 @@ func stripJoins(p Plan, failed map[string]bool, trims []trimmedWall) ([]strip, [
 				f = fs[0]
 			}
 			s := joinStrip(it, tw, j, f)
-			var reason JoinReason
-			switch {
-			case s.lo < f.start+minDim || s.hi > f.end-minDim || s.top-s.bottom < minDim:
-				reason = ReasonOffWall
-			case slices.ContainsFunc(out, s.touches):
-				reason = ReasonJoinsOverlap
-			default:
-				out = append(out, s)
+			if s.lo < f.start+minDim || s.hi > f.end-minDim || s.top-s.bottom < minDim {
+				errs = append(errs, &JoinError{Item: it.ID, Join: k, Reason: ReasonOffWall})
 				continue
 			}
-			errs = append(errs, &JoinError{Item: it.ID, Join: k, Reason: reason})
+			n, seen := used[f.wall]
+			if !seen {
+				_, _, ops := x.openings(f.wall)
+				n = len(ops)
+			}
+			if n > maxOpenings {
+				continue
+			}
+			key := faceKey{f.wall, f.measured}
+			if slices.ContainsFunc(onFace[key], func(i int) bool { return out[i].touches(&s) }) {
+				errs = append(errs, &JoinError{Item: it.ID, Join: k, Reason: ReasonJoinsOverlap})
+				used[f.wall] = n
+				continue
+			}
+			onFace[key] = append(onFace[key], len(out))
+			out = append(out, s)
+			used[f.wall] = n + 1
 		}
 	}
 	return out, append(errs, x.checkStrips(out)...)
@@ -519,8 +534,8 @@ func (x *joinTargets) checkStrips(strips []strip) []error {
 		item, wall, ops := x.openings(name)
 		ss := on[name]
 		var errs []error
-		if n := len(ops) + len(ss); n > maxOpenings {
-			errs = append(errs, tooLarge("wall %d has %d openings and joins, more than %d", wall, n, maxOpenings))
+		if len(ops)+len(ss) > maxOpenings {
+			errs = append(errs, tooLarge("wall %d has more than %d openings and joins", wall, maxOpenings))
 		} else {
 			for i, o := range ops {
 				if slices.ContainsFunc(ss, func(s strip) bool { return openingInStrip(o, s) }) {
