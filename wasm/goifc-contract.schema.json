@@ -22,6 +22,12 @@
             "above_wall",
             "in_corner",
             "layer_sliver",
+            "in_join",
+            "unknown_wall",
+            "not_on_face",
+            "too_shallow",
+            "off_wall",
+            "joins_overlap",
             "invalid_input",
             "invalid_ifc",
             "too_large",
@@ -35,6 +41,9 @@
           "type": "integer"
         },
         "opening": {
+          "type": "integer"
+        },
+        "join": {
           "type": "integer"
         },
         "message": {
@@ -142,6 +151,31 @@
                     "sill",
                     "width",
                     "height"
+                  ]
+                }
+              },
+              "joins": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "end": {
+                      "enum": [
+                        "a",
+                        "b"
+                      ]
+                    },
+                    "wall": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "end",
+                    "wall"
                   ]
                 }
               }
@@ -416,10 +450,16 @@
         "measuredGross": {
           "type": "number"
         },
+        "measuredJoins": {
+          "type": "number"
+        },
         "measuredNet": {
           "type": "number"
         },
         "otherGross": {
+          "type": "number"
+        },
+        "otherJoins": {
           "type": "number"
         },
         "otherNet": {
@@ -443,8 +483,10 @@
         "length",
         "height",
         "measuredGross",
+        "measuredJoins",
         "measuredNet",
         "otherGross",
+        "otherJoins",
         "otherNet",
         "revealPerimeter",
         "grossVolume",

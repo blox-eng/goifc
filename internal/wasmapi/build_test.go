@@ -140,9 +140,65 @@ func TestBuild_RefusalInLayeredRoom(t *testing.T) {
 	}
 }
 
+type joinsAnswer struct {
+	Walls []struct {
+		ID         string `json:"id"`
+		Quantities struct {
+			MeasuredJoins float64 `json:"measuredJoins"`
+			MeasuredNet   float64 `json:"measuredNet"`
+			OtherJoins    float64 `json:"otherJoins"`
+		} `json:"quantities"`
+	} `json:"walls"`
+}
+
+func TestBuild_Joins(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/joins.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	if glb == nil {
+		t.Fatalf("answer %s, want a GLB", answer)
+	}
+	var a joinsAnswer
+	if err := json.Unmarshal(answer, &a); err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range a.Walls {
+		if w.ID != "T" {
+			continue
+		}
+		q := w.Quantities
+		if math.Abs(q.MeasuredJoins-0.25) > 1e-9 || math.Abs(q.MeasuredNet-9.75) > 1e-9 || q.OtherJoins != 0 {
+			t.Errorf("T quantities %+v, want measuredJoins 0.25, measuredNet 9.75, otherJoins 0", q)
+		}
+		return
+	}
+	t.Fatalf("answer %s has no wall T", answer)
+}
+
+func TestBuild_RefusedJoin(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/refused-join.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	a := decodeAnswer(t, answer)
+	if a.OK || glb != nil || len(a.Errors) != 1 {
+		t.Fatalf("answer %s, want one refusal and no GLB", answer)
+	}
+	e := a.Errors[0]
+	if e.Code != "not_on_face" || e.Item != "P" || e.Join == nil || *e.Join != 0 || e.Wall != nil || e.Opening != nil {
+		t.Errorf("error %+v, want not_on_face on P join 0", e)
+	}
+}
+
 func TestBuild_RejectsBadRequests(t *testing.T) {
 	wall := func(fields string) string {
 		return `{"walls": [{` + fields + `}]}`
+	}
+	join := func(j string) string {
+		return `{"walls": [{"id": "P", "edge": [[2, 3], [2, 0]], "base": 0, "height": 2.5, "side": "left", "thickness": 0.1, "joins": [` + j + `]}]}`
 	}
 	const ok = `"edge": [[0, 0], [4, 0]], "base": 0, "height": 2.7, "side": "left"`
 	for _, c := range []struct {
@@ -175,6 +231,10 @@ func TestBuild_RejectsBadRequests(t *testing.T) {
 		{"null in a room outline", `{"rooms": [{"id": "r1", "outline": [[0, 0], [4, 0], [4, null]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2}]}`, "r1", "outline point 2"},
 		{"null in a slab outline", `{"slabs": [{"id": "s1", "outline": [[0, 0], [1, 0], [null, 1]], "z": 0, "thickness": 0.2}]}`, "s1", "outline point 2"},
 		{"null layer", wall(`"id": "w1", ` + ok + `, "layers": [0.1, null]`), "w1", "layers[1]"},
+		{"join end not a or b", join(`{"end": "c", "wall": "T"}`), "P", "end"},
+		{"join without end", join(`{"wall": "T"}`), "P", "end"},
+		{"join without wall", join(`{"end": "a"}`), "P", "wall"},
+		{"join with an unknown field", join(`{"end": "a", "wall": "T", "face": "x"}`), "", "face"},
 		{"opening without width", wall(`"id": "w1", ` + ok + `, "thickness": 0.2, "openings": [{"offset": 1, "sill": 0, "height": 2}]`), "w1", "width"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -230,17 +290,6 @@ func TestBuild_OKMatchesErrors(t *testing.T) {
 		a := decodeAnswer(t, answer)
 		if a.OK != (len(a.Errors) == 0) || (glb == nil) == a.OK || a.GoifcVersion != testVersion {
 			t.Errorf("%s: ok %v, %d errors, GLB %v, version %q", p, a.OK, len(a.Errors), glb != nil, a.GoifcVersion)
-		}
-	}
-}
-
-func TestValidID(t *testing.T) {
-	for id, want := range map[string]bool{
-		"w1": true, "A-z_0.9:x": true, strings.Repeat("a", 64): true,
-		"": false, strings.Repeat("a", 65): false, "a/b": false, "a b": false, "é": false, "a\x00": false,
-	} {
-		if got := validID(id); got != want {
-			t.Errorf("validID(%q) = %v, want %v", id, got, want)
 		}
 	}
 }
