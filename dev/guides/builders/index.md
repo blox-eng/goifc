@@ -33,14 +33,15 @@ The arguments, in order:
 
 ## The quantities
 
-| Quantity                       | Meaning                                                                             |
-| ------------------------------ | ----------------------------------------------------------------------------------- |
-| `Length`, `Height`             | The measured face.                                                                  |
-| `MeasuredGross`, `MeasuredNet` | The measured face, before and after openings, in m².                                |
-| `OtherGross`, `OtherNet`       | The opposite face. At a room corner it is longer or shorter than the measured face. |
-| `RevealPerimeter`              | The opening edges, in m. A door (`Sill: 0`) has no bottom edge.                     |
-| `GrossVolume`, `NetVolume`     | In m³.                                                                              |
-| `NicheBack`                    | The back panels of the niches, in m².                                               |
+| Quantity                       | Meaning                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Length`, `Height`             | The measured face.                                                                                                            |
+| `MeasuredGross`, `MeasuredNet` | The measured face, before and after openings, in m².                                                                          |
+| `OtherGross`, `OtherNet`       | The opposite face. At a room corner it is longer or shorter than the measured face.                                           |
+| `MeasuredJoins`, `OtherJoins`  | The strips that [joined partitions](#walls-that-meet-mid-wall) cover on each face, in m². The net areas already exclude them. |
+| `RevealPerimeter`              | The opening edges, in m. A door (`Sill: 0`) has no bottom edge.                                                               |
+| `GrossVolume`, `NetVolume`     | In m³.                                                                                                                        |
+| `NicheBack`                    | The back panels of the niches, in m².                                                                                         |
 
 These quantities are exact: they come from the numbers, not from the mesh. The mesh agrees with them. Its volume is `NetVolume` within float32 rounding.
 
@@ -61,12 +62,13 @@ if errors.As(err, &pe) {
 
 Each opening gets the first rule it breaks, checked in this order:
 
-| Reason       | The opening                                                   |
-| ------------ | ------------------------------------------------------------- |
-| `too_wide`   | reaches or passes an end of the measured face.                |
-| `above_wall` | reaches or passes the top of the wall.                        |
-| `overlaps`   | overlaps or touches an earlier opening.                       |
-| `in_corner`  | cuts into a room corner, where the opposite face stops short. |
+| Reason       | The opening                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| `too_wide`   | reaches or passes an end of the measured face.                                                           |
+| `above_wall` | reaches or passes the top of the wall.                                                                   |
+| `overlaps`   | overlaps or touches an earlier opening.                                                                  |
+| `in_corner`  | cuts into a room corner, where the opposite face stops short.                                            |
+| `in_join`    | overlaps or touches the strip a [joined partition](#walls-that-meet-mid-wall) covers (`BuildPlan` only). |
 
 "Touches" means closer than 1 mm. Wall thinner than that would not be wall.
 
@@ -149,6 +151,21 @@ detail, err := geometry.WritePreviewSVG(&svg, walls, []geometry.Slab{slab})
 }
 ```
 
-## Not yet
+## Walls that meet mid-wall
 
-Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a separate wall for now; see [limitations](https://docs.goifc.org/latest/limitations/index.md).
+A partition whose end meets the face of another wall (a T) is declared in the partition's `Joins`; goifc never finds joins by itself. `BuildPlan` builds the whole plan, cuts the end flush with the face and takes the strip it covers off that face's net area:
+
+```
+through := geometry.PlanWall{ID: "T", Edge: [2][2]float64{{0, 0}, {4, 0}},
+    Height: 2.5, Thickness: 0.2, Side: geometry.SideLeft}
+partition := geometry.PlanWall{ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}},
+    Height: 2.5, Thickness: 0.1, Side: geometry.SideLeft,
+    Joins: []geometry.Join{{End: geometry.EndB, Wall: "T"}}}
+built, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{through, partition}})
+```
+
+The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m². `MeasuredJoins` and `OtherJoins` hold the area taken off the measured and opposite faces, and `MeasuredNet` and `OtherNet` already exclude it: here `MeasuredNet` is 10 - 0.25 = 9.75 m². `Wall` is a wall item's ID or a room wall's `"r1/2"`.
+
+An end within 1 mm of the face snaps onto it. The partition's openings keep their place in the world when its start snaps, so a door does not slide.
+
+A join that cannot be built is refused with a `*JoinError` whose `Reason` is `unknown_wall`, `not_on_face`, `too_shallow` (the axes meet under 15 or over 165 degrees), `off_wall` or `joins_overlap`. An opening that falls in the strip a join removes is refused with a `*PlacementError` whose reason is `in_join`.

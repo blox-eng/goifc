@@ -845,17 +845,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#builders-do-not-join-walls-mid-wall-yet" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Builders do not join walls mid-wall yet
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#no-express-schema" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -882,6 +871,17 @@
     <span class="md-ellipsis">
       
         Storeys with no contained mesh produce no plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#only-t-joins-are-built" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Only T-joins are built
       
     </span>
   </a>
@@ -1286,17 +1286,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#builders-do-not-join-walls-mid-wall-yet" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Builders do not join walls mid-wall yet
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#no-express-schema" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1323,6 +1312,17 @@
     <span class="md-ellipsis">
       
         Storeys with no contained mesh produce no plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#only-t-joins-are-built" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Only T-joins are built
       
     </span>
   </a>
@@ -1395,11 +1395,6 @@ the budgets.</p>
 (more than 2^24 units of nesting work) keeps every ring as an outline, so a
 hole among them is drawn filled. Disjoint rings, however many, are nested
 correctly.</p>
-<h2 id="builders-do-not-join-walls-mid-wall-yet">Builders do not join walls mid-wall yet<a class="headerlink" href="#builders-do-not-join-walls-mid-wall-yet" title="Permanent link">&para;</a></h2>
-<p><code>BuildRoomWalls</code> joins walls at the corners of one outline. A wall that ends
-against the middle of another (a T-join) is not built yet. Build the partition
-as a separate wall with <code>BuildWall</code>; its end then overlaps the through wall's
-core, and the through wall's measured face still counts the strip it covers.</p>
 <h2 id="no-express-schema">No EXPRESS schema<a class="headerlink" href="#no-express-schema" title="Permanent link">&para;</a></h2>
 <p>The semantic layer reads positional attribute indices that are stable across
 IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not
@@ -1415,6 +1410,13 @@ a ring.</p>
 <h2 id="storeys-with-no-contained-mesh-produce-no-plan">Storeys with no contained mesh produce no plan<a class="headerlink" href="#storeys-with-no-contained-mesh-produce-no-plan" title="Permanent link">&para;</a></h2>
 <p><code>BuildImport</code> omits them from <code>StoreyPlans</code> rather than guessing a cut plane.
 See <a href="../guides/storey-plans/">storey plans</a>.</p>
+<h2 id="only-t-joins-are-built">Only T-joins are built<a class="headerlink" href="#only-t-joins-are-built" title="Permanent link">&para;</a></h2>
+<p>A join cuts a partition's end against another wall's face (a T). Two wall
+items meeting end to end, an L corner, are refused: <code>off_wall</code> when the
+partition stays outside the other wall, <code>not_on_face</code> when its end reaches
+into the other wall's body. Build them as a room, which mitres its corners. Walls that cross each other (an X) are not
+joined: build the crossing wall as two partitions, each joined to the other
+wall. See <a href="../guides/builders/#walls-that-meet-mid-wall">walls that meet mid-wall</a>.</p>
 <h2 id="scope-of-hardening">Scope of hardening<a class="headerlink" href="#scope-of-hardening" title="Permanent link">&para;</a></h2>
 <p>The well-trodden path is <code>BuildImport</code> on architectural IFC exports, because
 that is what Blox's import pipeline exercises. Off that path — MEP-heavy models,

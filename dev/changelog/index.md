@@ -8,6 +8,10 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+### Added
+
+- **Build walls that meet mid-wall (T-joins).** `BuildPlan` builds walls and rooms together, and a partition's `Joins` cut its end flush with another wall's face and take the strip it covers off that face's net area (`MeasuredJoins`, `OtherJoins`). The wasm build request takes `joins`, and the answer has `measuredJoins` and `otherJoins`. (#163)
+
 ### Changed
 
 - Releases no longer open a changelog PR, which got no CI and never merged. After a release, run `make promote` in a PR of its own; CI fails until then. (#140)

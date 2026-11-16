@@ -757,10 +757,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#not-yet" class="md-nav__link">
+  <a href="#walls-that-meet-mid-wall" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Not yet
+        Walls that meet mid-wall
       
     </span>
   </a>
@@ -1352,10 +1352,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#not-yet" class="md-nav__link">
+  <a href="#walls-that-meet-mid-wall" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Not yet
+        Walls that meet mid-wall
       
     </span>
   </a>
@@ -1463,6 +1463,10 @@ which the test suite runs.</p>
 <td>The opposite face. At a room corner it is longer or shorter than the measured face.</td>
 </tr>
 <tr>
+<td><code>MeasuredJoins</code>, <code>OtherJoins</code></td>
+<td>The strips that <a href="#walls-that-meet-mid-wall">joined partitions</a> cover on each face, in m². The net areas already exclude them.</td>
+</tr>
+<tr>
 <td><code>RevealPerimeter</code></td>
 <td>The opening edges, in m. A door (<code>Sill: 0</code>) has no bottom edge.</td>
 </tr>
@@ -1515,6 +1519,10 @@ a <code>*PlacementError</code> that names the wall, the opening and the reason:<
 <tr>
 <td><code>in_corner</code></td>
 <td>cuts into a room corner, where the opposite face stops short.</td>
+</tr>
+<tr>
+<td><code>in_join</code></td>
+<td>overlaps or touches the strip a <a href="#walls-that-meet-mid-wall">joined partition</a> covers (<code>BuildPlan</code> only).</td>
 </tr>
 </tbody>
 </table>
@@ -1612,9 +1620,29 @@ one <code>Wall</code> per layer.</p>
 <a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3d5a73</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
 <a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">}</span>
 </code></pre></div>
-<h2 id="not-yet">Not yet<a class="headerlink" href="#not-yet" title="Permanent link">&para;</a></h2>
-<p>Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a
-separate wall for now; see <a href="../../limitations/">limitations</a>.</p>
+<h2 id="walls-that-meet-mid-wall">Walls that meet mid-wall<a class="headerlink" href="#walls-that-meet-mid-wall" title="Permanent link">&para;</a></h2>
+<p>A partition whose end meets the face of another wall (a T) is declared in the
+partition's <code>Joins</code>; goifc never finds joins by itself. <code>BuildPlan</code> builds the
+whole plan, cuts the end flush with the face and takes the strip it covers off
+that face's net area:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">through</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">ID</span><span class="p">:</span><span class="w"> </span><span class="s">"T"</span><span class="p">,</span><span class="w"> </span><span class="nx">Edge</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}},</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="nx">Thickness</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="p">,</span><span class="w"> </span><span class="nx">Side</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">}</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nx">partition</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">ID</span><span class="p">:</span><span class="w"> </span><span class="s">"P"</span><span class="p">,</span><span class="w"> </span><span class="nx">Edge</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}},</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="nx">Thickness</span><span class="p">:</span><span class="w"> </span><span class="mf">0.1</span><span class="p">,</span><span class="w"> </span><span class="nx">Side</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nx">Joins</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Join</span><span class="p">{{</span><span class="nx">End</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">EndB</span><span class="p">,</span><span class="w"> </span><span class="nx">Wall</span><span class="p">:</span><span class="w"> </span><span class="s">"T"</span><span class="p">}}}</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nx">built</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildPlan</span><span class="p">(</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Plan</span><span class="p">{</span><span class="nx">Walls</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">through</span><span class="p">,</span><span class="w"> </span><span class="nx">partition</span><span class="p">}})</span>
+</code></pre></div>
+<p>The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m².
+<code>MeasuredJoins</code> and <code>OtherJoins</code> hold the area taken off the measured and
+opposite faces, and <code>MeasuredNet</code> and <code>OtherNet</code> already exclude it: here
+<code>MeasuredNet</code> is 10 - 0.25 = 9.75 m². <code>Wall</code> is a wall item's ID or a room
+wall's <code>"r1/2"</code>.</p>
+<p>An end within 1 mm of the face snaps onto it. The partition's openings keep
+their place in the world when its start snaps, so a door does not slide.</p>
+<p>A join that cannot be built is refused with a <code>*JoinError</code> whose <code>Reason</code> is
+<code>unknown_wall</code>, <code>not_on_face</code>, <code>too_shallow</code> (the axes meet under 15 or over 165 degrees),
+<code>off_wall</code> or <code>joins_overlap</code>. An opening that falls in the strip a join
+removes is refused with a <code>*PlacementError</code> whose reason is <code>in_join</code>.</p>
 
 
 

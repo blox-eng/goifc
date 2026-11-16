@@ -22,10 +22,6 @@ Each of these says so in the warnings, so a figure is never silently smaller: an
 
 One consequence for drawings: a cut whose rings overlap in very large numbers (more than 2^24 units of nesting work) keeps every ring as an outline, so a hole among them is drawn filled. Disjoint rings, however many, are nested correctly.
 
-## Builders do not join walls mid-wall yet
-
-`BuildRoomWalls` joins walls at the corners of one outline. A wall that ends against the middle of another (a T-join) is not built yet. Build the partition as a separate wall with `BuildWall`; its end then overlaps the through wall's core, and the through wall's measured face still counts the strip it covers.
-
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not reachable this way.
@@ -41,6 +37,10 @@ This is a known gap with a test pinning it. See [sections and floor plans](https
 ## Storeys with no contained mesh produce no plan
 
 `BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://docs.goifc.org/latest/guides/storey-plans/index.md).
+
+## Only T-joins are built
+
+A join cuts a partition's end against another wall's face (a T). Two wall items meeting end to end, an L corner, are refused: `off_wall` when the partition stays outside the other wall, `not_on_face` when its end reaches into the other wall's body. Build them as a room, which mitres its corners. Walls that cross each other (an X) are not joined: build the crossing wall as two partitions, each joined to the other wall. See [walls that meet mid-wall](https://docs.goifc.org/latest/guides/builders/#walls-that-meet-mid-wall).
 
 ## Scope of hardening
 

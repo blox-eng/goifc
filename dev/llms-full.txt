@@ -351,14 +351,15 @@ The arguments, in order:
 
 ## The quantities
 
-| Quantity                       | Meaning                                                                             |
-| ------------------------------ | ----------------------------------------------------------------------------------- |
-| `Length`, `Height`             | The measured face.                                                                  |
-| `MeasuredGross`, `MeasuredNet` | The measured face, before and after openings, in m².                                |
-| `OtherGross`, `OtherNet`       | The opposite face. At a room corner it is longer or shorter than the measured face. |
-| `RevealPerimeter`              | The opening edges, in m. A door (`Sill: 0`) has no bottom edge.                     |
-| `GrossVolume`, `NetVolume`     | In m³.                                                                              |
-| `NicheBack`                    | The back panels of the niches, in m².                                               |
+| Quantity                       | Meaning                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `Length`, `Height`             | The measured face.                                                                                                            |
+| `MeasuredGross`, `MeasuredNet` | The measured face, before and after openings, in m².                                                                          |
+| `OtherGross`, `OtherNet`       | The opposite face. At a room corner it is longer or shorter than the measured face.                                           |
+| `MeasuredJoins`, `OtherJoins`  | The strips that [joined partitions](#walls-that-meet-mid-wall) cover on each face, in m². The net areas already exclude them. |
+| `RevealPerimeter`              | The opening edges, in m. A door (`Sill: 0`) has no bottom edge.                                                               |
+| `GrossVolume`, `NetVolume`     | In m³.                                                                                                                        |
+| `NicheBack`                    | The back panels of the niches, in m².                                                                                         |
 
 These quantities are exact: they come from the numbers, not from the mesh. The mesh agrees with them. Its volume is `NetVolume` within float32 rounding.
 
@@ -379,12 +380,13 @@ if errors.As(err, &pe) {
 
 Each opening gets the first rule it breaks, checked in this order:
 
-| Reason       | The opening                                                   |
-| ------------ | ------------------------------------------------------------- |
-| `too_wide`   | reaches or passes an end of the measured face.                |
-| `above_wall` | reaches or passes the top of the wall.                        |
-| `overlaps`   | overlaps or touches an earlier opening.                       |
-| `in_corner`  | cuts into a room corner, where the opposite face stops short. |
+| Reason       | The opening                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| `too_wide`   | reaches or passes an end of the measured face.                                                           |
+| `above_wall` | reaches or passes the top of the wall.                                                                   |
+| `overlaps`   | overlaps or touches an earlier opening.                                                                  |
+| `in_corner`  | cuts into a room corner, where the opposite face stops short.                                            |
+| `in_join`    | overlaps or touches the strip a [joined partition](#walls-that-meet-mid-wall) covers (`BuildPlan` only). |
 
 "Touches" means closer than 1 mm. Wall thinner than that would not be wall.
 
@@ -467,9 +469,24 @@ detail, err := geometry.WritePreviewSVG(&svg, walls, []geometry.Slab{slab})
 }
 ```
 
-## Not yet
+## Walls that meet mid-wall
 
-Walls that meet mid-wall (T-joins) are not built yet. Build the partition as a separate wall for now; see [limitations](https://docs.goifc.org/latest/limitations/index.md).
+A partition whose end meets the face of another wall (a T) is declared in the partition's `Joins`; goifc never finds joins by itself. `BuildPlan` builds the whole plan, cuts the end flush with the face and takes the strip it covers off that face's net area:
+
+```
+through := geometry.PlanWall{ID: "T", Edge: [2][2]float64{{0, 0}, {4, 0}},
+    Height: 2.5, Thickness: 0.2, Side: geometry.SideLeft}
+partition := geometry.PlanWall{ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}},
+    Height: 2.5, Thickness: 0.1, Side: geometry.SideLeft,
+    Joins: []geometry.Join{{End: geometry.EndB, Wall: "T"}}}
+built, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{through, partition}})
+```
+
+The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m². `MeasuredJoins` and `OtherJoins` hold the area taken off the measured and opposite faces, and `MeasuredNet` and `OtherNet` already exclude it: here `MeasuredNet` is 10 - 0.25 = 9.75 m². `Wall` is a wall item's ID or a room wall's `"r1/2"`.
+
+An end within 1 mm of the face snaps onto it. The partition's openings keep their place in the world when its start snaps, so a door does not slide.
+
+A join that cannot be built is refused with a `*JoinError` whose `Reason` is `unknown_wall`, `not_on_face`, `too_shallow` (the axes meet under 15 or over 165 degrees), `off_wall` or `joins_overlap`. An opening that falls in the strip a join removes is refused with a `*PlacementError` whose reason is `in_join`.
 
 # Measuring silhouettes
 
@@ -764,10 +781,11 @@ const { answer, glb } = await builder.build({
 
 A request has three lists, `walls`, `rooms` and `slabs`, and `preview`. Each item's fields are the Go builder's parameters (see [Building from numbers](https://docs.goifc.org/latest/guides/builders/index.md)), in meters:
 
-- **wall:** `id`, `edge` (two `[x, y]` points), `base`, `height`, `thickness` or `layers`, `side` (`"left"` or `"right"`), `openings`.
+- **wall:** `id`, `edge` (two `[x, y]` points), `base`, `height`, `thickness` or `layers`, `side` (`"left"` or `"right"`), `openings`, `joins`.
 - **room:** `id`, `outline` (the closed outline's points), `base`, `height`, `thickness` or `layers`, `side`, `openings` (one list per outline edge; `null` or `[]` for none).
 - **slab:** `id`, `outline`, `z` (the top), `thickness` or `layers`.
 - **opening:** `offset`, `sill`, `width`, `height`, and `depth` for a niche (0 or left out cuts through).
+- **join:** `end` (`"a"` for `edge[0]`, `"b"` for `edge[1]`) and `wall`, the id of the wall the end meets mid-wall: a wall item (`"w1"`) or a room wall (`"r1/2"`). A wall has at most one join per end.
 
 Give `thickness` or `layers`, never both. A field the contract does not know is refused, so a typo never builds something different. Set `"preview": true` to get `answer.preview.svg`, the [SVG preview](https://docs.goifc.org/latest/guides/builders/#preview) of the whole plan.
 
@@ -783,6 +801,22 @@ An `id` is 1 to 64 letters, digits or `_ . : -`, unique in the request. Each bui
 | room in layers | `r1/0/0`, `r1/0/1`, … (wall, then layer)                  |
 | slab           | `s1`                                                      |
 | slab in layers | `s1/0`, `s1/1`, … (top first)                             |
+
+### Walls that meet mid-wall
+
+A partition's end that meets another wall's face (a T) is declared in the partition's `joins`. goifc cuts the end flush with the face and takes the strip it covers off that face's net area. The through wall's `measuredJoins` and `otherJoins` hold the area taken off its measured and opposite faces, and `measuredNet` and `otherNet` already exclude it.
+
+```
+{
+  "walls": [
+    { "id": "T", "edge": [[0, 0], [4, 0]], "base": 0, "height": 2.5, "thickness": 0.2, "side": "left" },
+    { "id": "P", "edge": [[2, 3], [2, 0]], "base": 0, "height": 2.5, "thickness": 0.1, "side": "left",
+      "joins": [{ "end": "b", "wall": "T" }] }
+  ]
+}
+```
+
+Here T's `measuredJoins` is 0.25 and its `measuredNet` 9.75.
 
 `answer.walls` lists the walls of `walls` and `rooms`, in request order; `answer.slabs` lists the slabs.
 
@@ -815,7 +849,7 @@ A part you did not ask for is absent from the answer. A value the file does not 
 
 ## When something is refused
 
-A refused request has `"ok": false` and lists every refusal at once:
+A refused request has `"ok": false` and lists every geometry refusal at once. A malformed field (a `null` or missing value, a join with no `end` or `wall`, a `thickness` of 0, or both `thickness` and `layers`) is reported alone, before any geometry runs:
 
 ```
 {
@@ -828,20 +862,32 @@ A refused request has `"ok": false` and lists every refusal at once:
 }
 ```
 
-`item` is the id you gave. `wall` is the outline edge (0 for a wall item) and `opening` the index in its openings. Match on `code`; `message` is for a person.
+`item` is the id you gave. `wall` is the outline edge (0 for a wall item) and `opening` the index in its openings. A refused join has `item` (the partition) and `join`, the index in its `joins`, instead of `wall` and `opening`:
 
-| Code              | What to do                                                                                                |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `too_wide`        | The opening reaches or passes an end of the wall. Make it narrower, or move it in.                        |
-| `overlaps`        | The opening touches or overlaps an earlier one. Move them apart.                                          |
-| `above_wall`      | The opening reaches or passes the top of the wall. Lower its sill or height.                              |
-| `in_corner`       | The opening cuts into a corner join of the room. Move it away from the corner.                            |
-| `layer_sliver`    | A niche's back lies under 1 mm from a layer boundary. Put it on the boundary or further from it.          |
-| `invalid_input`   | The request or an item is malformed. `message` names the field.                                           |
-| `invalid_ifc`     | The file is not IFC goifc can read. `message` says why.                                                   |
-| `too_large`       | A limit is exceeded. `message` names the size and the limit.                                              |
-| `nothing_to_draw` | The preview had no elements. Add one, or leave `preview` out.                                             |
-| `worker_failed`   | From `goifc.js` only: the worker died, for example out of memory. The next request starts a fresh worker. |
+```
+{ "code": "not_on_face", "item": "P", "join": 0, "message": "P join 0: not_on_face" }
+```
+
+Match on `code`; `message` is for a person.
+
+| Code              | What to do                                                                                                                                    |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `too_wide`        | The opening reaches or passes an end of the wall. Make it narrower, or move it in.                                                            |
+| `overlaps`        | The opening touches or overlaps an earlier one. Move them apart.                                                                              |
+| `above_wall`      | The opening reaches or passes the top of the wall. Lower its sill or height.                                                                  |
+| `in_corner`       | The opening cuts into a corner join of the room. Move it away from the corner.                                                                |
+| `layer_sliver`    | A niche's back lies under 1 mm from a layer boundary. Put it on the boundary or further from it.                                              |
+| `in_join`         | The opening overlaps or touches a strip a partition's join covers on that face. Move it away from the join.                                   |
+| `unknown_wall`    | A join names no wall or room wall of the request, or the partition itself. Check the `wall` id.                                               |
+| `not_on_face`     | The joined end is not on a face of the wall it names, or the partition runs into the wall. Move the end onto the face, or turn the partition. |
+| `too_shallow`     | The two walls meet at under 15° or over 165°. Change the angle.                                                                               |
+| `off_wall`        | The strip the partition covers leaves the face. Move the partition in from the wall's ends or edges.                                          |
+| `joins_overlap`   | The strip overlaps or touches an earlier strip on the same face. Move the partitions apart.                                                   |
+| `invalid_input`   | The request or an item is malformed. `message` names the field.                                                                               |
+| `invalid_ifc`     | The file is not IFC goifc can read. `message` says why.                                                                                       |
+| `too_large`       | A limit is exceeded. `message` names the size and the limit.                                                                                  |
+| `nothing_to_draw` | The preview had no elements. Add one, or leave `preview` out.                                                                                 |
+| `worker_failed`   | From `goifc.js` only: the worker died, for example out of memory. The next request starts a fresh worker.                                     |
 
 `goifc.js` rejects its Promise, without asking the worker, with an `Error` whose `code` is:
 
@@ -966,10 +1012,6 @@ Each of these says so in the warnings, so a figure is never silently smaller: an
 
 One consequence for drawings: a cut whose rings overlap in very large numbers (more than 2^24 units of nesting work) keeps every ring as an outline, so a hole among them is drawn filled. Disjoint rings, however many, are nested correctly.
 
-## Builders do not join walls mid-wall yet
-
-`BuildRoomWalls` joins walls at the corners of one outline. A wall that ends against the middle of another (a T-join) is not built yet. Build the partition as a separate wall with `BuildWall`; its end then overlaps the through wall's core, and the through wall's measured face still counts the strip it covers.
-
 ## No EXPRESS schema
 
 The semantic layer reads positional attribute indices that are stable across IFC2X3 and IFC4 for core entities. Exotic or schema-specific attributes are not reachable this way.
@@ -985,6 +1027,10 @@ This is a known gap with a test pinning it. See [sections and floor plans](https
 ## Storeys with no contained mesh produce no plan
 
 `BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane. See [storey plans](https://docs.goifc.org/latest/guides/storey-plans/index.md).
+
+## Only T-joins are built
+
+A join cuts a partition's end against another wall's face (a T). Two wall items meeting end to end, an L corner, are refused: `off_wall` when the partition stays outside the other wall, `not_on_face` when its end reaches into the other wall's body. Build them as a room, which mitres its corners. Walls that cross each other (an X) are not joined: build the crossing wall as two partitions, each joined to the other wall. See [walls that meet mid-wall](https://docs.goifc.org/latest/guides/builders/#walls-that-meet-mid-wall).
 
 ## Scope of hardening
 
@@ -1055,6 +1101,10 @@ This page is [`CHANGELOG.md`](https://github.com/blox-eng/goifc/blob/main/CHANGE
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
+
+### Added
+
+- **Build walls that meet mid-wall (T-joins).** `BuildPlan` builds walls and rooms together, and a partition's `Joins` cut its end flush with another wall's face and take the strip it covers off that face's net area (`MeasuredJoins`, `OtherJoins`). The wasm build request takes `joins`, and the answer has `measuredJoins` and `otherJoins`. (#163)
 
 ### Changed
 
