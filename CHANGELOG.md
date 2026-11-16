@@ -18,6 +18,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.20.0 — 2026-11-16
+
 ### Added
 
 - **Build walls that meet mid-wall (T-joins).**
