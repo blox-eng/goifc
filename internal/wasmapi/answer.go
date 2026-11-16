@@ -23,6 +23,7 @@ type Error struct {
 	Item    string `json:"item,omitempty"`
 	Wall    *int   `json:"wall,omitempty"`
 	Opening *int   `json:"opening,omitempty"`
+	Join    *int   `json:"join,omitempty"`
 	Message string `json:"message"`
 }
 
@@ -77,19 +78,34 @@ func flatten(err error) []error {
 	return []error{err}
 }
 
-// toErrors turns one item's error into contract errors.
-func toErrors(item string, err error) []Error {
+// toErrors turns BuildPlan's refusals into contract errors, one per refusal.
+func toErrors(err error) []Error {
 	var out []Error
 	for _, leaf := range flatten(err) {
-		e := Error{Code: codeOf(leaf), Item: item, Message: leaf.Error()}
-		var pe *geometry.PlacementError
-		if errors.As(leaf, &pe) {
-			e.Code = string(pe.Reason)
-			e.Wall, e.Opening = &pe.Wall, &pe.Opening
+		var je *geometry.JoinError
+		var ie *geometry.ItemError
+		switch {
+		case errors.As(leaf, &je):
+			out = append(out, Error{Code: string(je.Reason), Item: je.Item, Join: &je.Join, Message: je.Error()})
+		case errors.As(leaf, &ie):
+			for _, inner := range flatten(ie.Err) {
+				out = append(out, itemError(ie.Item, inner))
+			}
+		default:
+			out = append(out, Error{Code: codeOf(leaf), Message: leaf.Error()})
 		}
-		out = append(out, e)
 	}
 	return out
+}
+
+func itemError(item string, err error) Error {
+	e := Error{Code: codeOf(err), Item: item, Message: err.Error()}
+	var pe *geometry.PlacementError
+	if errors.As(err, &pe) {
+		e.Code = string(pe.Reason)
+		e.Wall, e.Opening = &pe.Wall, &pe.Opening
+	}
+	return e
 }
 
 // thousands writes n with comma separators, as the geometry messages do.

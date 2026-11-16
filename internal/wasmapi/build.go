@@ -30,6 +30,12 @@ type wallItem struct {
 	Layers    []*float64     `json:"layers"`
 	Side      *string        `json:"side"`
 	Openings  []openingInput `json:"openings"`
+	Joins     []joinInput    `json:"joins"`
+}
+
+type joinInput struct {
+	End  *string `json:"end"`
+	Wall *string `json:"wall"`
 }
 
 type roomItem struct {
@@ -84,8 +90,10 @@ type wallQuantities struct {
 	Length          float64 `json:"length"`
 	Height          float64 `json:"height"`
 	MeasuredGross   float64 `json:"measuredGross"`
+	MeasuredJoins   float64 `json:"measuredJoins"`
 	MeasuredNet     float64 `json:"measuredNet"`
 	OtherGross      float64 `json:"otherGross"`
+	OtherJoins      float64 `json:"otherJoins"`
 	OtherNet        float64 `json:"otherNet"`
 	RevealPerimeter float64 `json:"revealPerimeter"`
 	GrossVolume     float64 `json:"grossVolume"`
@@ -122,22 +130,6 @@ type previewOut struct {
 	Error  *Error `json:"error,omitempty"`
 }
 
-// validID reports whether id matches ^[A-Za-z0-9_.:-]{1,64}$. It is written
-// out because the regexp package adds 127 KB to goifc-build.wasm gzipped.
-func validID(id string) bool {
-	if len(id) == 0 || len(id) > 64 {
-		return false
-	}
-	for _, c := range []byte(id) {
-		switch {
-		case 'A' <= c && c <= 'Z', 'a' <= c && c <= 'z', '0' <= c && c <= '9', c == '_', c == '.', c == ':', c == '-':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
 // Build builds every wall, room and slab in one JSON request. It returns the
 // JSON answer and, when the answer is ok, a GLB with one node per built
 // element, named by its element id. A refused request returns every refusal
@@ -155,47 +147,31 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 		return failAnswer(version, []Error{{Code: "too_large", Message: fmt.Sprintf(
 			"%s items, over the %s limit", thousands(n), thousands(maxItems))}}), nil
 	}
-	if errs := checkIDs(req); errs != nil {
-		return failAnswer(version, errs), nil
-	}
 	if n := countElements(req); n > maxElements {
 		return failAnswer(version, []Error{{Code: "too_large", Message: fmt.Sprintf(
 			"the request builds %s elements, over the %s limit", thousands(n), thousands(maxElements))}}), nil
 	}
+	plan, errs := toPlan(req)
+	if errs != nil {
+		return failAnswer(version, errs), nil
+	}
+	b, err := geometry.BuildPlan(plan)
+	if err != nil {
+		return failAnswer(version, toErrors(err)), nil
+	}
 
 	var (
-		errs  []Error
 		walls []geometry.Wall
 		slabs []geometry.Slab
 		out   = built{GoifcVersion: version, OK: true, Walls: []wallOut{}, Slabs: []slabOut{}}
 	)
-	addWall := func(id string, w geometry.Wall) {
-		w.Element.GlobalID = id
-		walls = append(walls, w)
-		out.Walls = append(out.Walls, wallOut{ID: id, Quantities: toWallQuantities(w.Quantities), Measured: face(w.Measured)})
+	for _, w := range b.Walls {
+		walls = append(walls, w.Wall)
+		out.Walls = append(out.Walls, wallOut{ID: w.ID, Quantities: toWallQuantities(w.Wall.Quantities), Measured: face(w.Wall.Measured)})
 	}
-	addSlab := func(id string, s geometry.Slab) {
-		s.Element.GlobalID = id
-		slabs = append(slabs, s)
-		out.Slabs = append(out.Slabs, slabOut{ID: id, Quantities: slabQuantities(s.Quantities), Top: face(s.Top)})
-	}
-	for _, it := range req.Walls {
-		if err := buildWall(it, addWall); err != nil {
-			errs = append(errs, toErrors(it.ID, err)...)
-		}
-	}
-	for _, it := range req.Rooms {
-		if err := buildRoom(it, addWall); err != nil {
-			errs = append(errs, toErrors(it.ID, err)...)
-		}
-	}
-	for _, it := range req.Slabs {
-		if err := buildSlab(it, addSlab); err != nil {
-			errs = append(errs, toErrors(it.ID, err)...)
-		}
-	}
-	if errs != nil {
-		return failAnswer(version, errs), nil
+	for _, s := range b.Slabs {
+		slabs = append(slabs, s.Slab)
+		out.Slabs = append(out.Slabs, slabOut{ID: s.ID, Quantities: slabQuantities(s.Slab.Quantities), Top: face(s.Slab.Top)})
 	}
 
 	if req.Preview {
@@ -259,157 +235,132 @@ func countElements(req buildRequest) int {
 	return n
 }
 
-// checkIDs refuses an id that breaks the pattern or is used twice.
-func checkIDs(req buildRequest) []Error {
-	var ids []string
+// toPlan reads the request's numbers into a Plan, refusing a missing or null
+// one. It returns every refusal at once.
+func toPlan(req buildRequest) (geometry.Plan, []Error) {
+	var (
+		p    geometry.Plan
+		errs []Error
+	)
+	refuse := func(id string, err error) {
+		errs = append(errs, Error{Code: "invalid_input", Item: id, Message: err.Error()})
+	}
 	for _, it := range req.Walls {
-		ids = append(ids, it.ID)
+		w, err := toPlanWall(it)
+		if err != nil {
+			refuse(it.ID, err)
+			continue
+		}
+		p.Walls = append(p.Walls, w)
 	}
 	for _, it := range req.Rooms {
-		ids = append(ids, it.ID)
+		r, err := toPlanRoom(it)
+		if err != nil {
+			refuse(it.ID, err)
+			continue
+		}
+		p.Rooms = append(p.Rooms, r)
 	}
 	for _, it := range req.Slabs {
-		ids = append(ids, it.ID)
-	}
-	var errs []Error
-	seen := map[string]bool{}
-	for _, id := range ids {
-		switch {
-		case !validID(id):
-			errs = append(errs, Error{Code: "invalid_input", Item: id, Message: fmt.Sprintf(
-				"id %q must be 1 to 64 letters, digits or _ . : -", id)})
-		case seen[id]:
-			errs = append(errs, Error{Code: "invalid_input", Item: id, Message: fmt.Sprintf(
-				"id %q is used more than once", id)})
+		s, err := toPlanSlab(it)
+		if err != nil {
+			refuse(it.ID, err)
+			continue
 		}
-		seen[id] = true
+		p.Slabs = append(p.Slabs, s)
 	}
-	return errs
+	return p, errs
 }
 
-func buildWall(it wallItem, add func(string, geometry.Wall)) error {
+func toPlanWall(it wallItem) (geometry.PlanWall, error) {
+	w := geometry.PlanWall{ID: it.ID}
 	pts, err := points("edge", it.Edge)
 	if err != nil {
-		return err
+		return w, err
 	}
 	if len(pts) != 2 {
-		return fmt.Errorf("edge has %d points, want 2", len(pts))
+		return w, fmt.Errorf("edge has %d points, want 2", len(pts))
 	}
-	base, height, side, err := wallCommon(it.Base, it.Height, it.Side)
-	if err != nil {
-		return err
+	w.Edge = [2][2]float64{pts[0], pts[1]}
+	if w.Base, w.Height, w.Side, err = wallCommon(it.Base, it.Height, it.Side); err != nil {
+		return w, err
 	}
-	ops, err := openings("openings", it.Openings)
-	if err != nil {
-		return err
+	if w.Openings, err = openings("openings", it.Openings); err != nil {
+		return w, err
 	}
-	edge := [2][2]float64{pts[0], pts[1]}
-	switch {
-	case it.Thickness != nil && it.Layers == nil:
-		w, err := geometry.BuildWall(edge, base, height, *it.Thickness, side, ops)
-		if err != nil {
-			return err
-		}
-		add(it.ID, w)
-	case it.Thickness == nil && it.Layers != nil:
-		layers, err := numbers("layers", it.Layers)
-		if err != nil {
-			return err
-		}
-		ws, err := geometry.BuildWallLayers(edge, base, height, layers, side, ops)
-		if err != nil {
-			return err
-		}
-		for j, w := range ws {
-			add(fmt.Sprintf("%s/%d", it.ID, j), w)
-		}
-	default:
-		return errThicknessOrLayers
+	if w.Joins, err = joins(it.Joins); err != nil {
+		return w, err
 	}
-	return nil
+	w.Thickness, w.Layers, err = thicknessOrLayers(it.Thickness, it.Layers)
+	return w, err
 }
 
-func buildRoom(it roomItem, add func(string, geometry.Wall)) error {
-	outline, err := points("outline", it.Outline)
-	if err != nil {
-		return err
+func toPlanRoom(it roomItem) (geometry.PlanRoom, error) {
+	r := geometry.PlanRoom{ID: it.ID}
+	var err error
+	if r.Outline, err = points("outline", it.Outline); err != nil {
+		return r, err
 	}
-	base, height, side, err := wallCommon(it.Base, it.Height, it.Side)
-	if err != nil {
-		return err
+	if r.Base, r.Height, r.Side, err = wallCommon(it.Base, it.Height, it.Side); err != nil {
+		return r, err
 	}
-	var ops [][]geometry.Opening
 	if it.Openings != nil {
-		ops = make([][]geometry.Opening, len(it.Openings))
+		r.Openings = make([][]geometry.Opening, len(it.Openings))
 		for i, o := range it.Openings {
-			if ops[i], err = openings(fmt.Sprintf("openings[%d]", i), o); err != nil {
-				return err
+			if r.Openings[i], err = openings(fmt.Sprintf("openings[%d]", i), o); err != nil {
+				return r, err
 			}
 		}
 	}
-	switch {
-	case it.Thickness != nil && it.Layers == nil:
-		ws, err := geometry.BuildRoomWalls(outline, base, height, *it.Thickness, side, ops)
-		if err != nil {
-			return err
-		}
-		for i, w := range ws {
-			add(fmt.Sprintf("%s/%d", it.ID, i), w)
-		}
-	case it.Thickness == nil && it.Layers != nil:
-		layers, err := numbers("layers", it.Layers)
-		if err != nil {
-			return err
-		}
-		ws, err := geometry.BuildRoomWallLayers(outline, base, height, layers, side, ops)
-		if err != nil {
-			return err
-		}
-		for i, layers := range ws {
-			for j, w := range layers {
-				add(fmt.Sprintf("%s/%d/%d", it.ID, i, j), w)
-			}
-		}
-	default:
-		return errThicknessOrLayers
-	}
-	return nil
+	r.Thickness, r.Layers, err = thicknessOrLayers(it.Thickness, it.Layers)
+	return r, err
 }
 
-func buildSlab(it slabItem, add func(string, geometry.Slab)) error {
-	outline, err := points("outline", it.Outline)
-	if err != nil {
-		return err
+func toPlanSlab(it slabItem) (geometry.PlanSlab, error) {
+	s := geometry.PlanSlab{ID: it.ID}
+	var err error
+	if s.Outline, err = points("outline", it.Outline); err != nil {
+		return s, err
 	}
 	if it.Z == nil {
-		return errors.New("z is missing")
+		return s, errors.New("z is missing")
 	}
-	switch {
-	case it.Thickness != nil && it.Layers == nil:
-		s, err := geometry.BuildSlab(outline, *it.Z, *it.Thickness)
-		if err != nil {
-			return err
-		}
-		add(it.ID, s)
-	case it.Thickness == nil && it.Layers != nil:
-		layers, err := numbers("layers", it.Layers)
-		if err != nil {
-			return err
-		}
-		ss, err := geometry.BuildSlabLayers(outline, *it.Z, layers)
-		if err != nil {
-			return err
-		}
-		for j, s := range ss {
-			add(fmt.Sprintf("%s/%d", it.ID, j), s)
-		}
-	default:
-		return errThicknessOrLayers
-	}
-	return nil
+	s.Z = *it.Z
+	s.Thickness, s.Layers, err = thicknessOrLayers(it.Thickness, it.Layers)
+	return s, err
 }
 
-var errThicknessOrLayers = errors.New("give thickness or layers, not both and not neither")
+func thicknessOrLayers(thickness *float64, layers []*float64) (float64, []float64, error) {
+	switch {
+	case thickness != nil && layers == nil:
+		if *thickness == 0 { // a Plan reads 0 as "not given"
+			return 0, nil, errors.New("thickness 0 m is under the 1 mm minimum")
+		}
+		return *thickness, nil, nil
+	case thickness == nil && layers != nil:
+		l, err := numbers("layers", layers)
+		return 0, l, err
+	}
+	return 0, nil, errors.New("give thickness or layers, not both and not neither")
+}
+
+func joins(in []joinInput) ([]geometry.Join, error) {
+	var out []geometry.Join
+	for i, j := range in {
+		if j.End == nil {
+			return nil, fmt.Errorf("joins[%d]: end is missing", i)
+		}
+		if j.Wall == nil {
+			return nil, fmt.Errorf("joins[%d]: wall is missing", i)
+		}
+		var end geometry.End
+		if err := end.UnmarshalText([]byte(*j.End)); err != nil {
+			return nil, fmt.Errorf(`joins[%d]: end %q: give "a" or "b"`, i, *j.End)
+		}
+		out = append(out, geometry.Join{End: end, Wall: *j.Wall})
+	}
+	return out, nil
+}
 
 func wallCommon(base, height *float64, side *string) (float64, float64, geometry.Side, error) {
 	var s geometry.Side
@@ -486,8 +437,8 @@ func face(f geometry.Face) faceOut {
 func toWallQuantities(q geometry.WallQuantities) wallQuantities {
 	return wallQuantities{
 		Length: q.Length, Height: q.Height,
-		MeasuredGross: q.MeasuredGross, MeasuredNet: q.MeasuredNet,
-		OtherGross: q.OtherGross, OtherNet: q.OtherNet,
+		MeasuredGross: q.MeasuredGross, MeasuredJoins: q.MeasuredJoins, MeasuredNet: q.MeasuredNet,
+		OtherGross: q.OtherGross, OtherJoins: q.OtherJoins, OtherNet: q.OtherNet,
 		RevealPerimeter: q.RevealPerimeter,
 		GrossVolume:     q.GrossVolume, NetVolume: q.NetVolume,
 		NicheBack: q.NicheBack,
