@@ -32,7 +32,15 @@ func checkLayers(layers []float64) (total float64, err error) {
 // all share the outline's area and perimeter.
 // Invalid input returns an error and nothing else.
 func BuildSlabLayers(outline [][2]float64, z float64, layers []float64) ([]Slab, error) {
-	if err := checkOutline(outline); err != nil {
+	return BuildSlabPolygonLayers(Polygon2D{Outer: outline}, z, layers)
+}
+
+// BuildSlabPolygonLayers builds a slab with holes in layers, as
+// BuildSlabLayers does; every layer has the same holes. The holes are checked
+// as BuildSlabPolygon checks them.
+// Invalid input returns an error and nothing else.
+func BuildSlabPolygonLayers(p Polygon2D, z float64, layers []float64) ([]Slab, error) {
+	if err := checkOutline(p.Outer); err != nil {
 		return nil, err
 	}
 	if err := checkOrigin("z", z); err != nil {
@@ -41,14 +49,14 @@ func BuildSlabLayers(outline [][2]float64, z float64, layers []float64) ([]Slab,
 	if _, err := checkLayers(layers); err != nil {
 		return nil, err
 	}
-	ring, cap, err := slabCap(outline)
+	rings, cap, err := slabCap(p)
 	if err != nil {
 		return nil, err
 	}
 	slabs := make([]Slab, len(layers))
 	top := z
 	for k, t := range layers {
-		slabs[k] = slabAt(outline, ring, cap, top, t)
+		slabs[k] = slabAt(p.Outer, rings, cap, top, t)
 		top -= t
 	}
 	return slabs, nil

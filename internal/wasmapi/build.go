@@ -171,7 +171,8 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	}
 	for _, s := range b.Slabs {
 		slabs = append(slabs, s.Slab)
-		out.Slabs = append(out.Slabs, slabOut{ID: s.ID, Quantities: slabQuantities(s.Slab.Quantities), Top: face(s.Slab.Top)})
+		q := s.Slab.Quantities
+		out.Slabs = append(out.Slabs, slabOut{ID: s.ID, Quantities: slabQuantities{Area: q.Area, Perimeter: q.Perimeter, Volume: q.Volume}, Top: face(s.Slab.Top)})
 	}
 
 	if req.Preview {

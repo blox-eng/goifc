@@ -7,8 +7,8 @@ import (
 
 // triangulatePolygon ear-clips a simple 2D polygon (CCW or CW) into triangle
 // indices into poly. Correct for concave polygons (a naive fan is not). Holes
-// are not supported (v1: walls solid, profiles outer-only). Repeated points and
-// zero-width spikes are dropped before clipping.
+// are not supported here: triangulateWithHoles bridges them in first.
+// Repeated points and zero-width spikes are dropped before clipping.
 //
 // ok is false when clipping stalls short of the polygon's area or when b runs
 // out. A loop that touches or crosses itself (a keyhole, two lobes meeting at
@@ -16,6 +16,13 @@ import (
 // ear that would cover it. Shipping the part it managed would make the mesh
 // smaller than the solid, so callers decline to the box instead.
 func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
+	return earClip(poly, b, false)
+}
+
+// earClip is triangulatePolygon's clipper. bridged is for a ring whose holes
+// are spliced in by bridges, so a bridge end appears twice: a point at an
+// ear's corner then does not block the ear.
+func earClip(poly [][2]float64, b *budget, bridged bool) (tris []uint32, ok bool) {
 	if len(poly) < 3 {
 		return nil, true
 	}
@@ -62,6 +69,9 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 			for _, j := range idx {
 				work++
 				if j == ia || j == ib || j == ic {
+					continue
+				}
+				if q := poly[j]; bridged && (q == pa || q == pb || q == pc) {
 					continue
 				}
 				if pointInTri(poly[j], pa, pb, pc) {
