@@ -66,8 +66,9 @@ See [storey plans](guides/storey-plans.md).
 ## Only T-joins are built
 
 A join cuts a partition's end against another wall's face (a T). Two wall
-items meeting end to end, an L corner, are refused `off_wall`: build them as
-a room, which mitres its corners. Walls that cross each other (an X) are not
+items meeting end to end, an L corner, are refused: `off_wall` when the
+partition stays outside the other wall, `not_on_face` when its end reaches
+into the other wall's body. Build them as a room, which mitres its corners. Walls that cross each other (an X) are not
 joined: build the crossing wall as two partitions, each joined to the other
 wall. See [walls that meet mid-wall](guides/builders.md#walls-that-meet-mid-wall).
 
