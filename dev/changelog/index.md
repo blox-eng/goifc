@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.20.0 — 2026-11-16
+
 ### Added
 
 - **Build walls that meet mid-wall (T-joins).** `BuildPlan` builds walls and rooms together, and a partition's `Joins` cut its end flush with another wall's face and take the strip it covers off that face's net area (`MeasuredJoins`, `OtherJoins`). The wasm build request takes `joins`, and the answer has `measuredJoins` and `otherJoins`. (#163)
