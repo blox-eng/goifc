@@ -2,6 +2,7 @@ package geometry
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -148,5 +149,35 @@ func TestBuildPlanThicknessOrLayers(t *testing.T) {
 		if !errors.Is(err, errThicknessOrLayers) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+func TestBuildPlanSlabHoles(t *testing.T) {
+	outer := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}}
+	hole := [][2]float64{{2, 2}, {4.5, 2}, {4.5, 3.2}, {2, 3.2}}
+	got, err := BuildPlan(Plan{Slabs: []PlanSlab{
+		{ID: "s1", Outline: outer, Holes: [][][2]float64{hole}, Z: 3, Thickness: 0.2},
+		{ID: "s2", Outline: outer, Holes: [][][2]float64{hole}, Z: 3, Layers: []float64{0.1, 0.1}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Slabs) != 3 {
+		t.Fatalf("%d slabs, want s1, s2/0, s2/1", len(got.Slabs))
+	}
+	q := got.Slabs[0].Slab.Quantities
+	if math.Abs(q.Area-77) > 1e-9 || math.Abs(q.HolePerimeter-7.4) > 1e-9 {
+		t.Errorf("area %v hole perimeter %v, want 77 and 7.4", q.Area, q.HolePerimeter)
+	}
+	if h := got.Slabs[2].Slab.Top.Holes; len(h) != 1 {
+		t.Errorf("layer 1 holes %v, want one", h)
+	}
+
+	far := [][2]float64{{20, 20}, {22, 20}, {22, 22}}
+	_, err = BuildPlan(Plan{Slabs: []PlanSlab{{ID: "s1", Outline: outer, Holes: [][][2]float64{hole, far}, Z: 3, Thickness: 0.2}}})
+	var ie *ItemError
+	var he *HoleError
+	if !errors.As(err, &ie) || ie.Item != "s1" || !errors.As(err, &he) || he.Hole != 1 || he.Reason != ReasonHoleOutside {
+		t.Errorf("error %v, want an *ItemError for s1 wrapping a *HoleError for hole 1, outside", err)
 	}
 }

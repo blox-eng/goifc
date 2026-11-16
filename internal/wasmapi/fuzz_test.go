@@ -11,6 +11,7 @@ import (
 
 var goCodes = []string{"too_wide", "overlaps", "above_wall", "in_corner", "layer_sliver", "in_join",
 	"unknown_wall", "not_on_face", "too_shallow", "off_wall", "joins_overlap",
+	"hole_outside", "holes_overlap", "hole_self_crossing",
 	"invalid_input", "invalid_ifc", "too_large", "nothing_to_draw"}
 
 // checkEnvelope holds for every answer: valid JSON, ok exactly when there

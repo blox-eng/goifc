@@ -219,3 +219,19 @@ func TestWallOpenings_OnFaceInFrontOfFaceSeq(t *testing.T) {
 		t.Fatalf("opening %v, want seq %d (the south face)", got, south.seq)
 	}
 }
+
+func TestElementShapes_SlabHoleMakesASecondLoop(t *testing.T) {
+	s, err := BuildSlabPolygon(Polygon2D{Outer: [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}}, Holes: [][][2]float64{{{2, 2}, {4.5, 2}, {4.5, 3.2}, {2, 3.2}}}}, 3, 0.2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	top := shapeFacing(t, mustShapes(t, s.Element), [3]float64{0, 0, 1})
+	if len(top.loops) != 2 {
+		t.Fatalf("top face has %d loops, want 2: outline and hole", len(top.loops))
+	}
+	for _, l := range top.loops {
+		if len(l) != 4 {
+			t.Errorf("loop %v, want 4 points", l)
+		}
+	}
+}

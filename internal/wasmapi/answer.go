@@ -24,6 +24,7 @@ type Error struct {
 	Wall    *int   `json:"wall,omitempty"`
 	Opening *int   `json:"opening,omitempty"`
 	Join    *int   `json:"join,omitempty"`
+	Hole    *int   `json:"hole,omitempty"`
 	Message string `json:"message"`
 }
 
@@ -98,12 +99,23 @@ func toErrors(err error) []Error {
 	return out
 }
 
+var holeCodes = map[geometry.HoleReason]string{
+	geometry.ReasonHoleOutside:      "hole_outside",
+	geometry.ReasonHolesOverlap:     "holes_overlap",
+	geometry.ReasonHoleSelfCrossing: "hole_self_crossing",
+}
+
 func itemError(item string, err error) Error {
 	e := Error{Code: codeOf(err), Item: item, Message: err.Error()}
 	var pe *geometry.PlacementError
-	if errors.As(err, &pe) {
+	var he *geometry.HoleError
+	switch {
+	case errors.As(err, &pe):
 		e.Code = string(pe.Reason)
 		e.Wall, e.Opening = &pe.Wall, &pe.Opening
+	case errors.As(err, &he):
+		e.Code = holeCodes[he.Reason]
+		e.Hole = &he.Hole
 	}
 	return e
 }

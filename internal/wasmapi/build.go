@@ -50,11 +50,12 @@ type roomItem struct {
 }
 
 type slabItem struct {
-	ID        string       `json:"id"`
-	Outline   [][]*float64 `json:"outline"`
-	Z         *float64     `json:"z"`
-	Thickness *float64     `json:"thickness"`
-	Layers    []*float64   `json:"layers"`
+	ID        string         `json:"id"`
+	Outline   [][]*float64   `json:"outline"`
+	Holes     [][][]*float64 `json:"holes"`
+	Z         *float64       `json:"z"`
+	Thickness *float64       `json:"thickness"`
+	Layers    []*float64     `json:"layers"`
 }
 
 type openingInput struct {
@@ -102,18 +103,20 @@ type wallQuantities struct {
 }
 
 type slabQuantities struct {
-	Area      float64 `json:"area"`
-	Perimeter float64 `json:"perimeter"`
-	Volume    float64 `json:"volume"`
+	Area          float64 `json:"area"`
+	Perimeter     float64 `json:"perimeter"`
+	Volume        float64 `json:"volume"`
+	HolePerimeter float64 `json:"holePerimeter"`
 }
 
 type faceOut struct {
-	Origin   [3]float64   `json:"origin"`
-	U        [3]float64   `json:"u"`
-	V        [3]float64   `json:"v"`
-	Normal   [3]float64   `json:"normal"`
-	Outline  [][2]float64 `json:"outline"`
-	Openings []openingOut `json:"openings"`
+	Origin   [3]float64     `json:"origin"`
+	U        [3]float64     `json:"u"`
+	V        [3]float64     `json:"v"`
+	Normal   [3]float64     `json:"normal"`
+	Outline  [][2]float64   `json:"outline"`
+	Openings []openingOut   `json:"openings"`
+	Holes    [][][2]float64 `json:"holes,omitempty"`
 }
 
 type openingOut struct {
@@ -172,7 +175,7 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	for _, s := range b.Slabs {
 		slabs = append(slabs, s.Slab)
 		q := s.Slab.Quantities
-		out.Slabs = append(out.Slabs, slabOut{ID: s.ID, Quantities: slabQuantities{Area: q.Area, Perimeter: q.Perimeter, Volume: q.Volume}, Top: face(s.Slab.Top)})
+		out.Slabs = append(out.Slabs, slabOut{ID: s.ID, Quantities: slabQuantities{Area: q.Area, Perimeter: q.Perimeter, Volume: q.Volume, HolePerimeter: q.HolePerimeter}, Top: face(s.Slab.Top)})
 	}
 
 	if req.Preview {
@@ -323,6 +326,13 @@ func toPlanSlab(it slabItem) (geometry.PlanSlab, error) {
 	if s.Outline, err = points("outline", it.Outline); err != nil {
 		return s, err
 	}
+	for i, h := range it.Holes {
+		ring, err := points(fmt.Sprintf("holes[%d]", i), h)
+		if err != nil {
+			return s, err
+		}
+		s.Holes = append(s.Holes, ring)
+	}
 	if it.Z == nil {
 		return s, errors.New("z is missing")
 	}
@@ -425,7 +435,7 @@ func openings(name string, in []openingInput) ([]geometry.Opening, error) {
 }
 
 func face(f geometry.Face) faceOut {
-	out := faceOut{Origin: f.Origin, U: f.U, V: f.V, Normal: f.Normal, Outline: f.Outline, Openings: []openingOut{}}
+	out := faceOut{Origin: f.Origin, U: f.U, V: f.V, Normal: f.Normal, Outline: f.Outline, Openings: []openingOut{}, Holes: f.Holes}
 	if out.Outline == nil {
 		out.Outline = [][2]float64{}
 	}

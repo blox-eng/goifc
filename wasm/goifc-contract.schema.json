@@ -28,6 +28,9 @@
             "too_shallow",
             "off_wall",
             "joins_overlap",
+            "hole_outside",
+            "holes_overlap",
+            "hole_self_crossing",
             "invalid_input",
             "invalid_ifc",
             "too_large",
@@ -44,6 +47,9 @@
           "type": "integer"
         },
         "join": {
+          "type": "integer"
+        },
+        "hole": {
           "type": "integer"
         },
         "message": {
@@ -315,6 +321,15 @@
                   "$ref": "#/$defs/point"
                 }
               },
+              "holes": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/point"
+                  }
+                }
+              },
               "z": {
                 "type": "number"
               },
@@ -394,6 +409,15 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/point"
+          }
+        },
+        "holes": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/point"
+            }
           }
         },
         "openings": {
@@ -505,13 +529,17 @@
         },
         "volume": {
           "type": "number"
+        },
+        "holePerimeter": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
       "required": [
         "area",
         "perimeter",
-        "volume"
+        "volume",
+        "holePerimeter"
       ]
     },
     "buildOK": {

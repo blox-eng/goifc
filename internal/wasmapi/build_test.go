@@ -230,6 +230,8 @@ func TestBuild_RejectsBadRequests(t *testing.T) {
 		{"null in an edge point", wall(`"id": "w1", "edge": [[null, 0], [4, 0]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2`), "w1", "edge point 0"},
 		{"null in a room outline", `{"rooms": [{"id": "r1", "outline": [[0, 0], [4, 0], [4, null]], "base": 0, "height": 2.7, "side": "left", "thickness": 0.2}]}`, "r1", "outline point 2"},
 		{"null in a slab outline", `{"slabs": [{"id": "s1", "outline": [[0, 0], [1, 0], [null, 1]], "z": 0, "thickness": 0.2}]}`, "s1", "outline point 2"},
+		{"null in a hole point", `{"slabs": [{"id": "s1", "outline": [[0, 0], [10, 0], [10, 8]], "holes": [[[1, 1], [null, 2], [2, 2]]], "z": 0, "thickness": 0.2}]}`, "s1", "holes[0] point 1"},
+		{"hole with two points", `{"slabs": [{"id": "s1", "outline": [[0, 0], [10, 0], [10, 8]], "holes": [[[1, 1], [2, 2]]], "z": 0, "thickness": 0.2}]}`, "s1", "hole 0 needs at least 3 points"},
 		{"null layer", wall(`"id": "w1", ` + ok + `, "layers": [0.1, null]`), "w1", "layers[1]"},
 		{"join end not a or b", join(`{"end": "c", "wall": "T"}`), "P", "end"},
 		{"join without end", join(`{"wall": "T"}`), "P", "end"},
@@ -323,5 +325,45 @@ func TestBuild_ElementCap(t *testing.T) {
 	if a.OK || glb != nil || len(a.Errors) != 1 || a.Errors[0].Code != "too_large" ||
 		!strings.Contains(a.Errors[0].Message, "100,352") || !strings.Contains(a.Errors[0].Message, "100,000") {
 		t.Errorf("answer %.300s, want one too_large naming 100,352 elements and the 100,000 limit", answer)
+	}
+}
+
+func TestBuild_SlabHoles(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/slab-holes.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	if glb == nil {
+		t.Fatalf("answer %s, want a GLB", answer)
+	}
+	var a struct {
+		Slabs []struct {
+			Quantities struct{ Area, HolePerimeter float64 } `json:"quantities"`
+			Top        struct{ Holes [][][2]float64 }        `json:"top"`
+		} `json:"slabs"`
+	}
+	if err := json.Unmarshal(answer, &a); err != nil || len(a.Slabs) != 1 {
+		t.Fatalf("answer %s: %v", answer, err)
+	}
+	s := a.Slabs[0]
+	if math.Abs(s.Quantities.Area-77) > 1e-9 || math.Abs(s.Quantities.HolePerimeter-7.4) > 1e-9 || len(s.Top.Holes) != 1 {
+		t.Errorf("slab %+v, want area 77, holePerimeter 7.4, one top hole", s)
+	}
+}
+
+func TestBuild_RefusedHole(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/refused-hole.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	a := decodeAnswer(t, answer)
+	if a.OK || glb != nil || len(a.Errors) != 1 {
+		t.Fatalf("answer %s, want one refusal and no GLB", answer)
+	}
+	e := a.Errors[0]
+	if e.Code != "hole_outside" || e.Item != "s1" || e.Hole == nil || *e.Hole != 1 || e.Wall != nil || e.Join != nil {
+		t.Errorf("error %+v, want hole_outside on s1 hole 1", e)
 	}
 }
