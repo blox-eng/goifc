@@ -24,7 +24,7 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   `BuildPlan` builds walls and rooms together, and a partition's `Joins` cut
   its end flush with another wall's face and take the strip it covers off
   that face's net area (`MeasuredJoins`, `OtherJoins`). The wasm build
-  request takes `joins`, and the answer has `measuredJoins` and `otherJoins`.
+  request takes `joins`, and the answer has `measuredJoins` and `otherJoins`. (#163)
 
 ### Changed
 
