@@ -85,3 +85,25 @@ func ExampleWritePreviewSVG() {
 	// exact
 	// <svg xmlns="http://www.w3.org/2000/svg" viewBox="-2.514 -5.336 5.736 5.609" data-detail="exact">
 }
+
+// ExampleBuildPlan builds a 4 m through wall and a 0.1 m partition that meets
+// its face. The strip the partition covers is taken off the through wall's net
+// area.
+func ExampleBuildPlan() {
+	through := geometry.PlanWall{ID: "T", Edge: [2][2]float64{{0, 0}, {4, 0}}, Height: 2.5, Thickness: 0.2, Side: geometry.SideLeft}
+	partition := geometry.PlanWall{
+		ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}}, Height: 2.5, Thickness: 0.1, Side: geometry.SideLeft,
+		Joins: []geometry.Join{{End: geometry.EndB, Wall: "T"}},
+	}
+	built, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{through, partition}})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	q := built.Walls[0].Wall.Quantities
+	fmt.Printf("measured joins %.2f m²\n", q.MeasuredJoins)
+	fmt.Printf("measured net %.2f m²\n", q.MeasuredNet)
+	// Output:
+	// measured joins 0.25 m²
+	// measured net 9.75 m²
+}

@@ -299,3 +299,35 @@ func FuzzWritePreviewSVG(f *testing.F) {
 		}
 	})
 }
+
+func FuzzBuildPlan(f *testing.F) {
+	f.Add(4.0, 2.5, 0.2, 2.0, 3.0, 0.1, uint8(0))
+	f.Add(4.0, 2.5, 0.2, 2.0, -3.0, 0.1, uint8(1))
+	f.Add(1e6, 3.0, 0.3, 5e5, 2.0, 0.05, uint8(1))
+	f.Fuzz(func(t *testing.T, l, h, th, px, py, pth float64, end uint8) {
+		through := PlanWall{ID: "T", Edge: [2][2]float64{{0, 0}, {l, 0}}, Height: h, Thickness: th, Side: SideLeft}
+		partition := PlanWall{ID: "P", Edge: [2][2]float64{{px, py}, {px, 0}}, Height: h, Thickness: pth, Side: SideLeft}
+		e := EndB
+		if end%2 == 1 {
+			e = EndA
+			partition.Edge = [2][2]float64{{px, 0}, {px, py}}
+		}
+		partition.Joins = []Join{{End: e, Wall: "T"}}
+		b, err := BuildPlan(Plan{Walls: []PlanWall{through, partition}})
+		if err != nil {
+			return
+		}
+		q := builtWall(t, b, "T").Quantities
+		if q.MeasuredJoins+q.OtherJoins > q.MeasuredGross+q.OtherGross+1e-9*(q.MeasuredGross+q.OtherGross) {
+			t.Fatalf("joins %v + %v exceed gross %v + %v", q.MeasuredJoins, q.OtherJoins, q.MeasuredGross, q.OtherGross)
+		}
+		for _, w := range b.Walls {
+			wq := w.Wall.Quantities
+			for _, v := range []float64{wq.Length, wq.MeasuredGross, wq.MeasuredNet, wq.OtherGross, wq.OtherNet, wq.MeasuredJoins, wq.OtherJoins, wq.GrossVolume, wq.NetVolume} {
+				if math.IsNaN(v) || math.IsInf(v, 0) {
+					t.Fatalf("wall %s has a non-finite quantity: %+v", w.ID, wq)
+				}
+			}
+		}
+	})
+}

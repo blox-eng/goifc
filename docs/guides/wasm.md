@@ -92,7 +92,6 @@ Each item's fields are the Go builder's parameters (see
 - **slab:** `id`, `outline`, `z` (the top), `thickness` or `layers`.
 - **opening:** `offset`, `sill`, `width`, `height`, and `depth` for a
   niche (0 or left out cuts through).
-
 - **join:** `end` (`"a"` for `edge[0]`, `"b"` for `edge[1]`) and `wall`, the
   id of the wall the end meets mid-wall: a wall item (`"w1"`) or a room wall
   (`"r1/2"`). A wall has at most one join per end.
@@ -173,7 +172,9 @@ not read, for example an element with no geometry.
 
 ## When something is refused
 
-A refused request has `"ok": false` and lists every refusal at once:
+A refused request has `"ok": false` and lists every geometry refusal at once.
+A malformed field (a `null` or missing value, a join with no `end` or `wall`)
+is reported alone, before any geometry runs:
 
 ```json
 {
