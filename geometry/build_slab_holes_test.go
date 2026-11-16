@@ -192,24 +192,32 @@ func TestSlabHoleRefusals(t *testing.T) {
 	nearEdge := [][2]float64{{8, 2}, {9.9995, 2}, {9.9995, 3}, {8, 3}}
 	touching := [][2]float64{{4.5, 2.5}, {6, 2.5}, {6, 4}, {4.5, 4}}
 	bowtie := [][2]float64{{6, 5}, {7, 6}, {7, 5}, {6, 6}}
+	l := [][2]float64{{0, 0}, {18, 0}, {18, 6}, {12, 6}, {12, 10}, {0, 10}}
 	for _, tc := range []struct {
 		name  string
+		outer [][2]float64 // holeOuter when nil
 		holes [][][2]float64
 		want  []HoleError
 	}{
-		{"a hole across the outer edge", [][][2]float64{crossing}, []HoleError{{0, ReasonHoleOutside}}},
-		{"a hole 0.5 mm inside the outer edge", [][][2]float64{nearEdge}, []HoleError{{0, ReasonHoleOutside}}},
-		{"a hole wholly outside", [][][2]float64{holeSquare(20, 20, 1)}, []HoleError{{0, ReasonHoleOutside}}},
-		{"a hole around the whole slab", [][][2]float64{holeSquare(-1, -1, 12)}, []HoleError{{0, ReasonHoleOutside}}},
-		{"a hole touching H's edge", [][][2]float64{holeH, touching}, []HoleError{{1, ReasonHolesOverlap}}},
-		{"a hole inside H", [][][2]float64{holeH, holeSquare(2.5, 2.3, 0.5)}, []HoleError{{1, ReasonHolesOverlap}}},
-		{"a hole around H", [][][2]float64{holeH, holeSquare(1, 1, 3)}, []HoleError{{1, ReasonHolesOverlap}}},
-		{"a bowtie hole", [][][2]float64{bowtie}, []HoleError{{0, ReasonHoleSelfCrossing}}},
-		{"a collinear hole", [][][2]float64{{{2, 2}, {3, 2}, {4, 2}}}, []HoleError{{0, ReasonHoleSelfCrossing}}},
-		{"a hole pinched 0.5 mm", [][][2]float64{{{2, 2}, {4, 2}, {3, 2.0005}, {3, 3}}}, []HoleError{{0, ReasonHoleSelfCrossing}}},
-		{"two bad holes", [][][2]float64{crossing, holeH, bowtie}, []HoleError{{0, ReasonHoleOutside}, {2, ReasonHoleSelfCrossing}}},
+		{"a hole across the outer edge", nil, [][][2]float64{crossing}, []HoleError{{0, ReasonHoleOutside}}},
+		{"a hole 0.5 mm inside the outer edge", nil, [][][2]float64{nearEdge}, []HoleError{{0, ReasonHoleOutside}}},
+		{"a hole wholly outside", nil, [][][2]float64{holeSquare(20, 20, 1)}, []HoleError{{0, ReasonHoleOutside}}},
+		{"a hole around the whole slab", nil, [][][2]float64{holeSquare(-1, -1, 12)}, []HoleError{{0, ReasonHoleOutside}}},
+		{"a hole touching H's edge", nil, [][][2]float64{holeH, touching}, []HoleError{{1, ReasonHolesOverlap}}},
+		{"a hole inside H", nil, [][][2]float64{holeH, holeSquare(2.5, 2.3, 0.5)}, []HoleError{{1, ReasonHolesOverlap}}},
+		{"a hole around H", nil, [][][2]float64{holeH, holeSquare(1, 1, 3)}, []HoleError{{1, ReasonHolesOverlap}}},
+		{"a bowtie hole", nil, [][][2]float64{bowtie}, []HoleError{{0, ReasonHoleSelfCrossing}}},
+		{"a collinear hole", nil, [][][2]float64{{{2, 2}, {3, 2}, {4, 2}}}, []HoleError{{0, ReasonHoleSelfCrossing}}},
+		{"a hole pinched 0.5 mm", nil, [][][2]float64{{{2, 2}, {4, 2}, {3, 2.0005}, {3, 3}}}, []HoleError{{0, ReasonHoleSelfCrossing}}},
+		// Every point inside the L, but an edge cuts across the notch.
+		{"a hole across the L's notch", l, [][][2]float64{{{11, 5}, {14, 5}, {14, 5.5}, {11, 8}}}, []HoleError{{0, ReasonHoleOutside}}},
+		{"a hole in the L's notch", l, [][][2]float64{holeSquare(14, 7, 2)}, []HoleError{{0, ReasonHoleOutside}}},
+		{"two bad holes", nil, [][][2]float64{crossing, holeH, bowtie}, []HoleError{{0, ReasonHoleOutside}, {2, ReasonHoleSelfCrossing}}},
 	} {
-		_, err := BuildSlabPolygon(Polygon2D{Outer: holeOuter, Holes: tc.holes}, 3, 0.2)
+		if tc.outer == nil {
+			tc.outer = holeOuter
+		}
+		_, err := BuildSlabPolygon(Polygon2D{Outer: tc.outer, Holes: tc.holes}, 3, 0.2)
 		var he *HoleError
 		if !errors.As(err, &he) {
 			t.Errorf("%s: got %v, want a *HoleError", tc.name, err)
@@ -227,7 +235,7 @@ func TestSlabHoleRefusals(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
-		if _, err := BuildSlabPolygonLayers(Polygon2D{Outer: holeOuter, Holes: tc.holes}, 3, []float64{0.1, 0.1}); !errors.As(err, &he) {
+		if _, err := BuildSlabPolygonLayers(Polygon2D{Outer: tc.outer, Holes: tc.holes}, 3, []float64{0.1, 0.1}); !errors.As(err, &he) {
 			t.Errorf("%s: layers got %v, want a *HoleError", tc.name, err)
 		}
 	}
@@ -276,5 +284,30 @@ func TestSlabHoleInputErrors(t *testing.T) {
 	// The cap counts every point: 2,048 in all builds.
 	if _, err := BuildSlabPolygon(Polygon2D{Outer: holeOuter, Holes: [][][2]float64{shifted(regularPolygon(maxOutlinePoints-len(holeOuter), 1), 5, 4)}}, 3, 0.2); err != nil {
 		t.Errorf("2,048 points in all: %v", err)
+	}
+}
+
+func TestSlabHoleCheckWork(t *testing.T) {
+	// A 1,856-point outline with 64 triangular holes: 2,048 points in all.
+	// Each hole is compared with the outline's edges, not the outline with
+	// itself again: 3·1,856·3 units per hole, about 1.1 million in all, where
+	// re-checking the outline per hole cost over 200 million.
+	outer := shifted(regularPolygon(1856, 20), 20, 20)
+	var holes [][][2]float64
+	for i := range 8 {
+		for j := range 8 {
+			x, y := 10+2.2*float64(i), 10+2.2*float64(j)
+			holes = append(holes, [][2]float64{{x, y}, {x + 1, y}, {x, y + 1}})
+		}
+	}
+	b := newBudget()
+	if _, err := checkHoles(localRing(outer), outer[0], holes, b); err != nil {
+		t.Fatal(err)
+	}
+	if spent := b.size - b.left; spent > 2_000_000 {
+		t.Errorf("checking 64 holes in a 1,856-point outline cost %d work units, want at most 2,000,000", spent)
+	}
+	if _, err := BuildSlabPolygon(Polygon2D{Outer: outer, Holes: holes}, 0, 0.2); err != nil {
+		t.Error(err)
 	}
 }

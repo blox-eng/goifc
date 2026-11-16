@@ -70,11 +70,12 @@ func BuildSlabPolygon(p Polygon2D, z, thickness float64) (Slab, error) {
 // for every slab layer. rings holds the outline and then the holes, relative
 // to the outline's first point; cap indexes their points in that order.
 func slabCap(p Polygon2D) (rings [][][2]float64, cap []uint32, err error) {
-	holes, err := checkHoles(p.Outer, p.Holes)
+	ring := localRing(p.Outer)
+	holes, err := checkHoles(ring, p.Outer[0], p.Holes, newBudget())
 	if err != nil {
 		return nil, nil, err
 	}
-	rings = append([][][2]float64{localRing(p.Outer)}, holes...)
+	rings = append([][][2]float64{ring}, holes...)
 	ok := false
 	if len(holes) == 0 {
 		cap, ok = triangulatePolygon(rings[0], newBudget())
@@ -109,14 +110,15 @@ func holedCap(rings [][][2]float64) ([]uint32, bool) {
 }
 
 // checkHoles refuses too many holes or points, and a hole that is not a ring
-// of 3 or more finite points with edges of 1 mm or more. It returns the holes
-// relative to outer[0] without a repeated closing point, and every hole that
-// does not fit as a *HoleError.
-func checkHoles(outer [][2]float64, holes [][][2]float64) ([][][2]float64, error) {
+// of 3 or more finite points with edges of 1 mm or more. ring is the checked
+// outline relative to its first point, origin. It returns the holes relative
+// to origin without a repeated closing point, and every hole that does not
+// fit as a *HoleError. The checks are charged to b.
+func checkHoles(ring [][2]float64, origin [2]float64, holes [][][2]float64, b *budget) ([][][2]float64, error) {
 	if len(holes) > maxHoles {
 		return nil, tooLarge("%d holes, more than %d", len(holes), maxHoles)
 	}
-	total := len(outer)
+	total := len(ring)
 	for _, h := range holes {
 		total += len(h)
 	}
@@ -125,16 +127,26 @@ func checkHoles(outer [][2]float64, holes [][][2]float64) ([][][2]float64, error
 	}
 	rings := make([][][2]float64, len(holes))
 	for k, h := range holes {
-		r, err := holeRing(k, h, outer[0])
+		r, err := holeRing(k, h, origin)
 		if err != nil {
 			return nil, err
 		}
 		rings[k] = r
 	}
-	ring := localRing(outer)
 	var errs []error
 	var kept [][][2]float64
 	for k, r := range rings {
+		// Pairs compared: r's edges with each other and its points with its
+		// edges; then each other ring's edges with r's, both ways.
+		n := int64(len(r))
+		work := 3 * n * n / 2
+		work += 3 * int64(len(ring)) * n
+		for _, o := range kept {
+			work += 3 * int64(len(o)) * n
+		}
+		if !b.spend(work) {
+			return nil, errors.New("holes could not be checked within the work budget")
+		}
 		var reason HoleReason
 		switch {
 		case ringPinches(r) || edgesCrossOrOverlap([][][2]float64{r}):
@@ -206,9 +218,9 @@ func ringPinches(r [][2]float64) bool {
 
 // ringsApart reports whether two simple rings neither cross nor come within
 // 1 mm of each other. Segments that do not cross are closest at an end of one
-// of them.
+// of them. Each ring is already checked against itself.
 func ringsApart(a, b [][2]float64) bool {
-	if edgesCrossOrOverlap([][][2]float64{a, b}) {
+	if ringsCrossOrOverlap(a, b) {
 		return false
 	}
 	near := func(pts, ring [][2]float64) bool {
