@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -155,6 +156,28 @@ type joinTargets struct {
 	rooms  map[string]int
 	failed map[string]bool
 	spans  map[int][]wallSpan
+	trims  map[int]trimmedWall // by wall item; nil until partitions are trimmed
+}
+
+// target is a wall a join names: wall item item (room < 0), or wall w of
+// room room (item < 0).
+type target struct{ item, room, w int }
+
+// lookup finds the wall name.
+func (x *joinTargets) lookup(name string) (target, bool) {
+	if i, ok := x.walls[name]; ok {
+		return target{item: i, room: -1}, true
+	}
+	room, idx, ok := strings.Cut(name, "/")
+	r, okRoom := x.rooms[room]
+	if !ok || !okRoom {
+		return target{}, false
+	}
+	w, err := strconv.Atoi(idx)
+	if err != nil || strconv.Itoa(w) != idx || w < 0 || w >= len(x.p.Rooms[r].Outline) {
+		return target{}, false
+	}
+	return target{item: -1, room: r, w: w}, true
 }
 
 func newJoinTargets(p Plan, failed map[string]bool) *joinTargets {
@@ -169,28 +192,33 @@ func newJoinTargets(p Plan, failed map[string]bool) *joinTargets {
 }
 
 // faces returns the two faces of the wall name. known is false when the plan
-// has no such wall; built is false when its item failed to build, so the
-// join is not checked.
+// has no such wall; built is false when its item failed to build, or, once
+// partitions are trimmed, when its own joins were refused, so the join is not
+// checked. A trimmed partition's faces are its trimmed ones.
 func (x *joinTargets) faces(name string) (fs [2]face, known, built bool) {
-	if i, ok := x.walls[name]; ok {
-		it := x.p.Walls[i]
+	tg, ok := x.lookup(name)
+	if !ok {
+		return fs, false, false
+	}
+	if tg.room < 0 {
+		it := x.p.Walls[tg.item]
 		if x.failed[it.ID] {
 			return fs, true, false
 		}
-		t := totalThickness(it.Thickness, it.Layers)
 		l := math.Hypot(it.Edge[1][0]-it.Edge[0][0], it.Edge[1][1]-it.Edge[0][1])
-		return wallFaces(name, it.Edge[0], it.Edge[1], it.Base, it.Height, t, it.Side, wallSpan{l, 0, l}), true, true
+		edge, span := it.Edge, wallSpan{l, 0, l}
+		if x.trims != nil && len(it.Joins) > 0 {
+			tw, ok := x.trims[tg.item]
+			if !ok {
+				return fs, true, false
+			}
+			edge, span = tw.edge, tw.span
+		}
+		t := totalThickness(it.Thickness, it.Layers)
+		return wallFaces(name, edge[0], edge[1], it.Base, it.Height, t, it.Side, span), true, true
 	}
-	room, idx, ok := strings.Cut(name, "/")
-	r, okRoom := x.rooms[room]
-	if !ok || !okRoom {
-		return fs, false, false
-	}
+	r, w := tg.room, tg.w
 	it := x.p.Rooms[r]
-	w, err := strconv.Atoi(idx)
-	if err != nil || strconv.Itoa(w) != idx || w < 0 || w >= len(it.Outline) {
-		return fs, false, false
-	}
 	if x.failed[it.ID] {
 		return fs, true, false
 	}
@@ -266,7 +294,8 @@ type trimmedWall struct {
 	item  int // index into Plan.Walls
 	edge  [2][2]float64
 	span  wallSpan
-	faces []face // the face each join stops on, in join order
+	faces []face    // the face each join stops on, in join order
+	ops   []Opening // the openings, offset from the trimmed edge's start
 }
 
 // trimJoins runs checks 1 to 4 on every join whose walls both built, and
@@ -333,7 +362,8 @@ func endPoint(edge [2][2]float64, e End) [2]float64 {
 
 // trimWall cuts both of a partition's joined ends, end A first so end B's
 // trim measures from the snapped start, and checks its openings against the
-// trimmed span.
+// trimmed span. The openings keep their place in the world: when end A snaps
+// along the partition, their offsets move back by as much.
 func trimWall(it PlanWall, faces []face) (trimmedWall, error) {
 	l := math.Hypot(it.Edge[1][0]-it.Edge[0][0], it.Edge[1][1]-it.Edge[0][1])
 	tw := trimmedWall{edge: it.Edge, span: wallSpan{l, 0, l}, faces: faces}
@@ -359,11 +389,17 @@ func trimWall(it PlanWall, faces []face) (trimmedWall, error) {
 	if tw.span.length < minDim || tw.span.otherEnd-tw.span.otherStart < minDim {
 		return tw, errors.New("its joins leave the wall no length")
 	}
+	u := newWallFrame(it.Edge[0], it.Edge[1], it.Side).u
+	shift := (tw.edge[0][0]-it.Edge[0][0])*u[0] + (tw.edge[0][1]-it.Edge[0][1])*u[1]
+	tw.ops = append([]Opening(nil), it.Openings...)
+	for i := range tw.ops {
+		tw.ops[i].Offset -= shift
+	}
 	t := totalThickness(it.Thickness, it.Layers)
-	if err := checkOpenings(0, tw.span, it.Height, t, it.Openings); err != nil {
+	if err := checkOpenings(0, tw.span, it.Height, t, tw.ops); err != nil {
 		return tw, err
 	}
-	if layerCells(splitLayers(tw.span, wallLayerList(it), it.Openings), it.Height) > maxMeshCells {
+	if layerCells(splitLayers(tw.span, wallLayerList(it), tw.ops), it.Height) > maxMeshCells {
 		return tw, errTooMuchMesh
 	}
 	return tw, nil
@@ -379,5 +415,186 @@ func wallLayerList(it PlanWall) []float64 {
 
 // buildTrimmed builds a trimmed partition's walls, one per layer.
 func buildTrimmed(it PlanWall, tw trimmedWall) []Wall {
-	return wallLayers(newWallFrame(tw.edge[0], tw.edge[1], it.Side), wallOrigin(tw.edge[0], it.Base), tw.span, it.Height, wallLayerList(it), it.Openings)
+	return wallLayers(newWallFrame(tw.edge[0], tw.edge[1], it.Side), wallOrigin(tw.edge[0], it.Base), tw.span, it.Height, wallLayerList(it), tw.ops)
+}
+
+// strip is the band of a through wall's face a partition's end covers:
+// [lo, hi] along the face's u, [bottom, top] in z.
+type strip struct {
+	face                face
+	lo, hi, bottom, top float64
+}
+
+func (s strip) area() float64 { return (s.hi - s.lo) * (s.top - s.bottom) }
+
+// touches reports whether s and o lie on the same face and overlap or touch:
+// the gap between them is under minDim along both u and z.
+func (s strip) touches(o strip) bool {
+	if s.face.wall != o.face.wall || s.face.measured != o.face.measured {
+		return false
+	}
+	du := math.Max(s.lo, o.lo) - math.Min(s.hi, o.hi)
+	dv := math.Max(s.bottom, o.bottom) - math.Min(s.top, o.top)
+	return du < minDim && dv < minDim
+}
+
+// joinStrip is the strip that partition it, trimmed to tw, covers on the
+// face f of its join j: from its measured line's hit, the snapped end, to its
+// opposite line's.
+func joinStrip(it PlanWall, tw trimmedWall, j Join, f face) strip {
+	pf := newWallFrame(tw.edge[0], tw.edge[1], it.Side)
+	t := totalThickness(it.Thickness, it.Layers)
+	m := endPoint(tw.edge, j.End)
+	o := [2]float64{m[0] + t*pf.g[0], m[1] + t*pf.g[1]}
+	s := -f.depth(o) / (pf.u[0]*f.frame.g[0] + pf.u[1]*f.frame.g[1])
+	o = [2]float64{o[0] + s*pf.u[0], o[1] + s*pf.u[1]}
+	along := func(x [2]float64) float64 {
+		return (x[0]-f.origin[0])*f.frame.u[0] + (x[1]-f.origin[1])*f.frame.u[1]
+	}
+	lo, hi := along(m), along(o)
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	return strip{face: f, lo: lo, hi: hi, bottom: math.Max(it.Base, f.base), top: math.Min(it.Base+it.Height, f.top)}
+}
+
+// stripJoins computes the strip of every join of every trimmed partition and
+// runs checks 5 and 6 on it against the trimmed faces, in plan and join
+// order. It then checks each through wall's openings against the strips that
+// passed. It returns those strips and every refusal.
+func stripJoins(p Plan, failed map[string]bool, trims []trimmedWall) ([]strip, []error) {
+	x := newJoinTargets(p, failed)
+	x.trims = make(map[int]trimmedWall, len(trims))
+	for _, tw := range trims {
+		x.trims[tw.item] = tw
+	}
+	var (
+		out  []strip
+		errs []error
+	)
+	for _, tw := range trims {
+		it := p.Walls[tw.item]
+		for k, j := range it.Joins {
+			fs, _, built := x.faces(j.Wall)
+			if !built {
+				continue
+			}
+			f := fs[1]
+			if tw.faces[k].measured {
+				f = fs[0]
+			}
+			s := joinStrip(it, tw, j, f)
+			var reason JoinReason
+			switch {
+			case s.lo < f.start+minDim || s.hi > f.end-minDim || s.top-s.bottom < minDim:
+				reason = ReasonOffWall
+			case slices.ContainsFunc(out, s.touches):
+				reason = ReasonJoinsOverlap
+			default:
+				out = append(out, s)
+				continue
+			}
+			errs = append(errs, &JoinError{Item: it.ID, Join: k, Reason: reason})
+		}
+	}
+	return out, append(errs, x.checkStrips(out)...)
+}
+
+// checkStrips refuses, on each through wall, more openings and strips than
+// maxOpenings, and every opening that overlaps or touches a strip on a face
+// it cuts (ReasonInJoin): a through opening cuts both faces, a niche the
+// measured one. Each refusal is an *ItemError of the through wall's item.
+func (x *joinTargets) checkStrips(strips []strip) []error {
+	var walls []string
+	on := map[string][]strip{}
+	for _, s := range strips {
+		if on[s.face.wall] == nil {
+			walls = append(walls, s.face.wall)
+		}
+		on[s.face.wall] = append(on[s.face.wall], s)
+	}
+	var items []string
+	refused := map[string][]error{}
+	for _, name := range walls {
+		item, wall, ops := x.openings(name)
+		ss := on[name]
+		var errs []error
+		if n := len(ops) + len(ss); n > maxOpenings {
+			errs = append(errs, tooLarge("wall %d has %d openings and joins, more than %d", wall, n, maxOpenings))
+		} else {
+			for i, o := range ops {
+				if slices.ContainsFunc(ss, func(s strip) bool { return openingInStrip(o, s) }) {
+					errs = append(errs, &PlacementError{Wall: wall, Opening: i, Reason: ReasonInJoin})
+				}
+			}
+		}
+		if errs == nil {
+			continue
+		}
+		if refused[item] == nil {
+			items = append(items, item)
+		}
+		refused[item] = append(refused[item], errs...)
+	}
+	var out []error
+	for _, item := range items {
+		out = append(out, &ItemError{Item: item, Err: errors.Join(refused[item]...)})
+	}
+	return out
+}
+
+// openingInStrip reports whether o cuts the face s lies on and overlaps or
+// touches s.
+func openingInStrip(o Opening, s strip) bool {
+	if !s.face.measured && o.Depth != 0 {
+		return false
+	}
+	z := s.face.base + o.Sill
+	du := math.Max(o.Offset, s.lo) - math.Min(o.Offset+o.Width, s.hi)
+	dv := math.Max(z, s.bottom) - math.Min(z+o.Height, s.top)
+	return du < minDim && dv < minDim
+}
+
+// openings returns the item that owns the wall name, the wall's index in it,
+// and its openings as they are built: a trimmed partition's offset from its
+// trimmed start.
+func (x *joinTargets) openings(name string) (item string, wall int, ops []Opening) {
+	tg, _ := x.lookup(name)
+	if tg.room >= 0 {
+		it := x.p.Rooms[tg.room]
+		return it.ID, tg.w, roomOpenings(it.Openings, tg.w)
+	}
+	it := x.p.Walls[tg.item]
+	if tw, ok := x.trims[tg.item]; ok {
+		return it.ID, 0, tw.ops
+	}
+	return it.ID, 0, it.Openings
+}
+
+// subtractStrips takes each strip off the net area of the built face it lies
+// on: layer 0's measured face or the last layer's opposite face. wallAt and
+// roomAt are where each wall item's and room's walls start in walls.
+func subtractStrips(p Plan, walls []BuiltWall, wallAt, roomAt []int, strips []strip) {
+	x := newJoinTargets(p, nil)
+	for _, s := range strips {
+		tg, _ := x.lookup(s.face.wall)
+		var first, n int
+		if tg.room >= 0 {
+			n = max(1, len(p.Rooms[tg.room].Layers))
+			first = roomAt[tg.room] + tg.w*n
+		} else {
+			n = len(wallLayerList(p.Walls[tg.item]))
+			first = wallAt[tg.item]
+		}
+		a := s.area()
+		if s.face.measured {
+			q := &walls[first].Wall.Quantities
+			q.MeasuredJoins += a
+			q.MeasuredNet -= a
+		} else {
+			q := &walls[first+n-1].Wall.Quantities
+			q.OtherJoins += a
+			q.OtherNet -= a
+		}
+	}
 }

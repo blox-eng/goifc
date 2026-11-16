@@ -251,3 +251,356 @@ func TestEndText(t *testing.T) {
 		t.Error(`"c" read as an end`)
 	}
 }
+
+// joinFixture is T with a square 0.1 m partition P meeting its measured face
+// at x = 2: the strip is x ∈ [1.9, 2], 2.5 m tall.
+func joinFixture() Plan {
+	return Plan{Walls: []PlanWall{joinT, joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft)}}
+}
+
+// otherP is a square 0.1 m partition meeting T's opposite face (y = −0.2) in
+// x ∈ [1.9, 2].
+func otherP() PlanWall {
+	return joinP([2]float64{2, -3}, [2]float64{2, -0.2}, SideRight)
+}
+
+// checkFaces checks a wall's join and net areas on both faces.
+func checkFaces(t *testing.T, name string, q WallQuantities, mJoins, mNet, oJoins, oNet float64) {
+	t.Helper()
+	if !near(q.MeasuredJoins, mJoins, 1e-9) || !near(q.MeasuredNet, mNet, 1e-9) || !near(q.OtherJoins, oJoins, 1e-9) || !near(q.OtherNet, oNet, 1e-9) {
+		t.Errorf("%s: MeasuredJoins %v MeasuredNet %v OtherJoins %v OtherNet %v, want %v %v %v %v",
+			name, q.MeasuredJoins, q.MeasuredNet, q.OtherJoins, q.OtherNet, mJoins, mNet, oJoins, oNet)
+	}
+}
+
+// plainT is T built alone.
+func plainT(t *testing.T) Wall {
+	t.Helper()
+	w, err := BuildWall(joinT.Edge, 0, 2.5, 0.2, SideLeft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+func TestStripMeasured(t *testing.T) {
+	got, err := BuildPlan(joinFixture())
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := builtWall(t, got, "T")
+	checkFaces(t, "T", w.Quantities, 0.25, 9.75, 0, 10)
+	want := plainT(t)
+	if w.Quantities.GrossVolume != want.Quantities.GrossVolume || w.Quantities.NetVolume != want.Quantities.NetVolume ||
+		w.Quantities.MeasuredGross != want.Quantities.MeasuredGross || !reflect.DeepEqual(w.Element, func() Element { e := want.Element; e.GlobalID = "T"; return e }()) {
+		t.Error("the strip changed T's volumes, gross areas or mesh")
+	}
+}
+
+func TestStripOther(t *testing.T) {
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, otherP()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFaces(t, "T", builtWall(t, got, "T").Quantities, 0, 10, 0.25, 9.75)
+}
+
+func TestStripAngled(t *testing.T) {
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, joinP([2]float64{5, 3}, [2]float64{2, 0}, SideLeft)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := 0.1 / math.Sin(math.Pi/4) * 2.5
+	checkFaces(t, "T", builtWall(t, got, "T").Quantities, a, 10-a, 0, 10)
+}
+
+func TestStripVerticalOverlap(t *testing.T) {
+	p := joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft)
+	p.Base, p.Height = 1, 3
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, p}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFaces(t, "T", builtWall(t, got, "T").Quantities, 0.15, 9.85, 0, 10)
+}
+
+func TestStripLayeredThrough(t *testing.T) {
+	tl := joinT
+	tl.Thickness, tl.Layers = 0, []float64{0.015, 0.17, 0.015}
+	alone, err := BuildWallLayers(tl.Edge, 0, 2.5, tl.Layers, SideLeft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name  string
+		p     PlanWall
+		layer string
+		other bool
+	}{
+		{"measured side", joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft), "T/0", false},
+		{"other side", otherP(), "T/2", true},
+	} {
+		got, err := BuildPlan(Plan{Walls: []PlanWall{tl, c.p}})
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		q := builtWall(t, got, c.layer).Quantities
+		if c.other {
+			checkFaces(t, c.name, q, 0, alone[2].Quantities.MeasuredNet, 0.25, 9.75)
+		} else {
+			checkFaces(t, c.name, q, 0.25, 9.75, 0, alone[0].Quantities.OtherNet)
+		}
+		if q := builtWall(t, got, "T/1").Quantities; q != alone[1].Quantities {
+			t.Errorf("%s: layer 1 changed: %+v", c.name, q)
+		}
+	}
+}
+
+func TestStripLayeredPartition(t *testing.T) {
+	p := joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft)
+	p.Thickness, p.Layers = 0, []float64{0.0125, 0.075, 0.0125}
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, p}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFaces(t, "T", builtWall(t, got, "T").Quantities, 0.25, 9.75, 0, 10)
+}
+
+// joinR is a 4 × 3 room measured inside: R/0 runs along y = 0, R/2 along
+// y = 3 from x = 4 to 0.
+var joinR = PlanRoom{ID: "R", Outline: [][2]float64{{0, 0}, {4, 0}, {4, 3}, {0, 3}}, Height: 2.5, Thickness: 0.2, Side: SideLeft}
+
+func TestStripRoom(t *testing.T) {
+	p := PlanWall{ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}}, Height: 2.5, Thickness: 0.1, Side: SideLeft,
+		Joins: []Join{{End: EndA, Wall: "R/2"}, {End: EndB, Wall: "R/0"}}}
+	got, err := BuildPlan(Plan{Walls: []PlanWall{p}, Rooms: []PlanRoom{joinR}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"R/0", "R/2"} {
+		if j := builtWall(t, got, id).Quantities.MeasuredJoins; !near(j, 0.25, 1e-9) {
+			t.Errorf("%s MeasuredJoins %v, want 0.25", id, j)
+		}
+	}
+	if l := builtWall(t, got, "P").Quantities.Length; !near(l, 3, 1e-9) {
+		t.Errorf("P Length %v, want 3", l)
+	}
+
+	p.Joins[0].Wall = "R/00"
+	_, err = BuildPlan(Plan{Walls: []PlanWall{p}, Rooms: []PlanRoom{joinR}})
+	if got := joinErrors(err); len(got) != 1 || *got[0] != (JoinError{Item: "P", Join: 0, Reason: ReasonUnknownWall}) {
+		t.Errorf(`"R/00": got %v, want P join 0: %s`, err, ReasonUnknownWall)
+	}
+}
+
+// The room's outside corner mitres R/0's opposite face out to x = 4.2, so a
+// strip at x ∈ [4.05, 4.15] lies on it; T's square end stops at x = 4.
+func TestStripRoomMitredFace(t *testing.T) {
+	p := PlanWall{ID: "P", Edge: [2][2]float64{{4.15, -3}, {4.15, -0.2}}, Height: 2.5, Thickness: 0.1, Side: SideRight,
+		Joins: []Join{{End: EndB, Wall: "R/0"}}}
+	got, err := BuildPlan(Plan{Walls: []PlanWall{p}, Rooms: []PlanRoom{joinR}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j := builtWall(t, got, "R/0").Quantities.OtherJoins; !near(j, 0.25, 1e-9) {
+		t.Errorf("R/0 OtherJoins %v, want 0.25", j)
+	}
+
+	p.Joins[0].Wall = "T"
+	_, err = BuildPlan(Plan{Walls: []PlanWall{joinT, p}})
+	if got := joinErrors(err); len(got) != 1 || *got[0] != (JoinError{Item: "P", Join: 0, Reason: ReasonOffWall}) {
+		t.Errorf("on T: got %v, want P join 0: %s", err, ReasonOffWall)
+	}
+}
+
+func TestStripRefusals(t *testing.T) {
+	high := joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft)
+	high.Base = 3
+	second := joinP([2]float64{2.05, 3}, [2]float64{2.05, 0}, SideLeft)
+	second.ID = "P2"
+	for _, c := range []struct {
+		name  string
+		walls []PlanWall
+		want  JoinError
+	}{
+		{"past T's start", []PlanWall{joinT, joinP([2]float64{0.05, 3}, [2]float64{0.05, 0}, SideLeft)}, JoinError{Item: "P", Reason: ReasonOffWall}},
+		{"flush with T's end", []PlanWall{joinT, joinP([2]float64{4, 3}, [2]float64{4, 0}, SideLeft)}, JoinError{Item: "P", Reason: ReasonOffWall}},
+		{"above T", []PlanWall{joinT, high}, JoinError{Item: "P", Reason: ReasonOffWall}},
+		{"overlapping strips", []PlanWall{joinT, joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft), second}, JoinError{Item: "P2", Reason: ReasonJoinsOverlap}},
+	} {
+		_, err := BuildPlan(Plan{Walls: c.walls})
+		if got := joinErrors(err); len(got) != 1 || *got[0] != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, err, c.want)
+		}
+	}
+}
+
+// chainP is a 45° partition on T, measured on its upper-left face: its
+// opposite face is the line x − y = 2 + 0.1√2 and, trimmed at T, ends at
+// y = 0, 0.1 m short of the untrimmed end (y = −0.0707).
+var chainP = joinP([2]float64{5, 3}, [2]float64{2, 0}, SideRight)
+
+// chainQ is a horizontal 0.1 m partition below y = yq whose end A meets
+// chainP's opposite face. Its strip there ends where the line y = yq − 0.1
+// crosses that face.
+func chainQ(yq float64) PlanWall {
+	return PlanWall{ID: "Q", Edge: [2][2]float64{{yq + 2 + 0.1*math.Sqrt2, yq}, {3.5, yq}}, Height: 2.5, Thickness: 0.1, Side: SideLeft,
+		Joins: []Join{{End: EndA, Wall: "P"}}}
+}
+
+func TestStripChainAfterTrim(t *testing.T) {
+	// yq = 0.07: the strip reaches y = −0.03, past the trimmed end (y = 0)
+	// but short of the untrimmed one.
+	_, err := BuildPlan(Plan{Walls: []PlanWall{joinT, chainP, chainQ(0.07)}})
+	if got := joinErrors(err); len(got) != 1 || *got[0] != (JoinError{Item: "Q", Join: 0, Reason: ReasonOffWall}) {
+		t.Errorf("past the trimmed end: got %v, want Q join 0: %s", err, ReasonOffWall)
+	}
+
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, chainP, chainQ(0.37)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if j, want := builtWall(t, got, "P").Quantities.OtherJoins, 0.1*math.Sqrt2*2.5; !near(j, want, 1e-9) {
+		t.Errorf("P OtherJoins %v, want %v", j, want)
+	}
+}
+
+func TestStripInJoin(t *testing.T) {
+	door := Opening{Offset: 1.8, Width: 0.3, Height: 2}
+	tw := joinT
+	tw.Openings = []Opening{door}
+	for _, c := range []struct {
+		name string
+		p    PlanWall
+	}{
+		{"measured face", joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft)},
+		{"other face", otherP()},
+	} {
+		_, err := BuildPlan(Plan{Walls: []PlanWall{tw, c.p}})
+		var ie *ItemError
+		var pe *PlacementError
+		if !errors.As(err, &ie) || ie.Item != "T" || !errors.As(ie, &pe) || *pe != (PlacementError{Wall: 0, Opening: 0, Reason: ReasonInJoin}) {
+			t.Errorf("%s: got %v, want T wall 0 opening 0: %s", c.name, err, ReasonInJoin)
+		}
+	}
+
+	// A niche cuts the measured face only.
+	tw.Openings = []Opening{{Offset: 1.8, Width: 0.3, Sill: 0.1, Height: 2, Depth: 0.05}}
+	if _, err := BuildPlan(Plan{Walls: []PlanWall{tw, otherP()}}); err != nil {
+		t.Errorf("a niche on the other face: %v", err)
+	}
+}
+
+func TestStripCountsTowardOpenings(t *testing.T) {
+	tw := joinT
+	for i := range maxOpenings {
+		tw.Openings = append(tw.Openings, Opening{Offset: 0.01 + 0.0055*float64(i), Width: 0.002, Sill: 1, Height: 0.5})
+	}
+	if _, err := BuildPlan(Plan{Walls: []PlanWall{tw}}); err != nil {
+		t.Fatalf("T alone: %v", err)
+	}
+	_, err := BuildPlan(Plan{Walls: []PlanWall{tw, joinP([2]float64{2, 3}, [2]float64{2, 0}, SideLeft)}})
+	var ie *ItemError
+	if !errors.As(err, &ie) || ie.Item != "T" || !errors.Is(err, ErrTooLarge) {
+		t.Errorf("got %v, want T refused as too large", err)
+	}
+}
+
+func TestJoinBothEnds(t *testing.T) {
+	t2 := PlanWall{ID: "T2", Edge: [2][2]float64{{0, 3}, {4, 3}}, Height: 2.5, Thickness: 0.2, Side: SideRight}
+	p := PlanWall{ID: "P", Edge: [2][2]float64{{3.5, 3}, {0.5, 0}}, Height: 2.5, Thickness: 0.1, Side: SideLeft,
+		Joins: []Join{{End: EndA, Wall: "T2"}, {End: EndB, Wall: "T"}}}
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, t2, p}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both faces are trimmed 0.1 m along P at each end, the same way: a
+	// parallelogram.
+	l := 3 * math.Sqrt2
+	q := builtWall(t, got, "P").Quantities
+	if !near(q.Length, l, 1e-9) || !near(q.OtherGross, l*2.5, 1e-9) || !near(q.GrossVolume, l*0.25, 1e-9) {
+		t.Errorf("Length %v OtherGross %v GrossVolume %v, want %v %v %v", q.Length, q.OtherGross, q.GrossVolume, l, l*2.5, l*0.25)
+	}
+	a := 0.1 * math.Sqrt2 * 2.5
+	checkFaces(t, "T", builtWall(t, got, "T").Quantities, a, 10-a, 0, 10)
+	checkFaces(t, "T2", builtWall(t, got, "T2").Quantities, a, 10-a, 0, 10)
+}
+
+func TestJoinOtherFaceAngled(t *testing.T) {
+	l := 3 * math.Sqrt2
+	a := 0.1 * math.Sqrt2 * 2.5
+	for _, c := range []struct {
+		side  Side
+		other float64
+	}{
+		{SideLeft, l - 0.1},
+		{SideRight, l + 0.1},
+	} {
+		got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, joinP([2]float64{5, -3.2}, [2]float64{2, -0.2}, c.side)}})
+		if err != nil {
+			t.Fatalf("side %v: %v", c.side, err)
+		}
+		q := builtWall(t, got, "P").Quantities
+		if !near(q.Length, l, 1e-9) || !near(q.OtherGross, c.other*2.5, 1e-9) {
+			t.Errorf("side %v: Length %v OtherGross %v, want %v %v", c.side, q.Length, q.OtherGross, l, c.other*2.5)
+		}
+		checkFaces(t, "T", builtWall(t, got, "T").Quantities, 0, 10, a, 10-a)
+	}
+}
+
+func TestJoinAngleBounds(t *testing.T) {
+	for _, c := range []struct {
+		deg float64
+		ok  bool
+	}{{15, true}, {165, true}, {14.99, false}, {165.01, false}} {
+		r := c.deg * math.Pi / 180
+		p := joinP([2]float64{2 + 3*math.Cos(r), 3 * math.Sin(r)}, [2]float64{2, 0}, SideLeft)
+		_, err := BuildPlan(Plan{Walls: []PlanWall{joinT, p}})
+		switch got := joinErrors(err); {
+		case c.ok && err != nil:
+			t.Errorf("%v°: %v", c.deg, err)
+		case !c.ok && (len(got) != 1 || got[0].Reason != ReasonTooShallow):
+			t.Errorf("%v°: got %v, want %s", c.deg, err, ReasonTooShallow)
+		}
+	}
+}
+
+func TestJoinLayeredAngledVolume(t *testing.T) {
+	single := joinP([2]float64{5, 3}, [2]float64{2, 0}, SideLeft)
+	layered := single
+	layered.Thickness, layered.Layers = 0, []float64{0.0125, 0.075, 0.0125}
+	one, err := BuildPlan(Plan{Walls: []PlanWall{joinT, single}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	many, err := BuildPlan(Plan{Walls: []PlanWall{joinT, layered}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := 0.0
+	for j := range 3 {
+		sum += builtWall(t, many, "P/"+string(rune('0'+j))).Quantities.GrossVolume
+	}
+	if v := builtWall(t, one, "P").Quantities.GrossVolume; !near(sum, v, 1e-9) {
+		t.Errorf("layer volumes sum to %v, want %v", sum, v)
+	}
+}
+
+// End A lies 0.9 mm off T at 15° and snaps 0.9 mm / sin 15° along P; the
+// opening stays where it was in the world.
+func TestJoinSnapKeepsOpenings(t *testing.T) {
+	r := 15 * math.Pi / 180
+	a := [2]float64{2, 0.0009}
+	u := [2]float64{math.Cos(r), math.Sin(r)}
+	p := PlanWall{ID: "P", Edge: [2][2]float64{a, {a[0] + 3*u[0], a[1] + 3*u[1]}}, Height: 2.5, Thickness: 0.1, Side: SideRight,
+		Openings: []Opening{{Offset: 1, Width: 0.5, Height: 2}}, Joins: []Join{{End: EndA, Wall: "T"}}}
+	got, err := BuildPlan(Plan{Walls: []PlanWall{joinT, p}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := builtWall(t, got, "P").Measured
+	at := [2]float64{m.Origin[0] + m.Openings[0].Offset*m.U[0], m.Origin[1] + m.Openings[0].Offset*m.U[1]}
+	if want := [2]float64{a[0] + u[0], a[1] + u[1]}; !near(at[0], want[0], 1e-9) || !near(at[1], want[1], 1e-9) {
+		t.Errorf("opening starts at %v, want %v", at, want)
+	}
+}

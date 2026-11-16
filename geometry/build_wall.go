@@ -67,6 +67,9 @@ const (
 	// ReasonLayerSliver: a niche's back lies less than 1 mm from a layer
 	// boundary but not on it, which would leave a layer sliver under 1 mm.
 	ReasonLayerSliver PlacementReason = "layer_sliver"
+	// ReasonInJoin: the opening overlaps or touches the strip a partition
+	// covers on the face it cuts.
+	ReasonInJoin PlacementReason = "in_join"
 )
 
 // PlacementError refuses one opening. The builders return every refusal at

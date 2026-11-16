@@ -79,8 +79,9 @@ type ItemError struct {
 func (e *ItemError) Error() string { return e.Item + ": " + e.Err.Error() }
 func (e *ItemError) Unwrap() error { return e.Err }
 
-// BuildPlan builds every item of a plan and cuts each joined wall end flush
-// with the face it meets. It returns every refusal at once and no elements:
+// BuildPlan builds every item of a plan, cuts each joined wall end flush
+// with the face it meets, and takes the strip it covers off that face's net
+// area. It returns every refusal at once and no elements:
 // an item's own refusal as an *ItemError, a refused join as a *JoinError.
 func BuildPlan(p Plan) (Built, error) {
 	if n := len(p.Walls) + len(p.Rooms) + len(p.Slabs); n > maxPlanItems {
@@ -114,7 +115,9 @@ func BuildPlan(p Plan) (Built, error) {
 			failed[it.ID] = true
 		}
 	}
-	for _, it := range p.Rooms {
+	roomAt := make([]int, len(p.Rooms))
+	for i, it := range p.Rooms {
+		roomAt[i] = len(out.Walls)
 		if err := buildPlanRoom(it, addWall); err != nil {
 			errs = append(errs, &ItemError{Item: it.ID, Err: err})
 			failed[it.ID] = true
@@ -126,7 +129,9 @@ func BuildPlan(p Plan) (Built, error) {
 		}
 	}
 	trims, joinErrs := trimJoins(p, failed)
+	strips, stripErrs := stripJoins(p, failed, trims)
 	errs = append(errs, joinErrs...)
+	errs = append(errs, stripErrs...)
 	if errs != nil {
 		return Built{}, errors.Join(errs...)
 	}
@@ -137,6 +142,7 @@ func BuildPlan(p Plan) (Built, error) {
 			b.Wall = w
 		}
 	}
+	subtractStrips(p, out.Walls, wallAt, roomAt, strips)
 	return out, nil
 }
 
