@@ -379,8 +379,8 @@ func TestStripRoom(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"R/0", "R/2"} {
-		if j := builtWall(t, got, id).Quantities.MeasuredJoins; !near(j, 0.25, 1e-9) {
-			t.Errorf("%s MeasuredJoins %v, want 0.25", id, j)
+		if q := builtWall(t, got, id).Quantities; !near(q.MeasuredJoins, 0.25, 1e-9) || !near(q.MeasuredNet, 9.75, 1e-9) {
+			t.Errorf("%s MeasuredJoins %v MeasuredNet %v, want 0.25 9.75", id, q.MeasuredJoins, q.MeasuredNet)
 		}
 	}
 	if l := builtWall(t, got, "P").Quantities.Length; !near(l, 3, 1e-9) {
@@ -391,6 +391,36 @@ func TestStripRoom(t *testing.T) {
 	_, err = BuildPlan(Plan{Walls: []PlanWall{p}, Rooms: []PlanRoom{joinR}})
 	if got := joinErrors(err); len(got) != 1 || *got[0] != (JoinError{Item: "P", Join: 0, Reason: ReasonUnknownWall}) {
 		t.Errorf(`"R/00": got %v, want P join 0: %s`, err, ReasonUnknownWall)
+	}
+}
+
+// A layered room after wall items: the measured strips land on layer 0 of
+// R/0 and R/2, the opposite one on R/0's last layer, and no other layer
+// changes.
+func TestStripLayeredRoom(t *testing.T) {
+	in := PlanWall{ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}}, Height: 2.5, Thickness: 0.1, Side: SideLeft,
+		Joins: []Join{{End: EndA, Wall: "R/2"}, {End: EndB, Wall: "R/0"}}}
+	out := PlanWall{ID: "Q", Edge: [2][2]float64{{2, -3}, {2, -0.2}}, Height: 2.5, Thickness: 0.1, Side: SideRight,
+		Joins: []Join{{End: EndB, Wall: "R/0"}}}
+	r := joinR
+	r.Thickness, r.Layers = 0, []float64{0.015, 0.17, 0.015}
+	alone, err := BuildPlan(Plan{Rooms: []PlanRoom{r}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := BuildPlan(Plan{Walls: []PlanWall{in, out}, Rooms: []PlanRoom{r}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range alone.Walls {
+		want := w.Wall.Quantities
+		switch w.ID {
+		case "R/0/0", "R/2/0":
+			want.MeasuredJoins, want.MeasuredNet = 0.25, want.MeasuredNet-0.25
+		case "R/0/2":
+			want.OtherJoins, want.OtherNet = 0.25, want.OtherNet-0.25
+		}
+		checkFaces(t, w.ID, builtWall(t, got, w.ID).Quantities, want.MeasuredJoins, want.MeasuredNet, want.OtherJoins, want.OtherNet)
 	}
 }
 

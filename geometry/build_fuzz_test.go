@@ -321,6 +321,12 @@ func FuzzBuildPlan(f *testing.F) {
 		if q.MeasuredJoins+q.OtherJoins > q.MeasuredGross+q.OtherGross+1e-9*(q.MeasuredGross+q.OtherGross) {
 			t.Fatalf("joins %v + %v exceed gross %v + %v", q.MeasuredJoins, q.OtherJoins, q.MeasuredGross, q.OtherGross)
 		}
+		// T has no openings, so each face's net is its gross less its joins.
+		if tol := 1e-9 * q.MeasuredGross; math.Abs(q.MeasuredNet-(q.MeasuredGross-q.MeasuredJoins)) > tol ||
+			math.Abs(q.OtherNet-(q.OtherGross-q.OtherJoins)) > tol {
+			t.Fatalf("net %v, %v; want gross less joins: %v − %v, %v − %v",
+				q.MeasuredNet, q.OtherNet, q.MeasuredGross, q.MeasuredJoins, q.OtherGross, q.OtherJoins)
+		}
 		for _, w := range b.Walls {
 			wq := w.Wall.Quantities
 			for _, v := range []float64{wq.Length, wq.MeasuredGross, wq.MeasuredNet, wq.OtherGross, wq.OtherNet, wq.MeasuredJoins, wq.OtherJoins, wq.GrossVolume, wq.NetVolume} {

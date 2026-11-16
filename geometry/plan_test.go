@@ -84,15 +84,23 @@ func TestBuildPlanRefusesIDs(t *testing.T) {
 		return PlanWall{ID: id, Edge: [2][2]float64{{0, 0}, {4, 0}}, Height: 2.6, Thickness: 0.2, Side: SideLeft}
 	}
 	slab := func(id string) PlanSlab { return PlanSlab{ID: id, Outline: rect54, Thickness: 0.2} }
-	for name, p := range map[string]Plan{
-		"empty":     {Walls: []PlanWall{wall("")}},
-		"too long":  {Walls: []PlanWall{wall(strings.Repeat("a", 65))}},
-		"space":     {Walls: []PlanWall{wall("a b")}},
-		"duplicate": {Walls: []PlanWall{wall("x")}, Slabs: []PlanSlab{slab("x")}},
+	for name, c := range map[string]struct {
+		p    Plan
+		item string
+	}{
+		"empty":     {Plan{Walls: []PlanWall{wall("")}}, ""},
+		"too long":  {Plan{Walls: []PlanWall{wall(strings.Repeat("a", 65))}}, strings.Repeat("a", 65)},
+		"space":     {Plan{Walls: []PlanWall{wall("a b")}}, "a b"},
+		"duplicate": {Plan{Walls: []PlanWall{wall("x")}, Slabs: []PlanSlab{slab("x")}}, "x"},
 	} {
-		_, err := BuildPlan(p)
+		_, err := BuildPlan(c.p)
 		if err == nil {
 			t.Errorf("%s: no error", name)
+		}
+		for _, e := range unjoin(err) {
+			if ie, ok := e.(*ItemError); !ok || ie.Item != c.item {
+				t.Errorf("%s: refusal %#v, want an *ItemError of %q", name, e, c.item)
+			}
 		}
 		if name == "duplicate" && (err == nil || !strings.Contains(err.Error(), `"x"`)) {
 			t.Errorf("duplicate: %v does not name the ID", err)

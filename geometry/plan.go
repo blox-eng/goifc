@@ -81,8 +81,10 @@ func (e *ItemError) Unwrap() error { return e.Err }
 
 // BuildPlan builds every item of a plan, cuts each joined wall end flush
 // with the face it meets, and takes the strip it covers off that face's net
-// area. It returns every refusal at once and no elements:
-// an item's own refusal as an *ItemError, a refused join as a *JoinError.
+// area. A bad or repeated ID is refused alone, before anything is
+// built: one *ItemError per ID. Otherwise it returns every refusal at once
+// and no elements: an item's own refusal as an *ItemError, a refused join as
+// a *JoinError.
 func BuildPlan(p Plan) (Built, error) {
 	if n := len(p.Walls) + len(p.Rooms) + len(p.Slabs); n > maxPlanItems {
 		return Built{}, fmt.Errorf("%d items, over the %d limit", n, maxPlanItems)
