@@ -173,8 +173,9 @@ not read, for example an element with no geometry.
 ## When something is refused
 
 A refused request has `"ok": false` and lists every geometry refusal at once.
-A malformed field (a `null` or missing value, a join with no `end` or `wall`)
-is reported alone, before any geometry runs:
+A malformed field (a `null` or missing value, a join with no `end` or `wall`,
+a `thickness` of 0, or both `thickness` and `layers`) is reported alone,
+before any geometry runs:
 
 ```json
 {

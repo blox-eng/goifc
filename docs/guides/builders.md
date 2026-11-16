@@ -45,6 +45,7 @@ The arguments, in order:
 | `Length`, `Height` | The measured face. |
 | `MeasuredGross`, `MeasuredNet` | The measured face, before and after openings, in m². |
 | `OtherGross`, `OtherNet` | The opposite face. At a room corner it is longer or shorter than the measured face. |
+| `MeasuredJoins`, `OtherJoins` | The strips that [joined partitions](#walls-that-meet-mid-wall) cover on each face, in m². The net areas already exclude them. |
 | `RevealPerimeter` | The opening edges, in m. A door (`Sill: 0`) has no bottom edge. |
 | `GrossVolume`, `NetVolume` | In m³. |
 | `NicheBack` | The back panels of the niches, in m². |
@@ -77,6 +78,7 @@ Each opening gets the first rule it breaks, checked in this order:
 | `above_wall` | reaches or passes the top of the wall. |
 | `overlaps` | overlaps or touches an earlier opening. |
 | `in_corner` | cuts into a room corner, where the opposite face stops short. |
+| `in_join` | overlaps or touches the strip a [joined partition](#walls-that-meet-mid-wall) covers (`BuildPlan` only). |
 
 "Touches" means closer than 1 mm. Wall thinner than that would not be wall.
 
@@ -224,6 +226,6 @@ An end within 1 mm of the face snaps onto it. The partition's openings keep
 their place in the world when its start snaps, so a door does not slide.
 
 A join that cannot be built is refused with a `*JoinError` whose `Reason` is
-`unknown_wall`, `not_on_face`, `too_shallow` (the axes meet under 15 degrees),
+`unknown_wall`, `not_on_face`, `too_shallow` (the axes meet under 15 or over 165 degrees),
 `off_wall` or `joins_overlap`. An opening that falls in the strip a join
 removes is refused with a `*PlacementError` whose reason is `in_join`.

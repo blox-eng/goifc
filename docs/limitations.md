@@ -63,6 +63,14 @@ This is a known gap with a test pinning it. See
 `BuildImport` omits them from `StoreyPlans` rather than guessing a cut plane.
 See [storey plans](guides/storey-plans.md).
 
+## Only T-joins are built
+
+A join cuts a partition's end against another wall's face (a T). Two wall
+items meeting end to end, an L corner, are refused `off_wall`: build them as
+a room, which mitres its corners. Walls that cross each other (an X) are not
+joined: build the crossing wall as two partitions, each joined to the other
+wall. See [walls that meet mid-wall](guides/builders.md#walls-that-meet-mid-wall).
+
 ## Scope of hardening
 
 The well-trodden path is `BuildImport` on architectural IFC exports, because
