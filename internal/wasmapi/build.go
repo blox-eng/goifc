@@ -172,7 +172,7 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	addWall := func(id string, w geometry.Wall) {
 		w.Element.GlobalID = id
 		walls = append(walls, w)
-		out.Walls = append(out.Walls, wallOut{ID: id, Quantities: wallQuantities(w.Quantities), Measured: face(w.Measured)})
+		out.Walls = append(out.Walls, wallOut{ID: id, Quantities: toWallQuantities(w.Quantities), Measured: face(w.Measured)})
 	}
 	addSlab := func(id string, s geometry.Slab) {
 		s.Element.GlobalID = id
@@ -481,4 +481,15 @@ func face(f geometry.Face) faceOut {
 		out.Openings = append(out.Openings, openingOut(o))
 	}
 	return out
+}
+
+func toWallQuantities(q geometry.WallQuantities) wallQuantities {
+	return wallQuantities{
+		Length: q.Length, Height: q.Height,
+		MeasuredGross: q.MeasuredGross, MeasuredNet: q.MeasuredNet,
+		OtherGross: q.OtherGross, OtherNet: q.OtherNet,
+		RevealPerimeter: q.RevealPerimeter,
+		GrossVolume:     q.GrossVolume, NetVolume: q.NetVolume,
+		NicheBack: q.NicheBack,
+	}
 }

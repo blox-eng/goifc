@@ -92,6 +92,7 @@ type WallQuantities struct {
 	RevealPerimeter            float64 // m, Σ opening edges, minus the bottom edge when Sill == 0
 	GrossVolume, NetVolume     float64 // m³
 	NicheBack                  float64 // m², the back panels of the niches
+	MeasuredJoins, OtherJoins  float64 // m², the strips partitions cover
 }
 
 // Wall is what BuildWall and BuildRoomWalls return.
