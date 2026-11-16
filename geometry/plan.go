@@ -28,6 +28,7 @@ type PlanWall struct {
 	Layers                  []float64
 	Side                    Side
 	Openings                []Opening
+	Joins                   []Join // at most one per end
 }
 
 // PlanRoom is one room item: a wall on every outline edge.
@@ -78,8 +79,9 @@ type ItemError struct {
 func (e *ItemError) Error() string { return e.Item + ": " + e.Err.Error() }
 func (e *ItemError) Unwrap() error { return e.Err }
 
-// BuildPlan builds every item of a plan. It returns every refusal at once,
-// each wrapped in an *ItemError, and no elements.
+// BuildPlan builds every item of a plan and cuts each joined wall end flush
+// with the face it meets. It returns every refusal at once and no elements:
+// an item's own refusal as an *ItemError, a refused join as a *JoinError.
 func BuildPlan(p Plan) (Built, error) {
 	if n := len(p.Walls) + len(p.Rooms) + len(p.Slabs); n > maxPlanItems {
 		return Built{}, fmt.Errorf("%d items, over the %d limit", n, maxPlanItems)
@@ -103,14 +105,19 @@ func BuildPlan(p Plan) (Built, error) {
 		s.Element.GlobalID = id
 		out.Slabs = append(out.Slabs, BuiltSlab{ID: id, Slab: s})
 	}
-	for _, it := range p.Walls {
+	failed := map[string]bool{}
+	wallAt := make([]int, len(p.Walls)) // where each wall item's walls start in out.Walls
+	for i, it := range p.Walls {
+		wallAt[i] = len(out.Walls)
 		if err := buildPlanWall(it, addWall); err != nil {
 			errs = append(errs, &ItemError{Item: it.ID, Err: err})
+			failed[it.ID] = true
 		}
 	}
 	for _, it := range p.Rooms {
 		if err := buildPlanRoom(it, addWall); err != nil {
 			errs = append(errs, &ItemError{Item: it.ID, Err: err})
+			failed[it.ID] = true
 		}
 	}
 	for _, it := range p.Slabs {
@@ -118,8 +125,17 @@ func BuildPlan(p Plan) (Built, error) {
 			errs = append(errs, &ItemError{Item: it.ID, Err: err})
 		}
 	}
+	trims, joinErrs := trimJoins(p, failed)
+	errs = append(errs, joinErrs...)
 	if errs != nil {
 		return Built{}, errors.Join(errs...)
+	}
+	for _, tw := range trims {
+		for j, w := range buildTrimmed(p.Walls[tw.item], tw) {
+			b := &out.Walls[wallAt[tw.item]+j]
+			w.Element.GlobalID = b.ID
+			b.Wall = w
+		}
 	}
 	return out, nil
 }
@@ -185,6 +201,9 @@ func checkPlanIDs(p Plan) error {
 }
 
 func buildPlanWall(it PlanWall, add func(string, Wall)) error {
+	if err := checkJoins(it.Joins); err != nil {
+		return err
+	}
 	switch {
 	case it.Thickness != 0 && it.Layers == nil:
 		w, err := BuildWall(it.Edge, it.Base, it.Height, it.Thickness, it.Side, it.Openings)
