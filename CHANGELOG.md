@@ -18,6 +18,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.21.0 — 2026-11-19
+
 ### Added
 
 - **Build slabs with holes (a stair or shaft through a floor).**
