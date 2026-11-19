@@ -1140,6 +1140,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.21.0 — 2026-11-19
+
 ### Added
 
 - **Build slabs with holes (a stair or shaft through a floor).** `BuildSlabPolygon` and `BuildSlabPolygonLayers` take a `Polygon2D` with holes and report `HolePerimeter`; a hole that does not fit is a `*HoleError`. `BuildPlan` slabs take holes, and the wasm build request takes a `holes` field. (#162)
