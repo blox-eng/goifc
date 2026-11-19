@@ -23,6 +23,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 - After a release, the Release workflow opens the pull request that promotes
   `## Unreleased` and the goifc.org news line, and it merges itself once its
   checks pass. `make promote` stays as the fallback.
+- The Release workflow runs only after CI on a push to `main`: a fork's pull
+  request from a branch named `main` no longer starts it.
 
 ## v0.21.0 — 2026-11-19
 

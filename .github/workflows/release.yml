@@ -42,7 +42,12 @@ env:
 jobs:
   release:
     name: Create Release
-    if: github.event.workflow_run.conclusion == 'success'
+    # Only CI on a push to this repository's main: the branches filter above
+    # also matches a pull request from a fork's branch named main.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -223,7 +228,8 @@ jobs:
   # checks pass. RELEASE_TOKEN opens it: a pull request opened with the
   # built-in token starts no CI and never merges (#140). This job's own token
   # only reads. If it fails, `make promote` does the same by hand
-  # (CONTRIBUTING.md, After a release).
+  # (CONTRIBUTING.md, After a release). While it waits it holds the release
+  # concurrency group; a later Release run queues, which is harmless.
   promote:
     name: Promote Changelog
     needs: release
@@ -233,9 +239,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # main, not the tag: the tag's CHANGELOG.md is never promoted, and a
+      # promotion that already merged shows only on main. The tags come too.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/v${{ needs.release.outputs.version }}
+          ref: main
           fetch-depth: 0
           persist-credentials: false
       - name: Open the promotion pull request
@@ -245,7 +253,9 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
         run: .github/scripts/open-promote-pr.sh "$VERSION"
       # main takes only up-to-date branches, and auto-merge never updates
-      # one: a pull request that merged meanwhile would hold this one back.
+      # one. When main moves, the branch is built again from it rather than
+      # merged with it: a merge could file an entry added after the tag under
+      # this release, which promote-release.sh refuses to do.
       - name: Keep the pull request up to date until it merges
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
@@ -259,7 +269,10 @@ jobs:
             case "$state" in
               MERGED*) echo "merged"; exit 0 ;;
               CLOSED*) echo "::warning::the v${VERSION} promotion pull request was closed: run make promote (CONTRIBUTING.md, After a release)"; exit 0 ;;
-              *BEHIND) gh pr update-branch "$branch" || true ;;
+              *BEHIND | *DIRTY)
+                git fetch -q origin main
+                git switch -q --detach FETCH_HEAD
+                .github/scripts/open-promote-pr.sh "$VERSION" ;;
             esac
             sleep 60
           done

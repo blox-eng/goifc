@@ -29,18 +29,24 @@ every release with nobody in the loop.
 
 ## Design
 
-- `.github/scripts/open-promote-pr.sh VERSION` runs on the released commit:
+- `.github/scripts/open-promote-pr.sh VERSION` runs on `main`, where a
+  promotion that already merged shows (reviewed 2026-11-20; the tag's
+  changelog is never promoted):
   `promote-release.sh VERSION`, a commit
   `docs: promote Unreleased to vVERSION in CHANGELOG.md` on
   `docs/promote-vVERSION`, a push, a pull request (found again on a re-run)
   and `gh pr merge --squash --auto`. Nothing to promote: it does nothing.
-  A refusal of `promote-release.sh` fails the job with its message.
+  A refusal of `promote-release.sh` fails the job with its message. A
+  promotion someone pushed by hand to the branch is left alone.
 - `release.yml` gets a job "Promote Changelog" after "Create Release". Its
   `GITHUB_TOKEN` keeps `contents: read`; the script uses the secret
   `RELEASE_TOKEN`, a fine-grained token for blox-eng/goifc only (Contents and
   Pull requests, read and write). Without the secret the job fails and says
-  how to add it. A second step updates the pull request's branch while it is
-  behind `main`, for up to 40 minutes, since auto-merge never does.
+  how to add it. A second step builds the branch again from `main` while it is
+  behind or in conflict, for up to 40 minutes, since auto-merge never
+  updates it; merging `main` in could file a later entry under the release.
+- The release job runs only for CI on a push to this repository's `main`,
+  not for a fork's pull request from a branch named `main`.
 - The repository allows auto-merge (set 2026-11-20). GitHub signs the squash
   commit on `main`.
 - `make promote` stays as the fallback; CONTRIBUTING.md says when to use it.

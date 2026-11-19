@@ -296,14 +296,16 @@ func TestPromoteReleaseNoHeadline(t *testing.T) {
 // no CI and never merges (#140).
 func TestReleaseWorkflowPromotesWithReleaseToken(t *testing.T) {
 	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
-	for _, s := range []string{"open-promote-pr.sh", "secrets.RELEASE_TOKEN", "gh pr update-branch"} {
+	for _, s := range []string{"open-promote-pr.sh", "secrets.RELEASE_TOKEN", "ref: main", "github.event.workflow_run.event == 'push'"} {
 		if !strings.Contains(wf, s) {
 			t.Errorf("release.yml has no %q", s)
 		}
 	}
-	for _, s := range []string{"pull-requests: write", "gh pr create"} {
+	// The tag's CHANGELOG.md is never promoted, so the job reads main's; and
+	// merging main into the branch could file a later entry under the release.
+	for _, s := range []string{"pull-requests: write", "gh pr create", "ref: refs/tags/v${{ needs.release.outputs.version }}\n          fetch-depth: 0", "gh pr update-branch"} {
 		if strings.Contains(wf, s) {
-			t.Errorf("release.yml has %q: the pull request must come from RELEASE_TOKEN in open-promote-pr.sh", s)
+			t.Errorf("release.yml has %q", s)
 		}
 	}
 	if !strings.Contains(wf, "release-notes.sh Unreleased") {
@@ -322,7 +324,7 @@ func promoteRepo(t *testing.T, changelog string, prExists bool) (dir, remote, lo
 	log = filepath.Join(bin, "gh.log")
 	view := "exit 1"
 	if prExists {
-		view = "exit 0"
+		view = "{ echo \"${GH_PR_STATE:-OPEN}\"; exit 0; }"
 	}
 	stub := "#!/usr/bin/env bash\necho \"$*\" >> " + log + "\n[[ \"$1 $2\" == \"pr view\" ]] && " + view + "\nexit 0\n"
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(stub), 0o755); err != nil {
@@ -383,21 +385,30 @@ func TestOpenPromotePR(t *testing.T) {
 	}
 }
 
-// A re-run finds its pull request and opens no second one.
+// A re-run, as the workflow's wait loop makes when main moved, rebuilds the
+// branch from main and finds its pull request: no second one.
 func TestOpenPromotePRRerun(t *testing.T) {
 	dir, _, log, env := promoteRepo(t, unreleased, true)
-	if out, err := openPromotePR(t, dir, env, "0.5.0"); err != nil {
-		t.Fatalf("%v: %s", err, out)
+	main := gitOut(t, dir, "rev-parse", "HEAD")
+	for range 2 {
+		gitIn(t, dir, "switch", "-q", "--detach", main)
+		if out, err := openPromotePR(t, dir, env, "0.5.0"); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
 	}
 	if calls := ghLog(t, log); strings.Contains(calls, "pr create") || !strings.Contains(calls, "--squash --auto") {
 		t.Errorf("a re-run: want no pr create and an auto-merge, got:\n%s", calls)
 	}
 }
 
-// A release someone promoted by hand needs nothing.
+// The job runs on main, where a promotion someone merged by hand shows.
 func TestOpenPromotePRAlreadyPromoted(t *testing.T) {
+	dir, remote, log, env := promoteRepo(t, unreleased, false)
 	promoted := strings.Replace(unreleased, "## Unreleased\n", "## Unreleased\n\n## v0.5.0 — 2026-11-15\n", 1)
-	dir, remote, log, env := promoteRepo(t, promoted, false)
+	if err := os.WriteFile(filepath.Join(dir, "CHANGELOG.md"), []byte(promoted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "commit", "-qam", "docs: promote")
 	out, err := openPromotePR(t, dir, env, "0.5.0")
 	if err != nil || !strings.Contains(out, "already") {
 		t.Fatalf("%v: %s", err, out)
@@ -407,6 +418,58 @@ func TestOpenPromotePRAlreadyPromoted(t *testing.T) {
 	}
 	if b, _ := exec.Command("git", "--git-dir", remote, "branch").Output(); len(b) != 0 {
 		t.Errorf("a branch was pushed: %s", b)
+	}
+}
+
+// A pull request that already merged needs nothing more.
+func TestOpenPromotePRMerged(t *testing.T) {
+	dir, _, log, env := promoteRepo(t, unreleased, true)
+	env = append(env, "GH_PR_STATE=MERGED")
+	out, err := openPromotePR(t, dir, env, "0.5.0")
+	if err != nil || !strings.Contains(out, "merged") {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if calls := ghLog(t, log); strings.Contains(calls, "pr merge") || strings.Contains(calls, "pr create") {
+		t.Errorf("gh acted on a merged pull request:\n%s", calls)
+	}
+}
+
+// A person's promotion on the branch is theirs: the job neither overwrites
+// it nor turns on auto-merge for it.
+func TestOpenPromotePRKeepsAHandPromotion(t *testing.T) {
+	dir, remote, log, env := promoteRepo(t, unreleased, true)
+	main := gitOut(t, dir, "rev-parse", "HEAD")
+	gitIn(t, dir, "switch", "-q", "-c", "docs/promote-v0.5.0")
+	if err := os.WriteFile(filepath.Join(dir, "CHANGELOG.md"), []byte("hand\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, dir, "commit", "-qam", "docs: promote by hand")
+	gitIn(t, dir, "push", "-q", remote, "docs/promote-v0.5.0")
+	hand := gitOut(t, dir, "rev-parse", "HEAD")
+	gitIn(t, dir, "switch", "-q", "--detach", main)
+	gitIn(t, dir, "branch", "-q", "-D", "docs/promote-v0.5.0")
+	out, err := openPromotePR(t, dir, env, "0.5.0")
+	if err != nil || !strings.Contains(out, "by hand") {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if got := gitOut(t, remote, "rev-parse", "docs/promote-v0.5.0"); got != hand {
+		t.Errorf("the hand promotion %s was replaced by %s", hand, got)
+	}
+	if calls := ghLog(t, log); strings.Contains(calls, "pr merge") {
+		t.Errorf("auto-merge was turned on for a hand promotion:\n%s", calls)
+	}
+}
+
+// A failed push names the token's likely cause and never prints the token.
+func TestOpenPromotePRPushFailureHidesTheToken(t *testing.T) {
+	dir, _, _, env := promoteRepo(t, unreleased, false)
+	env = append(env, "PUSH_URL=/nonexistent/secret-token/remote.git")
+	out, err := openPromotePR(t, dir, env, "0.5.0")
+	if err == nil || !strings.Contains(out, "RELEASE_TOKEN may have expired") {
+		t.Fatalf("want a push failure, got %v: %s", err, out)
+	}
+	if strings.Contains(out, "secret-token") {
+		t.Errorf("the output shows the token:\n%s", out)
 	}
 }
 
@@ -430,6 +493,17 @@ func TestOpenPromotePRNoToken(t *testing.T) {
 	if err == nil || !strings.Contains(out, "RELEASE_TOKEN") {
 		t.Fatalf("want a RELEASE_TOKEN error, got %v: %s", err, out)
 	}
+}
+
+func gitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v: %v", args, err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // gitIn runs git in dir with a throwaway identity and no signing.

@@ -67,7 +67,7 @@ rule; the failure prints the command that fixes it.
 A release publishes `## Unreleased` as its notes. The Release workflow's
 Promote Changelog job then opens a pull request,
 `docs: promote Unreleased to vX.Y.Z in CHANGELOG.md`, that runs `make promote`
-on the released commit and merges itself once its checks pass. Until it
+on `main` and merges itself once its checks pass. Until it
 merges, the Conventional Commits Check fails on every other pull request and
 names the command.
 
@@ -76,6 +76,7 @@ fine-grained token for this repository only, with Contents and Pull requests
 read and write. A pull request opened with the built-in token starts no CI
 and never merges. When the token is missing or expired the job fails and
 says so; make a new token, save it as `RELEASE_TOKEN`, and re-run the job.
+The job leaves a promotion you pushed to `docs/promote-vX.Y.Z` yourself alone.
 
 If the job fails or its pull request does not merge, promote by hand, in a
 pull request of its own, from `main`:
