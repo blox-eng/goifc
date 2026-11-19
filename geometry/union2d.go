@@ -543,38 +543,66 @@ const unionTouch = 1 / sectionWeldQuantum
 // of those a crossing, and whether an outline is refused would then depend on
 // where the model stands.
 func edgesCrossOrOverlap(rings [][][2]float64) bool {
-	type edge struct {
-		a, b [2]float64
-		len  float64
-	}
-	var edges []edge
+	var edges []touchEdge
 	for _, r := range rings {
-		for i := range r {
-			a, b := r[i], r[(i+1)%len(r)]
-			if l := math.Hypot(b[0]-a[0], b[1]-a[1]); l > unionTouch {
-				edges = append(edges, edge{a, b, l})
-			}
-		}
+		edges = appendTouchEdges(edges, r)
 	}
 	for i, s := range edges {
 		for _, t := range edges[i+1:] {
-			sa, sb := touchSide(s.a, s.b, s.len, t.a), touchSide(s.a, s.b, s.len, t.b)
-			ta, tb := touchSide(t.a, t.b, t.len, s.a), touchSide(t.a, t.b, t.len, s.b)
-			switch {
-			case sa*sb < 0 && ta*tb < 0:
-				return true // each edge has the other's ends on opposite sides
-			case sa == 0 && sb == 0:
-				if collinearOverlap(s.a, s.b, s.len, t.a, t.b) {
-					return true
-				}
-			case ta == 0 && tb == 0:
-				// From t's side as well: a short edge lying along a long one
-				// can have the long one's far ends well off its own line.
-				if collinearOverlap(t.a, t.b, t.len, s.a, s.b) {
-					return true
-				}
+			if s.crossesOrOverlaps(t) {
+				return true
 			}
 		}
+	}
+	return false
+}
+
+// ringsCrossOrOverlap reports whether an edge of a crosses or overlaps an edge
+// of b, as edgesCrossOrOverlap judges them. Neither ring is checked against
+// itself.
+func ringsCrossOrOverlap(a, b [][2]float64) bool {
+	ea, eb := appendTouchEdges(nil, a), appendTouchEdges(nil, b)
+	for _, s := range ea {
+		for _, t := range eb {
+			if s.crossesOrOverlaps(t) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// touchEdge is a ring edge from a to b, len long.
+type touchEdge struct {
+	a, b [2]float64
+	len  float64
+}
+
+// appendTouchEdges appends r's edges longer than unionTouch to edges.
+func appendTouchEdges(edges []touchEdge, r [][2]float64) []touchEdge {
+	for i := range r {
+		a, b := r[i], r[(i+1)%len(r)]
+		if l := math.Hypot(b[0]-a[0], b[1]-a[1]); l > unionTouch {
+			edges = append(edges, touchEdge{a, b, l})
+		}
+	}
+	return edges
+}
+
+// crossesOrOverlaps reports whether s and t cross or share more than
+// unionTouch of their length. Meeting at a point is neither.
+func (s touchEdge) crossesOrOverlaps(t touchEdge) bool {
+	sa, sb := touchSide(s.a, s.b, s.len, t.a), touchSide(s.a, s.b, s.len, t.b)
+	ta, tb := touchSide(t.a, t.b, t.len, s.a), touchSide(t.a, t.b, t.len, s.b)
+	switch {
+	case sa*sb < 0 && ta*tb < 0:
+		return true // each edge has the other's ends on opposite sides
+	case sa == 0 && sb == 0:
+		return collinearOverlap(s.a, s.b, s.len, t.a, t.b)
+	case ta == 0 && tb == 0:
+		// From t's side as well: a short edge lying along a long one
+		// can have the long one's far ends well off its own line.
+		return collinearOverlap(t.a, t.b, t.len, s.a, s.b)
 	}
 	return false
 }

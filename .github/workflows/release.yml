@@ -185,7 +185,9 @@ jobs:
       - name: Build the wasm files
         run: |
           make wasm
-          .github/scripts/wasm-size.sh dist/goifc-build.wasm 1200000 dist/goifc-read.wasm
+          .github/scripts/wasm-deps.sh
+          .github/scripts/wasm-size.sh dist/goifc-build.wasm
+          .github/scripts/wasm-size.sh dist/goifc-read.wasm
       - name: Check the files answer with the tag's version
         env:
           TAG: ${{ steps.tag.outputs.tag }}

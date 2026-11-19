@@ -232,10 +232,14 @@ jobs:
     needs: [lint, changes]
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # The growth check reads the pull request's labels when it runs.
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -254,12 +258,27 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-      # goifc-build.wasm and goifc-read.wasm: build them, hold the build file
-      # under 1.2 MB gzipped, run goifc.js and both files under Node against
-      # the Go goldens, and run the whole contract suite compiled to wasm, so
-      # the browser gives the same bytes as Go.
+      # goifc-build.wasm and goifc-read.wasm: build them, fail on a banned
+      # package (regexp, os/exec, text/template, net, ...), run goifc.js and
+      # both files under Node against the Go goldens, and run the whole
+      # contract suite compiled to wasm, so the browser gives the same bytes
+      # as Go.
       - name: Build and test the wasm files
         run: make wasm-test
+      # A pull request may grow goifc-build.wasm by 50 KiB gzipped over its
+      # merge base. More needs the pull request label wasm-growth; the labels
+      # are read when this step runs, so add the label, then re-run the job.
+      - name: Check goifc-build.wasm growth against the base branch
+        if: github.event_name == 'pull_request'
+        env:
+          WASM_BASE: origin/${{ github.base_ref }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx wasm-growth; then
+            export WASM_GROWTH_OK=1
+          fi
+          make wasm-growth WASM_BASE="$WASM_BASE"
 
   govulncheck:
     name: Vulnerability Scan
@@ -348,6 +367,10 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildSlab 60s
+      - name: Fuzz the slab-with-holes builder
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildSlabPolygon 60s
       - name: Fuzz the layered wall builder
         env:
           CGO_ENABLED: '0'

@@ -89,7 +89,8 @@ Each item's fields are the Go builder's parameters (see
 - **room:** `id`, `outline` (the closed outline's points), `base`,
   `height`, `thickness` or `layers`, `side`, `openings` (one list per
   outline edge; `null` or `[]` for none).
-- **slab:** `id`, `outline`, `z` (the top), `thickness` or `layers`.
+- **slab:** `id`, `outline`, `holes` (optional: one list of points per hole,
+  for a stair or a shaft), `z` (the top), `thickness` or `layers`.
 - **opening:** `offset`, `sill`, `width`, `height`, and `depth` for a
   niche (0 or left out cuts through).
 - **join:** `end` (`"a"` for `edge[0]`, `"b"` for `edge[1]`) and `wall`, the
@@ -137,6 +138,22 @@ Here T's `measuredJoins` is 0.25 and its `measuredNet` 9.75.
 
 `answer.walls` lists the walls of `walls` and `rooms`, in request order;
 `answer.slabs` lists the slabs.
+
+### Slabs with holes
+
+A hole is a ring of 3 or more points inside the outline, at least 1 mm from
+it and from the other holes. A slab takes up to 64 holes and 2,048 points in
+all.
+
+```json
+{ "slabs": [{ "id": "s1", "outline": [[0, 0], [10, 0], [10, 8], [0, 8]],
+    "holes": [[[2, 2], [4.5, 2], [4.5, 3.2], [2, 3.2]]], "z": 3, "thickness": 0.2 }] }
+```
+
+The slab's `area` and `volume` are net of its holes, `perimeter` is the
+outline's, and `holePerimeter` is the holes' edges together (7.4 here, area
+77). `top.holes` lists the holes in the top face's `u`, `v`; it is absent
+for a slab without holes.
 
 three.js's `GLTFLoader` removes `[ ] . : /` from node names, so `w1/0`
 loads as `w10`. Read the element id from `node.userData.name`: it keeps
@@ -191,7 +208,8 @@ before any geometry runs:
 `item` is the id you gave. `wall` is the outline edge (0 for a wall item)
 and `opening` the index in its openings. A refused join has `item` (the
 partition) and `join`, the index in its `joins`, instead of `wall` and
-`opening`:
+`opening`; a refused hole has `item` (the slab) and `hole`, the index in its
+`holes`:
 
 ```json
 { "code": "not_on_face", "item": "P", "join": 0, "message": "P join 0: not_on_face" }
@@ -212,6 +230,9 @@ Match on `code`; `message` is for a person.
 | `too_shallow` | The two walls meet at under 15° or over 165°. Change the angle. |
 | `off_wall` | The strip the partition covers leaves the face. Move the partition in from the wall's ends or edges. |
 | `joins_overlap` | The strip overlaps or touches an earlier strip on the same face. Move the partitions apart. |
+| `hole_outside` | A hole point lies outside the slab's outline, or a hole edge runs on or within 1 mm of it. Move the hole in. |
+| `holes_overlap` | The hole touches (within 1 mm) or overlaps an earlier hole, or lies inside it. Move them apart. |
+| `hole_self_crossing` | The hole's edges cross, overlap or pinch. Fix its points. |
 | `invalid_input` | The request or an item is malformed. `message` names the field. |
 | `invalid_ifc` | The file is not IFC goifc can read. `message` says why. |
 | `too_large` | A limit is exceeded. `message` names the size and the limit. |

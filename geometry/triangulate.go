@@ -7,8 +7,8 @@ import (
 
 // triangulatePolygon ear-clips a simple 2D polygon (CCW or CW) into triangle
 // indices into poly. Correct for concave polygons (a naive fan is not). Holes
-// are not supported (v1: walls solid, profiles outer-only). Repeated points and
-// zero-width spikes are dropped before clipping.
+// are not supported here: triangulateWithHoles bridges them in first.
+// Repeated points and zero-width spikes are dropped before clipping.
 //
 // ok is false when clipping stalls short of the polygon's area or when b runs
 // out. A loop that touches or crosses itself (a keyhole, two lobes meeting at
@@ -16,6 +16,13 @@ import (
 // ear that would cover it. Shipping the part it managed would make the mesh
 // smaller than the solid, so callers decline to the box instead.
 func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
+	return earClip(poly, b, false)
+}
+
+// earClip is triangulatePolygon's clipper. bridged is for a ring whose holes
+// are spliced in by bridges, so a bridge end appears twice: a point at an
+// ear's corner then does not block the ear.
+func earClip(poly [][2]float64, b *budget, bridged bool) (tris []uint32, ok bool) {
 	if len(poly) < 3 {
 		return nil, true
 	}
@@ -64,6 +71,9 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 				if j == ia || j == ib || j == ic {
 					continue
 				}
+				if q := poly[j]; bridged && (q == pa || q == pb || q == pc) {
+					continue
+				}
 				if pointInTri(poly[j], pa, pb, pc) {
 					isEar = false
 					break
@@ -85,9 +95,15 @@ func triangulatePolygon(poly [][2]float64, b *budget) (tris []uint32, ok bool) {
 			break // no ear left; the coverage check below decides
 		}
 	}
-	if len(idx) == 3 {
-		out = append(out, uint32(idx[0]), uint32(idx[1]), uint32(idx[2]))
-		covered += math.Abs(cross2D(poly[idx[0]], poly[idx[1]], poly[idx[2]])) / 2
+	// What is left is a triangle, or a sliver of collinear points that no ear
+	// can clip. A fan of the sliver has no area but keeps each of its points
+	// in the mesh, so the cap's edges still meet the side walls'.
+	if len(idx) > 3 && math.Abs(indexedLoopArea(poly, idx)) > floor {
+		return nil, false
+	}
+	for k := 1; k+1 < len(idx); k++ {
+		out = append(out, uint32(idx[0]), uint32(idx[k]), uint32(idx[k+1]))
+		covered += math.Abs(cross2D(poly[idx[0]], poly[idx[k]], poly[idx[k+1]])) / 2
 	}
 	if math.Abs(covered-area) > 1e-6*math.Max(covered, area)+floor {
 		return nil, false

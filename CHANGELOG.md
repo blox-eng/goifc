@@ -18,6 +18,25 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- **Build slabs with holes (a stair or shaft through a floor).**
+  `BuildSlabPolygon` and `BuildSlabPolygonLayers` take a `Polygon2D` with holes
+  and report `HolePerimeter`; a hole that does not fit is a `*HoleError`.
+  `BuildPlan` slabs take holes, and the wasm build request takes a `holes`
+  field. (#162)
+
+### Changed
+
+- The wasm size check bans the `net`, `regexp` and template packages and limits
+  growth per PR (51,200 B gzip, unless labelled `wasm-growth`), not a fixed size.
+
+### Fixed
+
+- An outline or profile with nearly collinear points could build a cap missing
+  one point, leaving the mesh open: a slab or wall built from numbers, or an
+  extruded solid read from an IFC file. The cap now keeps every point.
+
 ## v0.20.0 — 2026-11-16
 
 ### Added

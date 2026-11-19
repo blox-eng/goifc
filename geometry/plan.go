@@ -45,6 +45,7 @@ type PlanRoom struct {
 type PlanSlab struct {
 	ID           string
 	Outline      [][2]float64
+	Holes        [][][2]float64 // see BuildSlabPolygon
 	Z, Thickness float64
 	Layers       []float64
 }
@@ -262,13 +263,13 @@ func buildPlanRoom(it PlanRoom, add func(string, Wall)) error {
 func buildPlanSlab(it PlanSlab, add func(string, Slab)) error {
 	switch {
 	case it.Thickness != 0 && it.Layers == nil:
-		s, err := BuildSlab(it.Outline, it.Z, it.Thickness)
+		s, err := BuildSlabPolygon(Polygon2D{Outer: it.Outline, Holes: it.Holes}, it.Z, it.Thickness)
 		if err != nil {
 			return err
 		}
 		add(it.ID, s)
 	case it.Thickness == 0 && it.Layers != nil:
-		ss, err := BuildSlabLayers(it.Outline, it.Z, it.Layers)
+		ss, err := BuildSlabPolygonLayers(Polygon2D{Outer: it.Outline, Holes: it.Holes}, it.Z, it.Layers)
 		if err != nil {
 			return err
 		}

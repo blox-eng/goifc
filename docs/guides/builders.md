@@ -108,8 +108,42 @@ s, err := geometry.BuildSlab([][2]float64{{0, 0}, {5, 0}, {5, 4}, {0, 4}}, 0, 0.
 // s.Quantities: Area 20 m², Perimeter 18 m, Volume 4 m³
 ```
 
-The outline can wind either way and has no holes. The top face is at `z`, and
-the slab extends down by the thickness.
+The outline can wind either way. The top face is at `z`, and the slab extends
+down by the thickness.
+
+### Slabs with holes
+
+A stair or a shaft through a floor is a hole. `BuildSlabPolygon` takes a
+`Polygon2D` with an outer ring and any number of holes; `BuildSlabPolygonLayers`
+does the same for layers:
+
+```go
+s, err := geometry.BuildSlabPolygon(geometry.Polygon2D{
+	Outer: [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}},
+	Holes: [][][2]float64{{{2, 2}, {4.5, 2}, {4.5, 3.2}, {2, 3.2}}},
+}, 3, 0.20)
+// s.Quantities: Area 77 m², Perimeter 36 m, HolePerimeter 7.4 m, Volume 15.4 m³
+```
+
+`Area` is the floor less the holes, and `Perimeter` is the outer edge only.
+`HolePerimeter` is the length of every hole's edge, which is where the slab's
+edge forms go around the opening. Holes can wind either way. A slab with no
+holes builds exactly as `BuildSlab` does.
+
+A hole that does not fit is refused, not clipped. Each refusal is a
+`*HoleError` that names the hole and the reason, and all of them come back at
+once, joined with `errors.Join`:
+
+| Reason | The hole |
+|---|---|
+| `outside` | reaches or passes the outer edge, or lies outside it. |
+| `overlaps` | overlaps or touches another hole. |
+| `self_crossing` | crosses itself. |
+
+"Touches" means closer than 1 mm. A slab takes at most 64 holes and 2,048
+points in all. `BuildPlan` takes holes on its slabs, and the wasm build request
+takes a `holes` field on a slab; its refusals are `hole_outside`,
+`holes_overlap` and `hole_self_crossing`, with the item and the hole.
 
 ## Niches
 

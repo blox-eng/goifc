@@ -39,24 +39,27 @@ func (o Opening) cut(thickness float64) float64 {
 
 // Face is one planar face as data, for drawing and dimensioning without
 // re-deriving the frame. Origin, U, V and Normal are world; U and V are unit;
-// Outline and Openings are in (u, v) meters on that plane.
+// Outline, Openings and Holes are in (u, v) meters on that plane.
 type Face struct {
 	Origin, U, V, Normal [3]float64
 	Outline              [][2]float64
 	Openings             []Opening
+	Holes                [][][2]float64 // a slab's holes; empty on a wall
 }
 
-// SlabQuantities are a slab's exact quantities: Area is one face, in plan.
+// SlabQuantities are a slab's exact quantities: Area is one face, in plan, less
+// its holes. Perimeter is the outline's; HolePerimeter sums the holes'.
 type SlabQuantities struct {
 	Area, Perimeter, Volume float64
+	HolePerimeter           float64
 }
 
-// Slab is what BuildSlab returns.
+// Slab is what BuildSlab and BuildSlabPolygon return.
 type Slab struct {
 	Element    Element
 	Quantities SlabQuantities
 	// Top: Origin = outline[0] at z; U = +X; V = +Y; Normal = +Z; Outline =
-	// the outline relative to outline[0].
+	// the outline relative to outline[0]; Holes = the holes relative to it.
 	Top Face
 }
 
