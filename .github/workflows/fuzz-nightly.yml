@@ -44,6 +44,8 @@ jobs:
             package: ./geometry/
           - target: FuzzBuildSlab
             package: ./geometry/
+          - target: FuzzBuildSlabPolygon
+            package: ./geometry/
           - target: FuzzBuildWallLayers
             package: ./geometry/
           - target: FuzzBuildRoomWallLayers

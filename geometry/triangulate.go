@@ -95,9 +95,15 @@ func earClip(poly [][2]float64, b *budget, bridged bool) (tris []uint32, ok bool
 			break // no ear left; the coverage check below decides
 		}
 	}
-	if len(idx) == 3 {
-		out = append(out, uint32(idx[0]), uint32(idx[1]), uint32(idx[2]))
-		covered += math.Abs(cross2D(poly[idx[0]], poly[idx[1]], poly[idx[2]])) / 2
+	// What is left is a triangle, or a sliver of collinear points that no ear
+	// can clip. A fan of the sliver has no area but keeps each of its points
+	// in the mesh, so the cap's edges still meet the side walls'.
+	if len(idx) > 3 && math.Abs(indexedLoopArea(poly, idx)) > floor {
+		return nil, false
+	}
+	for k := 1; k+1 < len(idx); k++ {
+		out = append(out, uint32(idx[0]), uint32(idx[k]), uint32(idx[k+1]))
+		covered += math.Abs(cross2D(poly[idx[0]], poly[idx[k]], poly[idx[k+1]])) / 2
 	}
 	if math.Abs(covered-area) > 1e-6*math.Max(covered, area)+floor {
 		return nil, false

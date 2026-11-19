@@ -358,6 +358,10 @@ jobs:
         env:
           CGO_ENABLED: '0'
         run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildSlab 60s
+      - name: Fuzz the slab-with-holes builder
+        env:
+          CGO_ENABLED: '0'
+        run: .github/scripts/fuzz-smoke.sh ./geometry/ FuzzBuildSlabPolygon 60s
       - name: Fuzz the layered wall builder
         env:
           CGO_ENABLED: '0'

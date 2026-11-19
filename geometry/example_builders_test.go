@@ -107,3 +107,22 @@ func ExampleBuildPlan() {
 	// measured joins 0.25 m²
 	// measured net 9.75 m²
 }
+
+// ExampleBuildSlabPolygon builds a 10 m by 8 m floor with a 2.5 m by 1.2 m
+// stair opening in it. The hole's walls count toward the slab, and the area
+// is the floor less the opening.
+func ExampleBuildSlabPolygon() {
+	s, err := geometry.BuildSlabPolygon(geometry.Polygon2D{
+		Outer: [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}},
+		Holes: [][][2]float64{{{2, 2}, {4.5, 2}, {4.5, 3.2}, {2, 3.2}}},
+	}, 3, 0.20)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("area %.2f m²\n", s.Quantities.Area)
+	fmt.Printf("hole perimeter %.2f m\n", s.Quantities.HolePerimeter)
+	// Output:
+	// area 77.00 m²
+	// hole perimeter 7.40 m
+}

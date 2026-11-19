@@ -110,6 +110,44 @@ func FuzzBuildSlab(f *testing.F) {
 	})
 }
 
+func FuzzBuildSlabPolygon(f *testing.F) {
+	f.Add(2.0, 2.0, 4.5, 2.0, 4.5, 3.2, 2.0, 3.2)
+	f.Add(1.0, 1.0, 9.0, 1.0, 9.0, 7.0, 1.0, 7.0)
+	f.Add(2.0, 2.0, 4.0, 2.0, 3.0, 3.0, 3.0, 6.0)
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3 float64) {
+		hole := [][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}}
+		for _, p := range hole {
+			for _, c := range p {
+				if math.IsNaN(c) || math.Abs(c) > 1e3 {
+					t.Skip()
+				}
+			}
+		}
+		const thickness = 0.2
+		s, err := BuildSlabPolygon(Polygon2D{
+			Outer: [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}},
+			Holes: [][][2]float64{hole},
+		}, 3, thickness)
+		if err != nil {
+			return
+		}
+		var twice float64
+		for i, p := range hole {
+			n := hole[(i+1)%len(hole)]
+			twice += p[0]*n[1] - n[0]*p[1]
+		}
+		q := s.Quantities
+		if want := 80 - math.Abs(twice)/2; math.Abs(q.Area-want) > 1e-9*80 {
+			t.Fatalf("area %v, want %v", q.Area, want)
+		}
+		if math.Abs(q.Volume-q.Area*thickness) > 1e-9*q.Volume {
+			t.Fatalf("volume %v, want area %v × thickness", q.Volume, q.Area)
+		}
+		meshAgrees(t, s.Element, q.Volume, 2*q.Area+(q.Perimeter+q.HolePerimeter)*thickness, 0,
+			q.Area, q.Perimeter, q.HolePerimeter, q.Volume)
+	})
+}
+
 func FuzzBuildSlabLayers(f *testing.F) {
 	f.Add(0.0, 0.0, 5.0, 0.0, 5.0, 4.0, 0.0, 4.0, 2.0, 2.0, 0.0, 0.05, 0.20, 0.0)
 	f.Add(1e6, 2e6, 1e6+4, 2e6, 1e6+4, 2e6+2, 1e6+2, 2e6+2, 1e6+2, 2e6+4, 6.0, 0.02, 0.25, 0.01)

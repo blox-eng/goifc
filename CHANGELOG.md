@@ -18,6 +18,19 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Added
+
+- **Build slabs with holes (a stair or shaft through a floor).**
+  `BuildSlabPolygon` and `BuildSlabPolygonLayers` take a `Polygon2D` with holes
+  and report `HolePerimeter`; a hole that does not fit is a `*HoleError`.
+  `BuildPlan` slabs take holes, and the wasm build request takes a `holes`
+  field. (#162)
+
+### Changed
+
+- The wasm size check bans the `net`, `regexp` and template packages and limits
+  growth per PR (51,200 B gzip, unless labelled `wasm-growth`), not a fixed size.
+
 ## v0.20.0 — 2026-11-16
 
 ### Added
