@@ -33,8 +33,9 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Fixed
 
-- A slab or wall outline with nearly collinear points could build a cap missing
-  one point, leaving the mesh open. The cap now keeps every point.
+- An outline or profile with nearly collinear points could build a cap missing
+  one point, leaving the mesh open: a slab or wall built from numbers, or an
+  extruded solid read from an IFC file. The cap now keeps every point.
 
 ## v0.20.0 — 2026-11-16
 

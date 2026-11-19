@@ -76,37 +76,22 @@ func slabCap(p Polygon2D) (rings [][][2]float64, cap []uint32, err error) {
 		return nil, nil, err
 	}
 	rings = append([][][2]float64{ring}, holes...)
-	ok := false
-	if len(holes) == 0 {
-		cap, ok = triangulatePolygon(rings[0], newBudget())
-	} else {
-		cap, ok = holedCap(rings)
+	if len(holes) > 0 {
+		_, src, tris, err := triangulateWithHoles(ring, holes, newBudget())
+		if err != nil {
+			return nil, nil, err
+		}
+		cap = make([]uint32, len(tris))
+		for i, t := range tris {
+			cap[i] = src[t]
+		}
+		return rings, cap, nil
 	}
+	cap, ok := triangulatePolygon(ring, newBudget())
 	if !ok || len(cap) == 0 {
-		return nil, nil, errors.New("outline could not be triangulated whole within the work budget")
+		return nil, nil, errCapBudget
 	}
 	return rings, cap, nil
-}
-
-// holedCap triangulates the outline rings[0] with the holes rings[1:] and
-// indexes the triangles into the rings' points in order. The rings are
-// checked, so no two of their points are equal.
-func holedCap(rings [][][2]float64) ([]uint32, bool) {
-	merged, tris, ok := triangulateWithHoles(rings[0], rings[1:], newBudget())
-	if !ok {
-		return nil, false
-	}
-	at := make(map[[2]float64]uint32)
-	for _, r := range rings {
-		for _, q := range r {
-			at[q] = uint32(len(at))
-		}
-	}
-	cap := make([]uint32, len(tris))
-	for i, t := range tris {
-		cap[i] = at[merged[t]]
-	}
-	return cap, true
 }
 
 // checkHoles refuses too many holes or points, and a hole that is not a ring

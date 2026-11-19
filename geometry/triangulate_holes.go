@@ -2,60 +2,97 @@ package geometry
 
 import (
 	"cmp"
+	"errors"
 	"math"
 	"slices"
 )
 
+var (
+	errCapBudget  = errors.New("outline could not be triangulated whole within the work budget")
+	errHoleBridge = errors.New("a hole could not be joined to the outline")
+)
+
 // triangulateWithHoles ear-clips a simple polygon with holes (any winding)
-// into triangle indices into ring, the merged ring it clips. The holes must lie
-// inside outer and apart from it and from each other.
+// into triangle indices into ring, the merged ring it clips. src[i] is ring[i]'s
+// index among outer's points and then the holes' points, in order. The holes
+// must lie inside outer and apart from it and from each other.
 //
 // Each hole is spliced into the ring by a bridge from its rightmost point to a
 // ring vertex it can see, as earcut does (Eberly's method): holes with the
 // rightmost points first, so a hole further right is already part of the ring.
-// The bridge's two ends appear twice in ring. ok is as for triangulatePolygon.
-func triangulateWithHoles(outer [][2]float64, holes [][][2]float64, b *budget) (ring [][2]float64, tris []uint32, ok bool) {
-	ring = slices.Clone(ensureCCW(outer))
-	rightmost := func(h [][2]float64) int {
-		m := 0
-		for i, p := range h {
-			if p[0] > h[m][0] || (p[0] == h[m][0] && p[1] < h[m][1]) {
-				m = i
-			}
-		}
-		return m
+// The bridge's two ends appear twice in ring. The error is errCapBudget when
+// clipping stalls or b runs out, as for triangulatePolygon, and errHoleBridge
+// when a hole has no vertex to bridge to.
+func triangulateWithHoles(outer [][2]float64, holes [][][2]float64, b *budget) (ring [][2]float64, src, tris []uint32, err error) {
+	ring = slices.Clone(outer)
+	src = make([]uint32, len(outer))
+	for i := range src {
+		src[i] = uint32(i)
+	}
+	if polygonArea2D(ring) < 0 {
+		slices.Reverse(ring)
+		slices.Reverse(src)
+	}
+	start := make([]uint32, len(holes)) // each hole's first source index
+	next := uint32(len(outer))
+	rightX := make([]float64, len(holes))
+	for k, h := range holes {
+		start[k], next = next, next+uint32(len(h))
+		rightX[k] = h[rightmost(h)][0]
 	}
 	order := make([]int, len(holes))
 	for k := range order {
 		order[k] = k
 	}
-	slices.SortStableFunc(order, func(i, j int) int {
-		return cmp.Compare(holes[j][rightmost(holes[j])][0], holes[i][rightmost(holes[i])][0])
-	})
+	slices.SortStableFunc(order, func(i, j int) int { return cmp.Compare(rightX[j], rightX[i]) })
 	for _, k := range order {
 		if !b.spend(int64(len(ring))) {
-			return nil, nil, false
+			return nil, nil, nil, errCapBudget
 		}
 		// Wound against the ring, so the solid stays on the ring's left.
-		h := holes[k]
+		h := slices.Clone(holes[k])
+		hs := make([]uint32, len(h))
+		for i := range hs {
+			hs[i] = start[k] + uint32(i)
+		}
 		if polygonArea2D(h) > 0 {
-			h = slices.Clone(h)
 			slices.Reverse(h)
+			slices.Reverse(hs)
 		}
 		m := rightmost(h)
 		p, found := bridgeVertex(ring, h[m])
 		if !found {
-			return nil, nil, false
+			return nil, nil, nil, errHoleBridge
 		}
-		merged := make([][2]float64, 0, len(ring)+len(h)+2)
-		merged = append(merged, ring[:p+1]...)
-		merged = append(merged, h[m:]...)
-		merged = append(merged, h[:m+1]...)
-		merged = append(merged, ring[p:]...)
-		ring = merged
+		ring = splice(ring, p, h, m)
+		src = splice(src, p, hs, m)
 	}
-	tris, ok = earClip(ring, b, true)
-	return ring, tris, ok && len(tris) > 0
+	tris, ok := earClip(ring, b, true)
+	if !ok || len(tris) == 0 {
+		return nil, nil, nil, errCapBudget
+	}
+	return ring, src, tris, nil
+}
+
+// rightmost is the index of h's point with the largest x, the lowest of ties.
+func rightmost(h [][2]float64) int {
+	m := 0
+	for i, p := range h {
+		if p[0] > h[m][0] || (p[0] == h[m][0] && p[1] < h[m][1]) {
+			m = i
+		}
+	}
+	return m
+}
+
+// splice bridges hole h, from its point m, into ring at its vertex p: the
+// ring to p, the hole round from m back to m, then p again and the rest.
+func splice[T any](ring []T, p int, h []T, m int) []T {
+	out := make([]T, 0, len(ring)+len(h)+2)
+	out = append(out, ring[:p+1]...)
+	out = append(out, h[m:]...)
+	out = append(out, h[:m+1]...)
+	return append(out, ring[p:]...)
 }
 
 // bridgeVertex is the index of a vertex of ring (counter-clockwise, holes

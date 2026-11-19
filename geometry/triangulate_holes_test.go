@@ -1,7 +1,9 @@
 package geometry
 
 import (
+	"errors"
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -21,11 +23,23 @@ func TestTriangulateWithHoles(t *testing.T) {
 		{"L with a hole in each arm", l, [][][2]float64{{{14, 2}, {16, 2}, {16, 3.5}, {14, 3.5}}, {{4, 6}, {7, 6}, {7, 8}, {4, 8}}}},
 		{"a hole in the L's notch shadow", l, [][][2]float64{holeSquare(2, 7, 1)}},
 		{"a round hole", holeOuter, [][][2]float64{shifted(regularPolygon(40, 1.5), 5, 4)}},
+		{"a clockwise outline, holes both ways", reversed(l), [][][2]float64{
+			reversed([][2]float64{{14, 2}, {16, 2}, {16, 3.5}, {14, 3.5}}), {{4, 6}, {7, 6}, {7, 8}, {4, 8}}}},
 	} {
-		ring, tris, ok := triangulateWithHoles(tc.outer, tc.holes, newBudget())
-		if !ok {
-			t.Errorf("%s: not triangulated", tc.name)
+		ring, src, tris, err := triangulateWithHoles(tc.outer, tc.holes, newBudget())
+		if err != nil {
+			t.Errorf("%s: %v", tc.name, err)
 			continue
+		}
+		// src names each ring point among the outline's points, then the holes', in order.
+		all := slices.Concat(append([][][2]float64{tc.outer}, tc.holes...)...)
+		if len(src) != len(ring) {
+			t.Fatalf("%s: %d source indices for %d ring points", tc.name, len(src), len(ring))
+		}
+		for i, s := range src {
+			if all[s] != ring[i] {
+				t.Errorf("%s: ring point %d is %v, but its source %d is %v", tc.name, i, ring[i], s, all[s])
+			}
 		}
 		want := math.Abs(polygonArea2D(tc.outer))
 		for _, h := range tc.holes {
@@ -49,7 +63,22 @@ func TestTriangulateWithHoles(t *testing.T) {
 }
 
 func TestTriangulateWithHolesBudget(t *testing.T) {
-	if _, _, ok := triangulateWithHoles(holeOuter, [][][2]float64{holeH}, sizedBudget(10)); ok {
-		t.Error("a budget of 10 triangulated a holed cap")
+	if _, _, _, err := triangulateWithHoles(holeOuter, [][][2]float64{holeH}, sizedBudget(10)); !errors.Is(err, errCapBudget) {
+		t.Errorf("a budget of 10: got %v, want %v", err, errCapBudget)
 	}
+}
+
+// A hole that cannot be joined to the outline is refused for that, not for
+// the work budget. Checked holes never get here; the error names the cause.
+func TestTriangulateWithHolesBridgeFailure(t *testing.T) {
+	outside := holeSquare(20, 20, 1)
+	if _, _, _, err := triangulateWithHoles(holeOuter, [][][2]float64{outside}, newBudget()); !errors.Is(err, errHoleBridge) {
+		t.Errorf("a hole outside the outline: got %v, want %v", err, errHoleBridge)
+	}
+}
+
+func reversed(r [][2]float64) [][2]float64 {
+	r = slices.Clone(r)
+	slices.Reverse(r)
+	return r
 }
