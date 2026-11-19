@@ -16,7 +16,7 @@
 - `BuildSlab` and `BuildSlabLayers` keep signatures and results; a `Polygon2D` with no holes builds exactly the same slab.
 - Tolerance 1 mm (`minDim`). Caps: 64 holes; 2,048 points in total (`maxOutlinePoints`); work bounded by the existing budget.
 - Refusal reasons: `outside`, `overlaps`, `self_crossing` (Go `HoleReason`); wasm codes `hole_outside`, `holes_overlap`, `hole_self_crossing`, with `item` and `hole`.
-- The wasm size gate is 1,200,000 B gzipped with ~10 KB headroom: report the size after Task 2.
+- The wasm size has two checks, not a fixed ceiling: `.github/scripts/wasm-deps.sh` fails on a banned package (regexp, os/exec, text/template, html/template, net), and `make wasm-growth` fails a PR that grows goifc-build.wasm over 50 KiB gzipped against its merge base (label `wasm-growth` waives it). Report the size after Task 2.
 
 ## Review Focus
 

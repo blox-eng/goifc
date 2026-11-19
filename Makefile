@@ -1,4 +1,4 @@
-.PHONY: lint test build wasm wasm-test promote clean fmt vet help docs docs-serve docs-deps parity parity-report parity-baseline oracle
+.PHONY: lint test build wasm wasm-test wasm-growth promote clean fmt vet help docs docs-serve docs-deps parity parity-report parity-baseline oracle
 
 # Default target
 .DEFAULT_GOAL := help
@@ -35,10 +35,24 @@ wasm: ## Build the WebAssembly release files into dist/
 	CGO_ENABLED=0 GOOS=js GOARCH=wasm go build $(WASM_FLAGS) -o dist/goifc-read.wasm ./cmd/goifc-read
 	install -m 644 "$$(go env GOROOT)/lib/wasm/wasm_exec.js" wasm/goifc.js wasm/goifc-contract.schema.json dist/
 
-wasm-test: wasm ## Test the WebAssembly files: Node tests, the contract suite as wasm, the size gate
+wasm-test: wasm ## Test the WebAssembly files: Node tests, the contract suite as wasm, banned packages, sizes
 	node --test "wasm/test/*.test.mjs"
 	GOOS=js GOARCH=wasm go test -exec="bash $$(go env GOROOT)/lib/wasm/go_js_wasm_exec" ./internal/wasmapi/ ./cmd/internal/jsbridge/
-	.github/scripts/wasm-size.sh dist/goifc-build.wasm 1200000 dist/goifc-read.wasm
+	.github/scripts/wasm-deps.sh
+	.github/scripts/wasm-size.sh dist/goifc-build.wasm
+	.github/scripts/wasm-size.sh dist/goifc-read.wasm
+
+WASM_BASE ?= origin/main
+WASM_MAX_GROWTH := 51200
+
+wasm-growth: wasm ## Fail when goifc-build.wasm grew over 50 KiB gzipped against the merge base with WASM_BASE (default origin/main)
+	@set -eu; \
+	tmp="$$(mktemp -d)"; \
+	trap 'git worktree remove --force "$$tmp/src" >/dev/null 2>&1 || true; rmdir "$$tmp" 2>/dev/null || true' EXIT; \
+	git worktree add --detach "$$tmp/src" "$$(git merge-base HEAD $(WASM_BASE))" >/dev/null; \
+	mkdir -p dist/base; \
+	(cd "$$tmp/src" && CGO_ENABLED=0 GOOS=js GOARCH=wasm go build $(WASM_FLAGS) -o "$(CURDIR)/dist/base/goifc-build.wasm" ./cmd/goifc-build); \
+	.github/scripts/wasm-size.sh dist/goifc-build.wasm dist/base/goifc-build.wasm $(WASM_MAX_GROWTH)
 
 promote: ## Promote Unreleased to the latest tag in CHANGELOG.md and goifc.org (on a branch from main, after a release)
 	.github/scripts/promote-release.sh
