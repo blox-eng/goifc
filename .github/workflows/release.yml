@@ -90,8 +90,8 @@ jobs:
         # The generated notes are one line per squash-merge title. The
         # Unreleased section of CHANGELOG.md is the hand-written record of this
         # release. This workflow commits nothing: the next PR renames the
-        # section with `make promote`, and CI's changelog guard fails every PR
-        # until it does (#140). A bot PR got no CI and never merged. The
+        # section: the Promote Changelog job below opens that PR, and CI's
+        # changelog guard fails every other PR until it merges (#140). The
         # release already exists, so a problem with its notes warns rather than
         # failing the job.
         if: steps.release.outputs.version != ''
@@ -217,3 +217,50 @@ jobs:
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber \
             dist/goifc-build.wasm dist/goifc-read.wasm dist/wasm_exec.js \
             dist/goifc.js dist/goifc-contract.schema.json dist/SHA256SUMS
+
+  # Promotes CHANGELOG.md's Unreleased section to the release and points the
+  # goifc.org news line at it, in a pull request that merges itself once its
+  # checks pass. RELEASE_TOKEN opens it: a pull request opened with the
+  # built-in token starts no CI and never merges (#140). This job's own token
+  # only reads. If it fails, `make promote` does the same by hand
+  # (CONTRIBUTING.md, After a release).
+  promote:
+    name: Promote Changelog
+    needs: release
+    if: needs.release.result == 'success' && needs.release.outputs.version != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/v${{ needs.release.outputs.version }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Open the promotion pull request
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: .github/scripts/open-promote-pr.sh "$VERSION"
+      # main takes only up-to-date branches, and auto-merge never updates
+      # one: a pull request that merged meanwhile would hold this one back.
+      - name: Keep the pull request up to date until it merges
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          branch="docs/promote-v${VERSION}"
+          for _ in $(seq 1 40); do
+            state="$(gh pr view "$branch" --json state,mergeStateStatus -q '.state + " " + .mergeStateStatus')" ||
+              { echo "no pull request for $branch: nothing to wait for"; exit 0; }
+            case "$state" in
+              MERGED*) echo "merged"; exit 0 ;;
+              CLOSED*) echo "::warning::the v${VERSION} promotion pull request was closed: run make promote (CONTRIBUTING.md, After a release)"; exit 0 ;;
+              *BEHIND) gh pr update-branch "$branch" || true ;;
+            esac
+            sleep 60
+          done
+          echo "::warning::the v${VERSION} promotion pull request has not merged in 40 min: look at its checks, or run make promote (CONTRIBUTING.md, After a release)"

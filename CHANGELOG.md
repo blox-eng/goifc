@@ -18,6 +18,12 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Changed
+
+- After a release, the Release workflow opens the pull request that promotes
+  `## Unreleased` and the goifc.org news line, and it merges itself once its
+  checks pass. `make promote` stays as the fallback.
+
 ## v0.21.0 — 2026-11-19
 
 ### Added

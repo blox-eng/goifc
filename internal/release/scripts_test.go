@@ -291,17 +291,144 @@ func TestPromoteReleaseNoHeadline(t *testing.T) {
 	}
 }
 
-// The Release workflow publishes the notes and commits nothing: a bot PR
-// gets no CI and never merges (#140).
-func TestReleaseWorkflowOpensNoPR(t *testing.T) {
+// After a release, the Release workflow promotes the changelog in a pull
+// request opened with RELEASE_TOKEN: one opened with the built-in token gets
+// no CI and never merges (#140).
+func TestReleaseWorkflowPromotesWithReleaseToken(t *testing.T) {
 	wf := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
-	for _, s := range []string{"gh pr create", "pull-requests: write", "promote-changelog.sh"} {
+	for _, s := range []string{"open-promote-pr.sh", "secrets.RELEASE_TOKEN", "gh pr update-branch"} {
+		if !strings.Contains(wf, s) {
+			t.Errorf("release.yml has no %q", s)
+		}
+	}
+	for _, s := range []string{"pull-requests: write", "gh pr create"} {
 		if strings.Contains(wf, s) {
-			t.Errorf("release.yml has %q", s)
+			t.Errorf("release.yml has %q: the pull request must come from RELEASE_TOKEN in open-promote-pr.sh", s)
 		}
 	}
 	if !strings.Contains(wf, "release-notes.sh Unreleased") {
 		t.Error("release.yml no longer publishes the Unreleased section as the notes")
+	}
+}
+
+// promoteRepo is a tagged repo with a bare remote and a stub gh that logs
+// its arguments. With prExists, gh pr view finds the pull request.
+func promoteRepo(t *testing.T, changelog string, prExists bool) (dir, remote, log string, env []string) {
+	t.Helper()
+	dir = tagged(t, changelog, "v0.5.0")
+	remote = filepath.Join(t.TempDir(), "remote.git")
+	gitIn(t, dir, "init", "-q", "--bare", remote)
+	bin := t.TempDir()
+	log = filepath.Join(bin, "gh.log")
+	view := "exit 1"
+	if prExists {
+		view = "exit 0"
+	}
+	stub := "#!/usr/bin/env bash\necho \"$*\" >> " + log + "\n[[ \"$1 $2\" == \"pr view\" ]] && " + view + "\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "GH_TOKEN=secret-token", "GH_REPO=example/goifc", "PUSH_URL="+remote,
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	return dir, remote, log, env
+}
+
+func openPromotePR(t *testing.T, dir string, env []string, args ...string) (string, error) {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", "..", ".github", "scripts", "open-promote-pr.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(abs, args...)
+	cmd.Dir, cmd.Env = dir, env
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func ghLog(t *testing.T, log string) string {
+	t.Helper()
+	b, err := os.ReadFile(log)
+	if os.IsNotExist(err) {
+		return ""
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestOpenPromotePR(t *testing.T) {
+	dir, remote, log, env := promoteRepo(t, unreleased, false)
+	out, err := openPromotePR(t, dir, env, "0.5.0")
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if strings.Contains(out, "secret-token") {
+		t.Errorf("the output shows the token:\n%s", out)
+	}
+	cl, err := exec.Command("git", "--git-dir", remote, "show", "docs/promote-v0.5.0:CHANGELOG.md").CombinedOutput()
+	if err != nil || !strings.Contains(string(cl), "## v0.5.0 — ") {
+		t.Fatalf("the pushed branch has no v0.5.0 heading: %v %s", err, cl)
+	}
+	subject, _ := exec.Command("git", "--git-dir", remote, "log", "-1", "--format=%s", "docs/promote-v0.5.0").Output()
+	if got, want := strings.TrimSpace(string(subject)), "docs: promote Unreleased to v0.5.0 in CHANGELOG.md"; got != want {
+		t.Errorf("commit %q, want %q", got, want)
+	}
+	calls := ghLog(t, log)
+	if strings.Count(calls, "pr create") != 1 || !strings.Contains(calls, "--head docs/promote-v0.5.0") {
+		t.Errorf("want one pr create for the branch, got:\n%s", calls)
+	}
+	if !strings.Contains(calls, "pr merge docs/promote-v0.5.0 --squash --auto") {
+		t.Errorf("no auto-merge asked:\n%s", calls)
+	}
+}
+
+// A re-run finds its pull request and opens no second one.
+func TestOpenPromotePRRerun(t *testing.T) {
+	dir, _, log, env := promoteRepo(t, unreleased, true)
+	if out, err := openPromotePR(t, dir, env, "0.5.0"); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if calls := ghLog(t, log); strings.Contains(calls, "pr create") || !strings.Contains(calls, "--squash --auto") {
+		t.Errorf("a re-run: want no pr create and an auto-merge, got:\n%s", calls)
+	}
+}
+
+// A release someone promoted by hand needs nothing.
+func TestOpenPromotePRAlreadyPromoted(t *testing.T) {
+	promoted := strings.Replace(unreleased, "## Unreleased\n", "## Unreleased\n\n## v0.5.0 — 2026-11-15\n", 1)
+	dir, remote, log, env := promoteRepo(t, promoted, false)
+	out, err := openPromotePR(t, dir, env, "0.5.0")
+	if err != nil || !strings.Contains(out, "already") {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if calls := ghLog(t, log); calls != "" {
+		t.Errorf("gh ran for a promoted release:\n%s", calls)
+	}
+	if b, _ := exec.Command("git", "--git-dir", remote, "branch").Output(); len(b) != 0 {
+		t.Errorf("a branch was pushed: %s", b)
+	}
+}
+
+// A refusal of promote-release.sh fails the job with its message.
+func TestOpenPromotePRRefusal(t *testing.T) {
+	dir, _, log, env := promoteRepo(t, unreleased, false)
+	out, err := openPromotePR(t, dir, env, "0.6.0")
+	if err == nil || !strings.Contains(out, "promote-release:") {
+		t.Fatalf("want promote-release's refusal, got %v: %s", err, out)
+	}
+	if calls := ghLog(t, log); calls != "" {
+		t.Errorf("gh ran after a refusal:\n%s", calls)
+	}
+}
+
+// Without RELEASE_TOKEN the job fails and says how to add it.
+func TestOpenPromotePRNoToken(t *testing.T) {
+	dir, _, _, env := promoteRepo(t, unreleased, false)
+	env = append(env, "GH_TOKEN=")
+	out, err := openPromotePR(t, dir, env, "0.5.0")
+	if err == nil || !strings.Contains(out, "RELEASE_TOKEN") {
+		t.Fatalf("want a RELEASE_TOKEN error, got %v: %s", err, out)
 	}
 }
 
