@@ -721,6 +721,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Slabs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#slabs-with-holes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slabs with holes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1316,6 +1333,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Slabs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#slabs-with-holes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Slabs with holes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1544,13 +1578,56 @@ volume 2.288 m³. A refusal's <code>Wall</code> field says which wall it belongs
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nx">s</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildSlab</span><span class="p">([][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">}},</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mf">0.20</span><span class="p">)</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1">// s.Quantities: Area 20 m², Perimeter 18 m, Volume 4 m³</span>
 </code></pre></div>
-<p>The outline can wind either way and has no holes. The top face is at <code>z</code>, and
-the slab extends down by the thickness.</p>
+<p>The outline can wind either way. The top face is at <code>z</code>, and the slab extends
+down by the thickness.</p>
+<h3 id="slabs-with-holes">Slabs with holes<a class="headerlink" href="#slabs-with-holes" title="Permanent link">&para;</a></h3>
+<p>A stair or a shaft through a floor is a hole. <code>BuildSlabPolygon</code> takes a
+<code>Polygon2D</code> with an outer ring and any number of holes; <code>BuildSlabPolygonLayers</code>
+does the same for layers:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">s</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildSlabPolygon</span><span class="p">(</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Polygon2D</span><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">    </span><span class="nx">Outer</span><span class="p">:</span><span class="w"> </span><span class="p">[][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">}},</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nx">Holes</span><span class="p">:</span><span class="w"> </span><span class="p">[][][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mf">4.5</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mf">4.5</span><span class="p">,</span><span class="w"> </span><span class="mf">3.2</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mf">3.2</span><span class="p">}}},</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">},</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mf">0.20</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1">// s.Quantities: Area 77 m², Perimeter 36 m, HolePerimeter 7.4 m, Volume 15.4 m³</span>
+</code></pre></div>
+<p><code>Area</code> is the floor less the holes, and <code>Perimeter</code> is the outer edge only.
+<code>HolePerimeter</code> is the length of every hole's edge, which is where the slab's
+edge forms go around the opening. Holes can wind either way. A slab with no
+holes builds exactly as <code>BuildSlab</code> does.</p>
+<p>A hole that does not fit is refused, not clipped. Each refusal is a
+<code>*HoleError</code> that names the hole and the reason, and all of them come back at
+once, joined with <code>errors.Join</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>The hole</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>outside</code></td>
+<td>reaches or passes the outer edge, or lies outside it.</td>
+</tr>
+<tr>
+<td><code>overlaps</code></td>
+<td>overlaps or touches another hole.</td>
+</tr>
+<tr>
+<td><code>self_crossing</code></td>
+<td>crosses itself.</td>
+</tr>
+</tbody>
+</table>
+<p>"Touches" means closer than 1 mm. A slab takes at most 64 holes and 2,048
+points in all. <code>BuildPlan</code> takes holes on its slabs, and the wasm build request
+takes a <code>holes</code> field on a slab; its refusals are <code>hole_outside</code>,
+<code>holes_overlap</code> and <code>hole_self_crossing</code>, with the item and the hole.</p>
 <h2 id="niches">Niches<a class="headerlink" href="#niches" title="Permanent link">&para;</a></h2>
 <p>An opening with a <code>Depth</code> is a niche. It is cut from the measured face to that
 depth, and the opposite face stays whole. A niche needs a sill, and its depth
 must stay at least 1 mm inside the wall.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nx">niche</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Opening</span><span class="p">{</span><span class="nx">Offset</span><span class="p">:</span><span class="w"> </span><span class="mf">1.00</span><span class="p">,</span><span class="w"> </span><span class="nx">Sill</span><span class="p">:</span><span class="w"> </span><span class="mf">1.20</span><span class="p">,</span><span class="w"> </span><span class="nx">Width</span><span class="p">:</span><span class="w"> </span><span class="mf">0.40</span><span class="p">,</span><span class="w"> </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">0.60</span><span class="p">,</span><span class="w"> </span><span class="nx">Depth</span><span class="p">:</span><span class="w"> </span><span class="mf">0.08</span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nx">niche</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Opening</span><span class="p">{</span><span class="nx">Offset</span><span class="p">:</span><span class="w"> </span><span class="mf">1.00</span><span class="p">,</span><span class="w"> </span><span class="nx">Sill</span><span class="p">:</span><span class="w"> </span><span class="mf">1.20</span><span class="p">,</span><span class="w"> </span><span class="nx">Width</span><span class="p">:</span><span class="w"> </span><span class="mf">0.40</span><span class="p">,</span><span class="w"> </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">0.60</span><span class="p">,</span><span class="w"> </span><span class="nx">Depth</span><span class="p">:</span><span class="w"> </span><span class="mf">0.08</span><span class="p">}</span>
 </code></pre></div>
 <p>In the 2.40 × 2.60 × 0.10 wall, this niche leaves <code>MeasuredNet</code> at 6.00 m²,
 <code>OtherNet</code> at 6.24 m² (whole), and <code>NicheBack</code> at 0.24 m².</p>
@@ -1560,9 +1637,9 @@ must stay at least 1 mm inside the wall.</p>
 metres, measured face first for walls and top first for slabs, and return one
 <code>Wall</code> or <code>Slab</code> per layer, in that order. The element's thickness is their
 sum.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nx">layers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="p">[]</span><span class="kt">float64</span><span class="p">{</span><span class="mf">0.015</span><span class="p">,</span><span class="w"> </span><span class="mf">0.175</span><span class="p">,</span><span class="w"> </span><span class="mf">0.10</span><span class="p">}</span><span class="w"> </span><span class="c1">// plaster, brick, insulation</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nx">ws</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildWallLayers</span><span class="p">(</span><span class="nx">edge</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mf">2.50</span><span class="p">,</span><span class="w"> </span><span class="nx">layers</span><span class="p">,</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">,</span><span class="w"> </span><span class="nx">openings</span><span class="p">)</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">// ws[0] is the plaster, ws[2] the insulation</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nx">layers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="p">[]</span><span class="kt">float64</span><span class="p">{</span><span class="mf">0.015</span><span class="p">,</span><span class="w"> </span><span class="mf">0.175</span><span class="p">,</span><span class="w"> </span><span class="mf">0.10</span><span class="p">}</span><span class="w"> </span><span class="c1">// plaster, brick, insulation</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nx">ws</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildWallLayers</span><span class="p">(</span><span class="nx">edge</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mf">2.50</span><span class="p">,</span><span class="w"> </span><span class="nx">layers</span><span class="p">,</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">,</span><span class="w"> </span><span class="nx">openings</span><span class="p">)</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1">// ws[0] is the plaster, ws[2] the insulation</span>
 </code></pre></div>
 <p>Each layer's quantities mean what they mean for a whole wall, for that layer
 alone. <code>MeasuredGross</code> and <code>MeasuredNet</code> are its face toward the measured
@@ -1590,8 +1667,8 @@ volumes add up to the whole wall's.</p>
 <p><code>WritePreviewSVG</code> draws built walls and slabs as a small SVG for a gallery
 card or a thumbnail. Pass the builders' results as they are; a layered wall is
 one <code>Wall</code> per layer.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">svg</span><span class="w"> </span><span class="nx">bytes</span><span class="p">.</span><span class="nx">Buffer</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nx">detail</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">WritePreviewSVG</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">svg</span><span class="p">,</span><span class="w"> </span><span class="nx">walls</span><span class="p">,</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Slab</span><span class="p">{</span><span class="nx">slab</span><span class="p">})</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">svg</span><span class="w"> </span><span class="nx">bytes</span><span class="p">.</span><span class="nx">Buffer</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">detail</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">WritePreviewSVG</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">svg</span><span class="p">,</span><span class="w"> </span><span class="nx">walls</span><span class="p">,</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Slab</span><span class="p">{</span><span class="nx">slab</span><span class="p">})</span>
 </code></pre></div>
 <ul>
 <li><strong>One view.</strong> An isometric view from the south-west, from above, so every
@@ -1609,28 +1686,28 @@ one <code>Wall</code> per layer.</p>
 <li><strong>Safe to inline.</strong> The SVG holds only fixed tags, classes and numbers,
   never text from the input.</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">top</span><span class="w">     </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#e8e6e1</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">left</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#b9b5ad</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">right</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#d3d0c9</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#7fa7c9</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="p">@</span><span class="k">media</span><span class="w"> </span><span class="o">(</span><span class="nt">prefers-color-scheme</span><span class="o">:</span><span class="w"> </span><span class="nt">dark</span><span class="o">)</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">top</span><span class="w">     </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#4a4845</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">left</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#2e2d2b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">right</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3c3a37</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3d5a73</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">top</span><span class="w">     </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#e8e6e1</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">left</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#b9b5ad</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">right</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#d3d0c9</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#7fa7c9</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">@</span><span class="k">media</span><span class="w"> </span><span class="o">(</span><span class="nt">prefers-color-scheme</span><span class="o">:</span><span class="w"> </span><span class="nt">dark</span><span class="o">)</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">top</span><span class="w">     </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#4a4845</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">left</span><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#2e2d2b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">right</span><span class="w">   </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3c3a37</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="p">.</span><span class="nc">goifc-preview</span><span class="w"> </span><span class="p">.</span><span class="nc">opening</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">fill</span><span class="p">:</span><span class="w"> </span><span class="mh">#3d5a73</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="p">}</span>
 </code></pre></div>
 <h2 id="walls-that-meet-mid-wall">Walls that meet mid-wall<a class="headerlink" href="#walls-that-meet-mid-wall" title="Permanent link">&para;</a></h2>
 <p>A partition whose end meets the face of another wall (a T) is declared in the
 partition's <code>Joins</code>; goifc never finds joins by itself. <code>BuildPlan</code> builds the
 whole plan, cuts the end flush with the face and takes the strip it covers off
 that face's net area:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nx">through</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">ID</span><span class="p">:</span><span class="w"> </span><span class="s">"T"</span><span class="p">,</span><span class="w"> </span><span class="nx">Edge</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}},</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">    </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="nx">Thickness</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="p">,</span><span class="w"> </span><span class="nx">Side</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">}</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nx">partition</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">ID</span><span class="p">:</span><span class="w"> </span><span class="s">"P"</span><span class="p">,</span><span class="w"> </span><span class="nx">Edge</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}},</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="nx">Thickness</span><span class="p">:</span><span class="w"> </span><span class="mf">0.1</span><span class="p">,</span><span class="w"> </span><span class="nx">Side</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">,</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nx">Joins</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Join</span><span class="p">{{</span><span class="nx">End</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">EndB</span><span class="p">,</span><span class="w"> </span><span class="nx">Wall</span><span class="p">:</span><span class="w"> </span><span class="s">"T"</span><span class="p">}}}</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nx">built</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildPlan</span><span class="p">(</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Plan</span><span class="p">{</span><span class="nx">Walls</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">through</span><span class="p">,</span><span class="w"> </span><span class="nx">partition</span><span class="p">}})</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nx">through</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">ID</span><span class="p">:</span><span class="w"> </span><span class="s">"T"</span><span class="p">,</span><span class="w"> </span><span class="nx">Edge</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}},</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="nx">Thickness</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="p">,</span><span class="w"> </span><span class="nx">Side</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">}</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nx">partition</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">ID</span><span class="p">:</span><span class="w"> </span><span class="s">"P"</span><span class="p">,</span><span class="w"> </span><span class="nx">Edge</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="kt">float64</span><span class="p">{{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">}},</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nx">Height</span><span class="p">:</span><span class="w"> </span><span class="mf">2.5</span><span class="p">,</span><span class="w"> </span><span class="nx">Thickness</span><span class="p">:</span><span class="w"> </span><span class="mf">0.1</span><span class="p">,</span><span class="w"> </span><span class="nx">Side</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">SideLeft</span><span class="p">,</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">    </span><span class="nx">Joins</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Join</span><span class="p">{{</span><span class="nx">End</span><span class="p">:</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">EndB</span><span class="p">,</span><span class="w"> </span><span class="nx">Wall</span><span class="p">:</span><span class="w"> </span><span class="s">"T"</span><span class="p">}}}</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nx">built</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">geometry</span><span class="p">.</span><span class="nx">BuildPlan</span><span class="p">(</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">Plan</span><span class="p">{</span><span class="nx">Walls</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="nx">geometry</span><span class="p">.</span><span class="nx">PlanWall</span><span class="p">{</span><span class="nx">through</span><span class="p">,</span><span class="w"> </span><span class="nx">partition</span><span class="p">}})</span>
 </code></pre></div>
 <p>The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m².
 <code>MeasuredJoins</code> and <code>OtherJoins</code> hold the area taken off the measured and
