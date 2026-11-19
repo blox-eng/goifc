@@ -31,6 +31,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 - The wasm size check bans the `net`, `regexp` and template packages and limits
   growth per PR (51,200 B gzip, unless labelled `wasm-growth`), not a fixed size.
 
+### Fixed
+
+- A slab or wall outline with nearly collinear points could build a cap missing
+  one point, leaving the mesh open. The cap now keeps every point.
+
 ## v0.20.0 — 2026-11-16
 
 ### Added
