@@ -37,6 +37,6 @@ if [[ -n "$growth" ]] && (( growth > max )); then
     echo "wasm growth ${growth} B is over the ${max} B budget; waived by WASM_GROWTH_OK=1"
     exit 0
   fi
-  echo "::error::$(basename "$file") grew ${growth} bytes after gzip -9, over the ${max}-byte budget. Find what grew with: go tool nm -size -sort size $file | head (and the same for $base). If the growth is intended, add the PR label wasm-growth to waive this check." >&2
+  echo "::error::$(basename "$file") grew ${growth} bytes after gzip -9, over the ${max}-byte budget. Find what grew with: go tool nm -size -sort size $file | head (and the same for $base). If the growth is intended, add the PR label wasm-growth to waive this check, then re-run the job." >&2
   exit 1
 fi

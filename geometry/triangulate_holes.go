@@ -77,6 +77,7 @@ func bridgeVertex(ring [][2]float64, m [2]float64) (int, bool) {
 		}
 	}
 	if edge < 0 {
+		// No edge to the right of m: m is not inside the ring, so it cannot be bridged.
 		return 0, false
 	}
 	a, c := ring[edge], ring[(edge+1)%n]

@@ -35,3 +35,16 @@ func TestEarClipKeepsCollinearSliverPoints(t *testing.T) {
 		t.Errorf("area %v, want %v", area, want)
 	}
 }
+
+// The same sliver, reached through a valid outline: the cap must use every
+// point, or the slab's shell is open.
+func TestBuildSlabSliverOutlineIsClosed(t *testing.T) {
+	outline := [][2]float64{{4, 0}, {2, 7}, {-4, 3}, {-5.5, -1}, {-7, -5},
+		{-3.666666666666667, -6}, {-0.3333333333333339, -7}, {3, -8}}
+	s, err := BuildSlab(outline, 0, 0.2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	meshAgrees(t, s.Element, s.Quantities.Volume, 2*s.Quantities.Area+s.Quantities.Perimeter*0.2, 0,
+		s.Quantities.Area, s.Quantities.Volume)
+}

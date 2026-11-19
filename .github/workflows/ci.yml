@@ -232,6 +232,10 @@ jobs:
     needs: [lint, changes]
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 10
+    permissions:
+      contents: read
+      # The growth check reads the pull request's labels when it runs.
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -262,14 +266,19 @@ jobs:
       - name: Build and test the wasm files
         run: make wasm-test
       # A pull request may grow goifc-build.wasm by 50 KiB gzipped over its
-      # merge base. More needs the pull request label wasm-growth; the label
-      # is read when the job starts, so re-run the job after adding it.
+      # merge base. More needs the pull request label wasm-growth; the labels
+      # are read when this step runs, so add the label, then re-run the job.
       - name: Check goifc-build.wasm growth against the base branch
         if: github.event_name == 'pull_request'
         env:
           WASM_BASE: origin/${{ github.base_ref }}
-          WASM_GROWTH_OK: ${{ contains(github.event.pull_request.labels.*.name, 'wasm-growth') && '1' || '0' }}
-        run: make wasm-growth WASM_BASE="$WASM_BASE"
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name' | grep -qx wasm-growth; then
+            export WASM_GROWTH_OK=1
+          fi
+          make wasm-growth WASM_BASE="$WASM_BASE"
 
   govulncheck:
     name: Vulnerability Scan
