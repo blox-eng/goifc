@@ -377,6 +377,8 @@ func wallOpenings(w Wall, shapes []previewShape, elem int) []previewShape {
 // WritePreviewSVG draws walls and slabs, with the walls' openings, as one
 // SVG document in a fixed isometric view from the south-west. Pass the
 // builders' results as they are: a layered wall is one Wall per layer.
+// A roof draws as a slab: pass Slab{Element: roof.Element}; its ridge, hip
+// and valley lines show where its planes meet.
 //
 // Every shape has one class, top, left, right or opening, and no colour:
 // style them under .goifc-preview. The root's data-detail names the Detail

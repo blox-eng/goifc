@@ -6,18 +6,19 @@ import (
 )
 
 const (
-	maxPlanItems    = 10_000  // walls + rooms + slabs in one plan
+	maxPlanItems    = 10_000  // walls + rooms + slabs + roofs in one plan
 	maxPlanElements = 100_000 // elements one plan builds, layers and room walls counted
 )
 
 var errThicknessOrLayers = errors.New("give thickness or layers, not both and not neither")
 
-// Plan is a whole plan: walls, rooms and slabs, each with an ID that names
+// Plan is a whole plan: walls, rooms, slabs and roofs, each with an ID that names
 // its elements. Give Thickness or Layers on an item, not both.
 type Plan struct {
 	Walls []PlanWall
 	Rooms []PlanRoom
 	Slabs []PlanSlab
+	Roofs []PlanRoof
 }
 
 // PlanWall is one wall item.
@@ -50,11 +51,24 @@ type PlanSlab struct {
 	Layers       []float64
 }
 
+// PlanRoof is one roof item: a pitched roof over Outline, built as
+// BuildRoofLayers does. Gables names the outline edges that are gable ends.
+type PlanRoof struct {
+	ID              string
+	Outline         [][2]float64
+	Pitch           float64
+	Gables          []int
+	Overhang, Eaves float64
+	Thickness       float64
+	Layers          []float64
+}
+
 // Built is what BuildPlan returns: wall items, then room walls, in plan
-// order, and the slabs.
+// order, and the slabs and roofs.
 type Built struct {
 	Walls []BuiltWall
 	Slabs []BuiltSlab
+	Roofs []BuiltRoof
 }
 
 // BuiltWall is one built wall. Its ID is the item ID (w1), w1/j for layer j,
@@ -69,6 +83,12 @@ type BuiltWall struct {
 type BuiltSlab struct {
 	ID   string
 	Slab Slab
+}
+
+// BuiltRoof is one built roof, named like a BuiltWall.
+type BuiltRoof struct {
+	ID   string
+	Roof Roof
 }
 
 // ItemError is a refusal of one item of a plan.
@@ -87,7 +107,7 @@ func (e *ItemError) Unwrap() error { return e.Err }
 // and no elements: an item's own refusal as an *ItemError, a refused join as
 // a *JoinError.
 func BuildPlan(p Plan) (Built, error) {
-	if n := len(p.Walls) + len(p.Rooms) + len(p.Slabs); n > maxPlanItems {
+	if n := len(p.Walls) + len(p.Rooms) + len(p.Slabs) + len(p.Roofs); n > maxPlanItems {
 		return Built{}, fmt.Errorf("%d items, over the %d limit", n, maxPlanItems)
 	}
 	if n := planElements(p); n > maxPlanElements {
@@ -109,6 +129,10 @@ func BuildPlan(p Plan) (Built, error) {
 		s.Element.GlobalID = id
 		out.Slabs = append(out.Slabs, BuiltSlab{ID: id, Slab: s})
 	}
+	addRoof := func(id string, r Roof) {
+		r.Element.GlobalID = id
+		out.Roofs = append(out.Roofs, BuiltRoof{ID: id, Roof: r})
+	}
 	failed := map[string]bool{}
 	wallAt := make([]int, len(p.Walls)) // where each wall item's walls start in out.Walls
 	for i, it := range p.Walls {
@@ -128,6 +152,11 @@ func BuildPlan(p Plan) (Built, error) {
 	}
 	for _, it := range p.Slabs {
 		if err := buildPlanSlab(it, addSlab); err != nil {
+			errs = append(errs, &ItemError{Item: it.ID, Err: err})
+		}
+	}
+	for _, it := range p.Roofs {
+		if err := buildPlanRoof(it, addRoof); err != nil {
 			errs = append(errs, &ItemError{Item: it.ID, Err: err})
 		}
 	}
@@ -163,6 +192,9 @@ func planElements(p Plan) int {
 	for _, it := range p.Slabs {
 		n += each(it.Layers)
 	}
+	for _, it := range p.Roofs {
+		n += each(it.Layers)
+	}
 	return n
 }
 
@@ -193,6 +225,9 @@ func checkPlanIDs(p Plan) error {
 		ids = append(ids, it.ID)
 	}
 	for _, it := range p.Slabs {
+		ids = append(ids, it.ID)
+	}
+	for _, it := range p.Roofs {
 		ids = append(ids, it.ID)
 	}
 	var errs []error
@@ -275,6 +310,29 @@ func buildPlanSlab(it PlanSlab, add func(string, Slab)) error {
 		}
 		for j, s := range ss {
 			add(fmt.Sprintf("%s/%d", it.ID, j), s)
+		}
+	default:
+		return errThicknessOrLayers
+	}
+	return nil
+}
+
+func buildPlanRoof(it PlanRoof, add func(string, Roof)) error {
+	spec := RoofSpec{Pitch: it.Pitch, Gables: it.Gables, Overhang: it.Overhang, Eaves: it.Eaves}
+	switch {
+	case it.Thickness != 0 && it.Layers == nil:
+		rs, err := BuildRoofLayers(it.Outline, spec, []float64{it.Thickness})
+		if err != nil {
+			return err
+		}
+		add(it.ID, rs[0])
+	case it.Thickness == 0 && it.Layers != nil:
+		rs, err := BuildRoofLayers(it.Outline, spec, it.Layers)
+		if err != nil {
+			return err
+		}
+		for j, r := range rs {
+			add(fmt.Sprintf("%s/%d", it.ID, j), r)
 		}
 	default:
 		return errThicknessOrLayers
