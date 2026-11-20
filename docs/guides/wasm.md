@@ -3,8 +3,8 @@
 goifc runs in a browser as two WebAssembly files that share one JSON
 contract:
 
-- **`goifc-build.wasm`** builds walls, the walls of a room, slabs and pitched roofs
-  from numbers. One request holds a whole plan; the answer has the quantities,
+- **`goifc-build.wasm`** builds walls, the walls of a room, slabs and
+  pitched roofs from numbers. One request holds a whole plan; the answer has the quantities,
   the faces, a GLB of the meshes and, on request, the SVG preview.
 - **`goifc-read.wasm`** reads an IFC file. The answer has the import tree,
   a GLB and the parts you ask for.
@@ -177,7 +177,8 @@ holds one face per sloped plane of the top, in the faces' `u`, `v`, like a
 slab's `top`. A roof in layers gives one entry per layer, each with its own
 `volume`; the areas and lengths are the same in all.
 
-The preview draws a roof like a slab, with its ridge, hip and valley lines.
+The preview draws a roof's sloped planes like a slab's faces, so the
+ridges, hips and valleys show as the edges between planes.
 
 A roof goifc cannot build is refused with one of these codes, with `item`
 and, where an edge is at fault, `edge` (and `other` for a second edge):
