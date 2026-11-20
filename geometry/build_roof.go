@@ -257,7 +257,38 @@ func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 			sh.rim = append(sh.rim, [2]uint32{a, e})
 		}
 	}
+	if !sh.keepsArea(faces) {
+		return roofShell{}, errSkelTooComplex()
+	}
 	return sh, nil
+}
+
+// keepsArea reports whether the weld left the cap the faces' plan area,
+// within what rounding each point to float32 moves the boundary: a weld that
+// cuts a long sliver off a face would build a roof short of its quantities.
+func (sh roofShell) keepsArea(faces []skelFace) bool {
+	plan := func(i uint32) [2]float64 { return [2]float64{sh.pts[i][0], sh.pts[i][1]} }
+	var want, got, rim float64
+	for _, f := range faces {
+		poly := make([][2]float64, len(f.Poly))
+		for i, p := range f.Poly {
+			poly[i] = [2]float64{p[0], p[1]}
+		}
+		want += polygonArea2D(poly)
+	}
+	for i := 0; i+2 < len(sh.cap); i += 3 {
+		got += cross2D(plan(sh.cap[i]), plan(sh.cap[i+1]), plan(sh.cap[i+2])) / 2
+	}
+	lo, hi := plan(0), plan(0)
+	for i := range sh.pts {
+		p := plan(uint32(i))
+		lo = [2]float64{min(lo[0], p[0]), min(lo[1], p[1])}
+		hi = [2]float64{max(hi[0], p[0]), max(hi[1], p[1])}
+	}
+	for _, r := range sh.rim {
+		rim += dist2(plan(r[0]), plan(r[1]))
+	}
+	return math.Abs(got-want) <= rim*dist2(lo, hi)*0x1p-24
 }
 
 // verts places the top at the skeleton heights raised by top and the bottom

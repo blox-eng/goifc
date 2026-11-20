@@ -602,3 +602,15 @@ func TestRoofFoldOffPlaneRefused(t *testing.T) {
 		buildRoof(t, [][2]float64{{0, 0}, {100, 0}, {100, 10}, {0, 10}}, spec)
 	}
 }
+
+// A 3 cm by 22 m wedge ends in two skeleton points 3e-5 m apart, inside the
+// mesh weld. Welding them cuts a 22 m sliver off the long face, 7e-4 of the
+// plan area and far past float32 rounding: refused, not built short.
+func TestRoofWeldLosingAreaRefused(t *testing.T) {
+	w := 999.0312538146973
+	_, err := BuildRoofLayers([][2]float64{{999, 977}, {w, 999}, {w, w}, {999, w}}, roofSpec(3), []float64{0.05, 0.15})
+	var re *RoofError
+	if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
+		t.Fatalf("%v, want %s", err, ReasonRoofTooComplex)
+	}
+}
