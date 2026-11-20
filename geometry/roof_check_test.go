@@ -164,3 +164,18 @@ func TestPlumbLineRefusesWhatClosesTheOutline(t *testing.T) {
 		t.Errorf("0.4 m leaves the slot open: %v", err)
 	}
 }
+
+func TestPlumbLineRefusesACrossing(t *testing.T) {
+	// A chamber behind a 1 m neck: 1 m of overhang pushes the neck walls past
+	// each other while every edge keeps its direction, so only the crossing
+	// test sees it.
+	chamber := [][2]float64{{0, 0}, {10, 0}, {10, 10}, {6, 10}, {6, 7}, {9, 7}, {9, 3}, {2, 3}, {2, 7}, {5, 7}, {5, 10}, {0, 10}}
+	_, _, err := plumbLine(chamber, 1)
+	var re *RoofError
+	if !errors.As(err, &re) || re.Reason != ReasonOverhangClosesOutline {
+		t.Fatalf("err = %v, want overhang_closes_outline", err)
+	}
+	if _, _, err := plumbLine(chamber, 0.4); err != nil {
+		t.Errorf("0.4 m leaves the neck open: %v", err)
+	}
+}
