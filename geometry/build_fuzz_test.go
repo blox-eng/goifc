@@ -446,6 +446,7 @@ func FuzzBuildRoofLayers(f *testing.F) {
 			}
 			meshAgrees(t, r.Element, q.Volume, 2*q.SlopeArea+2*q.PlanArea, 0,
 				q.SlopeArea, q.PlanArea, q.Volume, q.Eaves, q.Ridge, q.Hip, q.Valley, q.Verge, q.Top)
+			roofTrue(t, r, ringSize(outline), pitch)
 		}
 	})
 }

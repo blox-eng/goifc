@@ -117,6 +117,14 @@ func errSkelTooComplex() error {
 // reaches an edge) are taken in time order, and events at one time are taken
 // together, so a rectangle's ridge and a square's apex come out whole.
 func weightedSkeleton(ring [][2]float64, speed []float64, slope float64, b *budget) ([]skelFace, []skelArc, error) {
+	s := newSkeleton(ring, speed, b)
+	if err := s.run(); err != nil {
+		return nil, nil, err
+	}
+	return s.result(slope)
+}
+
+func newSkeleton(ring [][2]float64, speed []float64, b *budget) *skeleton {
 	n := len(ring)
 	s := &skeleton{ring: ring, speed: speed, b: b, dir: make([][2]float64, n), normal: make([][2]float64, n)}
 	lo, hi := ring[0], ring[0]
@@ -135,23 +143,29 @@ func weightedSkeleton(ring [][2]float64, speed []float64, slope float64, b *budg
 		s.verts = append(s.verts, skelVert{p0: p, in: (k + n - 1) % n, out: k, prev: (k + n - 1) % n, next: (k + 1) % n, node: k})
 		s.fresh = append(s.fresh, k)
 	}
+	return s
+}
+
+// run takes every event until the wavefront is gone.
+func (s *skeleton) run() error {
 	if err := s.launch(); err != nil {
-		return nil, nil, err
+		return err
 	}
+	n := len(s.ring)
 	for groups := 0; s.queue.Len() > 0; groups++ {
 		if groups > 4*n*n+64 {
-			return nil, nil, errSkelTooComplex()
+			return errSkelTooComplex()
 		}
 		if err := s.step(); err != nil {
-			return nil, nil, err
+			return err
 		}
 	}
 	for i := range s.verts {
 		if !s.verts[i].dead {
-			return nil, nil, errSkelTooComplex()
+			return errSkelTooComplex()
 		}
 	}
-	return s.result(slope)
+	return nil
 }
 
 func (s *skeleton) charge(n int) error {
@@ -161,9 +175,11 @@ func (s *skeleton) charge(n int) error {
 	return nil
 }
 
-func (s *skeleton) pos(v int) [2]float64 {
+func (s *skeleton) pos(v int) [2]float64 { return s.posAt(v, s.now) }
+
+func (s *skeleton) posAt(v int, t float64) [2]float64 {
 	x := &s.verts[v]
-	dt := s.now - x.t0
+	dt := t - x.t0
 	return [2]float64{x.p0[0] + x.vel[0]*dt, x.p0[1] + x.vel[1]*dt}
 }
 
@@ -189,7 +205,7 @@ func (s *skeleton) step() error {
 	for _, e := range group {
 		switch {
 		case e.kind == skelEdgeEvent && !s.verts[e.v].dead && !s.verts[e.w].dead && s.verts[e.v].next == e.w:
-			work = append(work, s.merge(e.v, e.w))
+			work = append(work, s.merge(e.v, e.w, e.t))
 		case e.kind == skelSplitEvent && !s.verts[e.v].dead:
 			work = append(work, e.v)
 		}
@@ -216,9 +232,9 @@ func (s *skeleton) settle(work []int) error {
 		case x.next == v:
 			s.end(v, s.nodeAt(pv))
 		case dist2(pv, s.pos(x.next)) <= s.tolP:
-			work = append(work, s.merge(v, x.next))
+			work = append(work, s.merge(v, x.next, s.now))
 		case dist2(pv, s.pos(x.prev)) <= s.tolP:
-			work = append(work, s.merge(x.prev, v))
+			work = append(work, s.merge(x.prev, v, s.now))
 		case x.prev == x.next:
 			q := x.next
 			nv, nq := s.nodeAt(pv), s.nodeAt(s.pos(q))
@@ -286,9 +302,11 @@ func (s *skeleton) spawn(node, in, out, prev, next int) int {
 	return v
 }
 
-// merge replaces neighbours u→w that meet by one vertex.
-func (s *skeleton) merge(u, w int) int {
-	pu, pw := s.pos(u), s.pos(w)
+// merge replaces neighbours u→w that meet at time t by one vertex. A vertex
+// between near-parallel edges runs fast enough to cross metres within the
+// time tolerance, so they meet where they are at t, not at now.
+func (s *skeleton) merge(u, w int, t float64) int {
+	pu, pw := s.posAt(u, t), s.posAt(w, t)
 	node := s.nodeAt([2]float64{(pu[0] + pw[0]) / 2, (pu[1] + pw[1]) / 2})
 	xu, xw := s.verts[u], s.verts[w]
 	s.end(u, node)
@@ -486,7 +504,8 @@ func (s *skeleton) scheduleSplits(v int) error {
 }
 
 // result walks each sloped edge's face from the arcs and checks that the
-// faces tile the ring.
+// faces are the roof: each walk takes every arc of its edge, every point is
+// on its edge's plane, and the faces tile the ring.
 func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 	n := len(s.ring)
 	at := func(i int) [3]float64 {
@@ -523,9 +542,17 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 			if to == e {
 				break
 			}
+			if !s.onPlane(e, to) {
+				return nil, nil, errSkelTooComplex()
+			}
 			poly = append(poly, at(to))
 			plan = append(plan, s.nodes[to].p)
 			cur = to
+		}
+		for _, outs := range next {
+			if len(outs) > 0 {
+				return nil, nil, errSkelTooComplex()
+			}
 		}
 		total += polygonArea2D(plan)
 		faces = append(faces, skelFace{e, poly})
@@ -540,6 +567,15 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		}
 	}
 	return faces, arcs, nil
+}
+
+// onPlane reports whether node i is where edge e's front passes at the
+// node's time. A fold between two near-parallel fronts is off by up to
+// skelFoldTol·size/2 (see skelFoldTol); anything further is a wrong roof.
+func (s *skeleton) onPlane(e, i int) bool {
+	nd, a, ne := s.nodes[i], s.ring[e], s.normal[e]
+	d := ne[0]*(nd.p[0]-a[0]) + ne[1]*(nd.p[1]-a[1])
+	return math.Abs(nd.t-d) <= skelFoldTol*s.size
 }
 
 // tiles reports whether faces of this total plan area tile the ring. A

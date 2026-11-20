@@ -325,7 +325,7 @@ func TestSkelTilingCatchesMissingFace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &skeleton{ring: ring, speed: skelSpeeds(len(ring)), tolP: skelPointTol * ringSize(ring)}
+	s := newSkeleton(ring, skelSpeeds(len(ring)), nil)
 	area := func(f skelFace) float64 {
 		plan := make([][2]float64, len(f.Poly))
 		for i, p := range f.Poly {
@@ -344,6 +344,42 @@ func TestSkelTilingCatchesMissingFace(t *testing.T) {
 		if s.tiles(total - area(f)) {
 			t.Errorf("the faces tile the ring without edge %d's face (area %v)", f.Edge, area(f))
 		}
+	}
+}
+
+// The result refuses a skeleton whose faces are not the roof: a node off
+// the planes of the faces it bounds, or an arc no face walk takes.
+func TestSkelResultRefusesAWrongRoof(t *testing.T) {
+	cases := []struct {
+		name  string
+		spoil func(s *skeleton)
+	}{
+		{"ridge ends 1 cm off", func(s *skeleton) {
+			for i := range s.nodes {
+				if s.nodes[i].t > 0 {
+					s.nodes[i].p[0] += 0.01
+				}
+			}
+		}},
+		{"ridge ends 1 cm low", func(s *skeleton) {
+			for i := range s.nodes {
+				if s.nodes[i].t > 0 {
+					s.nodes[i].t -= 0.01
+				}
+			}
+		}},
+		{"an arc no walk takes", func(s *skeleton) { s.arcs = append(s.arcs, s.arcs[len(s.arcs)-1]) }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := newSkeleton(roofR, skelSpeeds(4), nil)
+			if err := s.run(); err != nil {
+				t.Fatal(err)
+			}
+			c.spoil(s)
+			_, _, err := s.result(skelS)
+			wantRoofError(t, err, ReasonRoofTooComplex, -1)
+		})
 	}
 }
 

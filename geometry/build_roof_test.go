@@ -14,7 +14,7 @@ var (
 func roofSpec(gables ...int) RoofSpec { return RoofSpec{Pitch: 30, Gables: gables, Eaves: 3} }
 
 // buildRoof builds the layers, one of 0.2 m by default, and checks the
-// closed-form areas and volumes.
+// closed-form areas and volumes and that each top lies on its planes.
 func buildRoof(t *testing.T, outline [][2]float64, spec RoofSpec, layers ...float64) []Roof {
 	t.Helper()
 	if len(layers) == 0 {
@@ -33,6 +33,7 @@ func buildRoof(t *testing.T, outline [][2]float64, spec RoofSpec, layers ...floa
 		if !nearRel(q.SlopeArea, q.PlanArea/c, 1e-9) || !nearRel(q.Volume, q.PlanArea*layers[k]/c, 1e-9) {
 			t.Errorf("layer %d: slope area %v, volume %v for plan area %v", k, q.SlopeArea, q.Volume, q.PlanArea)
 		}
+		roofTrue(t, r, ringSize(outline), spec.Pitch)
 	}
 	return roofs
 }
@@ -425,6 +426,82 @@ func TestRoofSkewedLevelLines(t *testing.T) {
 				if !near(l.got, l.want, 2e-3) {
 					t.Errorf("%s = %.9g, want %.9g", l.name, l.got, l.want)
 				}
+			}
+		})
+	}
+}
+
+// roofTrue checks that a layer's top is the roof its planes describe: every
+// plane point is a top point of the mesh, as high as its plane says, and the
+// planes' areas add up to SlopeArea. A fold between two near-parallel fronts
+// may sit up to skelFoldTol·size off (see skelFoldTol); size is the
+// outline's.
+func roofTrue(t *testing.T, r Roof, size, pitch float64) {
+	t.Helper()
+	e := r.Element
+	o := [3]float64{e.Placement[12], e.Placement[13], e.Placement[14]}
+	var extent float64
+	for _, v := range e.Verts {
+		extent = math.Max(extent, math.Abs(float64(v)))
+	}
+	slope, c := math.Tan(pitch*math.Pi/180), math.Cos(pitch*math.Pi/180)
+	round := 4 * extent * math.Pow(2, -23)
+	planTol := 1e-3 + round
+	zTol := slope*(planTol+skelFoldTol*size) + round
+	top := e.Verts[:len(e.Verts)/2]
+	var area float64
+	for k, p := range r.Planes {
+		area += polygonArea2D(p.Outline)
+		for _, uv := range p.Outline {
+			var w [3]float64
+			for i := range w {
+				w[i] = p.Origin[i] + uv[0]*p.U[i] + uv[1]*p.V[i] - o[i]
+			}
+			best := math.Inf(1)
+			for i := 0; i+2 < len(top); i += 3 {
+				if math.Hypot(float64(top[i])-w[0], float64(top[i+1])-w[1]) <= planTol {
+					best = math.Min(best, math.Abs(float64(top[i+2])-w[2]))
+				}
+			}
+			if best > zTol {
+				t.Fatalf("plane %d point %v: the mesh is %v off it (tolerance %v)", k, w, best, zTol)
+			}
+		}
+	}
+	var perimeter float64
+	for _, p := range r.Planes {
+		for i, a := range p.Outline {
+			b := p.Outline[(i+1)%len(p.Outline)]
+			perimeter += math.Hypot(b[0]-a[0], b[1]-a[1])
+		}
+	}
+	if q := r.Quantities.SlopeArea; math.Abs(area-q) > 1e-8*q+skelPointTol*size*perimeter/c {
+		t.Fatalf("planes cover %v, slope area %v", area, q)
+	}
+}
+
+// A front landing almost parallel on a gable slides its vertex along the
+// gable at 1/sin of their angle: the roof must still lie on its planes.
+func TestRoofNearParallelLanding(t *testing.T) {
+	cases := []struct {
+		name    string
+		outline [][2]float64
+		gables  []int
+		pitch   float64
+	}{
+		{"short front", [][2]float64{{0, 0}, {20, 0}, {22, 8}, {0.24, 7.999999}, {0, 8}, {-200, 8}}, []int{0, 5}, 30},
+		{"long front", [][2]float64{{0, 0}, {75, 0}, {77, 8}, {0.238, 7.99999}, {0, 8}, {-690, 8}}, []int{0, 5}, 30},
+		{"three gables", [][2]float64{{-10.5, 0}, {10, -164}, {10, 1}, {10.00001, 80}, {0, 8}, {0, 2.667}}, []int{0, 1, 2}, 34},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			spec := RoofSpec{Pitch: c.pitch, Gables: c.gables, Eaves: 3}
+			roofs, err := BuildRoofLayers(c.outline, spec, []float64{0.05, 0.15})
+			if err != nil {
+				t.Fatalf("BuildRoofLayers: %v", err)
+			}
+			for _, r := range roofs {
+				roofTrue(t, r, ringSize(c.outline), c.pitch)
 			}
 		})
 	}
