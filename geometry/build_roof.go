@@ -197,19 +197,35 @@ func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 		}
 	}
 	// The sides stand on the top's boundary: every cap edge no other
-	// triangle shares, run as its triangle runs, the solid on its left.
+	// triangle shares, run as its triangle runs, the solid on its left. Faces
+	// that overlap, however slightly, use an edge twice, and a pinch puts two
+	// boundary edges through one point: either way the shell would not close.
 	half := make(map[[2]uint32]bool, len(sh.cap))
 	for i := 0; i+2 < len(sh.cap); i += 3 {
+		t := sh.cap[i : i+3]
+		if t[0] == t[1] || t[1] == t[2] || t[0] == t[2] {
+			return roofShell{}, errSkelTooComplex()
+		}
 		for k := range 3 {
-			half[[2]uint32{sh.cap[i+k], sh.cap[i+(k+1)%3]}] = true
+			e := [2]uint32{t[k], t[(k+1)%3]}
+			if half[e] {
+				return roofShell{}, errSkelTooComplex()
+			}
+			half[e] = true
 		}
 	}
+	from, to := map[uint32]bool{}, map[uint32]bool{}
 	for i := 0; i+2 < len(sh.cap); i += 3 {
 		for k := range 3 {
 			a, e := sh.cap[i+k], sh.cap[i+(k+1)%3]
-			if !half[[2]uint32{e, a}] {
-				sh.rim = append(sh.rim, [2]uint32{a, e})
+			if half[[2]uint32{e, a}] {
+				continue
 			}
+			if from[a] || to[e] {
+				return roofShell{}, errSkelTooComplex()
+			}
+			from[a], to[e] = true, true
+			sh.rim = append(sh.rim, [2]uint32{a, e})
 		}
 	}
 	return sh, nil
