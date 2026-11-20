@@ -24,7 +24,7 @@ type RoofQuantities struct {
 type Roof struct {
 	Element    Element
 	Quantities RoofQuantities
-	Planes     []Face // one per sloped plane of the layer's top, by outline edge
+	Planes     []Face // one per sloped plane of the layer's top, by its first outline edge
 }
 
 // BuildRoofLayers builds a pitched roof over a plan outline (meters, either
@@ -53,6 +53,8 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 			speed[m] = 1
 		}
 	}
+	planArea := polygonArea2D(ring)
+	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, planArea)
 	pitch := spec.Pitch * math.Pi / 180
 	slope, c := math.Tan(pitch), math.Cos(pitch)
 	b := newBudget()
@@ -75,7 +77,7 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 		return nil, err
 	}
 	lines := roofLines(ring, speed, arcs, slope)
-	lines.PlanArea = polygonArea2D(ring)
+	lines.PlanArea = planArea
 	lines.SlopeArea = lines.PlanArea / c
 
 	origin := [3]float64{outline[0][0], outline[0][1], spec.Eaves}
@@ -95,6 +97,25 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 		}
 	}
 	return roofs, nil
+}
+
+// joinCollinear drops each ring point between two sloped edges on one line,
+// as a T-join leaves, so that one plane is one face with no line across it.
+// The joined edge is the lower-numbered of the caller's two. A point stays
+// when the sliver it would cut off is more than a trace of the plan area.
+func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, area float64) ([][2]float64, []int, []float64) {
+	for k := 0; k < len(ring); {
+		n := len(ring)
+		p := (k + n - 1) % n
+		if n > 3 && speed[p] != 0 && speed[k] != 0 && collinearEdges(ring, p, k) &&
+			math.Abs(cross2D(ring[p], ring[k], ring[(k+1)%n])) <= 2e-12*area {
+			edgeOf[p] = min(edgeOf[p], edgeOf[k])
+			ring, edgeOf, speed = slices.Delete(ring, k, k+1), slices.Delete(edgeOf, k, k+1), slices.Delete(speed, k, k+1)
+			continue
+		}
+		k++
+	}
+	return ring, edgeOf, speed
 }
 
 // callerEdges maps a skeleton's *RoofError from ring edges to the caller's.

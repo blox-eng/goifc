@@ -147,12 +147,19 @@ func TestRoofMonoNotch(t *testing.T) {
 	checkRoofQuantities(t, r, roofWant{1, 74, 10, 0, 0, 0, 22 / roofC, 10})
 }
 
-// A point inside an eaves edge splits it in two on one line: the arc between
-// their faces is no ridge.
+// A point inside an eaves edge, as a T-join leaves, keeps one plane over the
+// two edges and no line between them, either winding; gables and refusals
+// still name the caller's edges.
 func TestRoofCollinearEavesPoint(t *testing.T) {
 	split := [][2]float64{{0, 0}, {5, 0}, {10, 0}, {10, 8}, {0, 8}}
-	r := buildRoof(t, split, roofSpec())[0]
-	checkRoofQuantities(t, r, roofWant{5, 80, 36, 2, 4 * math.Sqrt(32+16*roofS*roofS), 0, 0, 0})
+	hip := roofWant{4, 80, 36, 2, 4 * math.Sqrt(32+16*roofS*roofS), 0, 0, 0}
+	checkRoofQuantities(t, buildRoof(t, split, roofSpec())[0], hip)
+	checkRoofQuantities(t, buildRoof(t, reversed(split), roofSpec())[0], hip)
+	checkRoofQuantities(t, buildRoof(t, split, roofSpec(2, 4))[0], roofWant{2, 80, 20, 10, 0, 0, 4 * 4 / roofC, 0})
+
+	stepL := [][2]float64{{0, 0}, {9, 0}, {18, 0}, {18, 6}, {12, 6}, {12, 10}, {0, 10}}
+	_, err := BuildRoofLayers(stepL, roofSpec(3), []float64{0.2})
+	wantRoofError(t, err, ReasonRoofStep, 3)
 }
 
 func TestRoofOverhang(t *testing.T) {
