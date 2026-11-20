@@ -15,7 +15,7 @@
 - Package `geometry` imports no cgo, `os` or `net`.
 - Synthetic fixtures only; no private names in code, tests, docs or commits.
 - Every commit: a signed Conventional Commit, gated:
-  `! git diff --cached | rg -i '<private names>' | rg -v 'blox-eng/goifc' && git commit -S ...`
+  `! git diff --cached | sed 's#blox-eng/goifc##g' | rg -i '<private names>' && git commit -S ...`
   (the controller holds the name list; never write it into the repo). Never `--no-verify`.
 - Pitch in (0°, 75°]; Overhang in [0, 3] m; outline: `checkOutline` plus at most 256 points.
 - Edge i runs `outline[i] → outline[i+1]` (wrapping). Layers are top first.
