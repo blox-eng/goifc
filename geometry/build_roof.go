@@ -54,7 +54,7 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 		}
 	}
 	planArea := polygonArea2D(ring)
-	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, planArea)
+	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, skelPointTol*math.Sqrt(planArea))
 	pitch := spec.Pitch * math.Pi / 180
 	slope, c := math.Tan(pitch), math.Cos(pitch)
 	b := newBudget()
@@ -102,13 +102,13 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 // joinCollinear drops each ring point between two sloped edges on one line,
 // as a T-join leaves, so that one plane is one face with no line across it.
 // The joined edge is the lower-numbered of the caller's two. A point stays
-// when the sliver it would cut off is more than a trace of the plan area.
-func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, area float64) ([][2]float64, []int, []float64) {
+// when it is more than tol metres off the line its neighbours span.
+func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, tol float64) ([][2]float64, []int, []float64) {
 	for k := 0; k < len(ring); {
 		n := len(ring)
 		p := (k + n - 1) % n
-		if n > 3 && speed[p] != 0 && speed[k] != 0 && collinearEdges(ring, p, k) &&
-			math.Abs(cross2D(ring[p], ring[k], ring[(k+1)%n])) <= 2e-12*area {
+		if q := ring[(k+1)%n]; n > 3 && speed[p] != 0 && speed[k] != 0 && collinearEdges(ring, p, k) &&
+			math.Abs(cross2D(ring[p], ring[k], q)) <= tol*dist2(ring[p], q) {
 			edgeOf[p] = min(edgeOf[p], edgeOf[k])
 			ring, edgeOf, speed = slices.Delete(ring, k, k+1), slices.Delete(edgeOf, k, k+1), slices.Delete(speed, k, k+1)
 			continue
@@ -293,6 +293,12 @@ func (sh roofShell) tris() []uint32 {
 // Edges any closer are one roof drawn a little out of square.
 const roofLevel = 1e-2
 
+// roofFold is the sine of the turn between two sloped edges under which no
+// line runs between their planes: they fold by under 1 mm per metre, finer
+// than a survey or a drawing fixes a wall line, so the turn is noise and
+// not a hip or a valley to build or price.
+const roofFold = 1e-3
+
 // roofLines measures the plumb line's sloped edges and the skeleton's arcs.
 func roofLines(ring [][2]float64, speed []float64, arcs []skelArc, slope float64) RoofQuantities {
 	var q RoofQuantities
@@ -313,8 +319,8 @@ func roofLines(ring [][2]float64, speed []float64, arcs []skelArc, slope float64
 		nl, nr := inward[a.Left], inward[a.Right]
 		switch sl, sr := speed[a.Left] != 0, speed[a.Right] != 0; {
 		case sl && sr:
-			if nl[0]*nr[0]+nl[1]*nr[1] > 0 && math.Abs(nl[0]*nr[1]-nl[1]*nr[0]) <= roofCollinear {
-				continue // one plane: the edges are on one line
+			if nl[0]*nr[0]+nl[1]*nr[1] > 0 && math.Abs(nl[0]*nr[1]-nl[1]*nr[0]) <= roofFold {
+				continue // no line: the edges are on one line, or near enough
 			}
 			// Just left of the arc the roof is Left's plane; Right's plane
 			// rising above it there means the roof folds outward.

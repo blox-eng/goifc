@@ -161,6 +161,28 @@ func TestRoofCollinearEavesPoint(t *testing.T) {
 	stepL := [][2]float64{{0, 0}, {9, 0}, {18, 0}, {18, 6}, {12, 6}, {12, 10}, {0, 10}}
 	_, err := BuildRoofLayers(stepL, roofSpec(3), []float64{0.2})
 	wantRoofError(t, err, ReasonRoofStep, 3)
+
+	// Turned off the axes and moved to national-grid coordinates, the mid
+	// point rounds a few nm off the line: still one plane.
+	grid := make([][2]float64, len(split))
+	for i, p := range split {
+		grid[i] = [2]float64{4.5e6 + 0.28*p[0] - 0.96*p[1], 5.6e5 + 0.96*p[0] + 0.28*p[1]}
+	}
+	checkRoofQuantities(t, buildRoof(t, grid, roofSpec())[0], hip)
+}
+
+// A point a survey's noise off an eaves edge keeps its two planes but draws
+// no line between them, on either side of the edge.
+func TestRoofNearCollinearEavesPoint(t *testing.T) {
+	hip := 4 * math.Sqrt(32+16*roofS*roofS)
+	for _, y := range []float64{1e-7, -1e-7} {
+		r := buildRoof(t, [][2]float64{{0, 0}, {5, y}, {10, 0}, {10, 8}, {0, 8}}, roofSpec())[0]
+		q := r.Quantities
+		if len(r.Planes) != 5 || !near(q.PlanArea, 80, 1e-6) || !near(q.Eaves, 36, 1e-6) ||
+			!near(q.Ridge, 2, 1e-6) || !near(q.Hip, hip, 1e-6) || q.Valley != 0 || q.Verge != 0 || q.Top != 0 {
+			t.Errorf("mid point at y %g: %+v (%d planes), want the rectangle's lines (5 planes)", y, q, len(r.Planes))
+		}
+	}
 }
 
 func TestRoofOverhang(t *testing.T) {
