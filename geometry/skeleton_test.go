@@ -316,3 +316,33 @@ func TestSkeletonTilesOutlines(t *testing.T) {
 		})
 	}
 }
+
+// The tiling check is the one guard against a face gone missing: dropping
+// any face of a slender hip strip must fail it.
+func TestSkelTilingCatchesMissingFace(t *testing.T) {
+	ring := [][2]float64{{0, 0}, {20, 0}, {20, 0.001}, {0, 0.001}}
+	faces, _, err := weightedSkeleton(ring, skelSpeeds(len(ring)), skelS, newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &skeleton{ring: ring, speed: skelSpeeds(len(ring)), tolP: skelPointTol * ringSize(ring)}
+	area := func(f skelFace) float64 {
+		plan := make([][2]float64, len(f.Poly))
+		for i, p := range f.Poly {
+			plan[i] = [2]float64{p[0], p[1]}
+		}
+		return polygonArea2D(plan)
+	}
+	var total float64
+	for _, f := range faces {
+		total += area(f)
+	}
+	if !s.tiles(total) {
+		t.Fatalf("the whole face set (area %v) does not tile the ring", total)
+	}
+	for _, f := range faces {
+		if s.tiles(total - area(f)) {
+			t.Errorf("the faces tile the ring without edge %d's face (area %v)", f.Edge, area(f))
+		}
+	}
+}

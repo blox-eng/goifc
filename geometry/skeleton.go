@@ -24,6 +24,7 @@ const (
 	skelTimeTol  = 1e-9 // events this close in time are one event
 	skelPointTol = 1e-9 // points this close are one point
 	skelLineTol  = 1e-7 // a vertex this close to an edge it is due to reach is on it
+	skelAreaTol  = 1e-9 // the faces must tile the ring this closely, gables aside
 )
 
 // skelFoldTol is the sine under which two edges whose fronts meet head on
@@ -238,10 +239,17 @@ func (s *skeleton) settle(work []int) error {
 }
 
 // antiparallel reports whether edges a and b run opposite ways along one
-// line, as two fronts that meet head on do.
+// line, as two fronts that meet head on do. Two sloped fronts fold within
+// skelFoldTol; a sloped front and a gable only when exactly on one line, as
+// a mono roof's high gable is. Short of that, velocity slides the vertex
+// along the gable and refuses the step where it would lengthen it.
 func (s *skeleton) antiparallel(a, b int) bool {
 	da, db := s.dir[a], s.dir[b]
-	return da[0]*db[0]+da[1]*db[1] < 0 && math.Abs(da[0]*db[1]-da[1]*db[0]) <= skelFoldTol
+	tol := skelFoldTol
+	if s.speed[a] != s.speed[b] {
+		tol = roofCollinear
+	}
+	return da[0]*db[0]+da[1]*db[1] < 0 && math.Abs(da[0]*db[1]-da[1]*db[0]) <= tol
 }
 
 // nodeAt returns the node at p made at now, making it if there is none.
@@ -486,10 +494,7 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		return [3]float64{nd.p[0], nd.p[1], nd.t * slope}
 	}
 	var faces []skelFace
-	var total, perimeter float64
-	for e := range n {
-		perimeter += dist2(s.ring[e], s.ring[(e+1)%n])
-	}
+	var total float64
 	for e := range n {
 		if s.speed[e] == 0 {
 			continue
@@ -525,9 +530,7 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		total += polygonArea2D(plan)
 		faces = append(faces, skelFace{e, poly})
 	}
-	// The faces must tile the ring. Nodes merge within tolP, so the faces'
-	// sides may stray that far from the ring's all along its perimeter.
-	if want := polygonArea2D(s.ring); math.Abs(total-want) > s.tolP*perimeter {
+	if !s.tiles(total) {
 		return nil, nil, errSkelTooComplex()
 	}
 	arcs := make([]skelArc, 0, len(s.arcs))
@@ -537,6 +540,21 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		}
 	}
 	return faces, arcs, nil
+}
+
+// tiles reports whether faces of this total plan area tile the ring. A
+// face starts on its own eaves edge's two points, so only along a gable,
+// where no ring point pins it, can a face's side stray: by up to tolP, the
+// distance within which nodes merge.
+func (s *skeleton) tiles(total float64) bool {
+	var gables float64
+	for e := range s.ring {
+		if s.speed[e] == 0 {
+			gables += dist2(s.ring[e], s.ring[(e+1)%len(s.ring)])
+		}
+	}
+	want := polygonArea2D(s.ring)
+	return math.Abs(total-want) <= skelAreaTol*want+s.tolP*gables
 }
 
 func dist2(a, b [2]float64) float64 { return math.Hypot(a[0]-b[0], a[1]-b[1]) }

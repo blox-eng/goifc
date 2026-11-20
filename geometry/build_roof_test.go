@@ -355,3 +355,26 @@ func TestRoofNearParallelNoise(t *testing.T) {
 		})
 	}
 }
+
+// A sloped front that meets a gable a few µm off head on, as a mono roof's
+// high gable, builds as it does when exactly parallel.
+func TestRoofNearHeadOnGable(t *testing.T) {
+	cases := []struct {
+		name    string
+		outline [][2]float64
+		gables  []int
+	}{
+		{"mono, high gable tilted down", [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 7.99999}}, []int{1, 2, 3}},
+		{"mono, high gable tilted up", [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8.00001}}, []int{1, 2, 3}},
+		{"front reaches a gable", [][2]float64{{0, 0}, {1, 0}, {1.0001, 100}, {0, 100}}, []int{1}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, r := range buildRoof(t, c.outline, roofSpec(c.gables...)) {
+				q := r.Quantities
+				meshAgrees(t, r.Element, q.Volume, 2*q.SlopeArea+2*q.PlanArea, 0,
+					q.SlopeArea, q.PlanArea, q.Volume, q.Eaves, q.Ridge, q.Hip, q.Valley, q.Verge, q.Top)
+			}
+		})
+	}
+}
