@@ -96,7 +96,7 @@ func checkRoof(outline [][2]float64, spec RoofSpec, layers []float64) (gable []b
 	if drop := total / math.Cos(spec.Pitch*math.Pi/180); drop > maxLocalExtent {
 		return nil, 0, tooLarge("the roof's drop %.6g m is over the %g m maximum", drop, maxLocalExtent)
 	}
-	area := math.Abs(polygonArea2D(outline))
+	area := math.Abs(polygonArea2D(localRing(outline)))
 	for g := range gable {
 		p, q := (g+n-1)%n, (g+1)%n
 		switch {

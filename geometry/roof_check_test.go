@@ -179,3 +179,21 @@ func TestPlumbLineRefusesACrossing(t *testing.T) {
 		t.Errorf("0.4 m leaves the neck open: %v", err)
 	}
 }
+
+// The gable check's tolerance follows the outline's own area, not where it
+// sits: a corner just inside it stays inside when the outline moves.
+func TestGableCollinearMoved(t *testing.T) {
+	w, h, e := 7.0/512, 1.0/64, math.Ldexp(1, -36)
+	outline := [][2]float64{{0, 0}, {w, 0}, {w, h}, {0, h}, {e, h / 2}}
+	for _, at := range [][2]float64{{0, 0}, {100000 + 1.0/256, 4600000}} {
+		moved := make([][2]float64, len(outline))
+		for i, p := range outline {
+			moved[i] = [2]float64{at[0] + p[0], at[1] + p[1]}
+		}
+		_, _, err := checkRoof(moved, RoofSpec{Pitch: 30, Gables: []int{3}}, []float64{0.2})
+		var re *RoofError
+		if !errors.As(err, &re) || *re != (RoofError{Reason: ReasonGableCollinear, Edge: 3, Other: 4}) {
+			t.Errorf("at %v: %v, want gable_collinear edge 3, other 4", at, err)
+		}
+	}
+}
