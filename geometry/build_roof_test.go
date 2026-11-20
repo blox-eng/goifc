@@ -193,6 +193,37 @@ func TestRoofCollinearPointOnGrid(t *testing.T) {
 	}
 }
 
+// A gable on one line with a sloped edge is refused at every turn of the
+// outline, at the origin and at national-grid coordinates, naming the same
+// edges as when it lies along the axes, however short the stub.
+func TestRoofGableCollinearOnGrid(t *testing.T) {
+	for _, outline := range [][][2]float64{
+		{{0, 0}, {0.2, 0}, {10, 0}, {10, 8}, {0, 8}},
+		{{0, 0}, {0.05, 0}, {10, 0}, {10, 8}, {0, 8}},
+	} {
+		for _, gables := range [][]int{{0}, {1}, {0, 2}, {1, 3}} {
+			_, err := BuildRoofLayers(outline, roofSpec(gables...), []float64{0.2})
+			var want *RoofError
+			if !errors.As(err, &want) || want.Reason != ReasonGableCollinear {
+				t.Fatalf("stub %g, gables %v along the axes: %v, want %s", outline[1][0], gables, err, ReasonGableCollinear)
+			}
+			for _, at := range [][2]float64{{0, 0}, {4512345.678, 561234.567}} {
+				for deg := 0; deg < 360; deg += 7 {
+					s, c := math.Sincos(float64(deg) * math.Pi / 180)
+					turned := make([][2]float64, len(outline))
+					for i, p := range outline {
+						turned[i] = [2]float64{at[0] + c*p[0] - s*p[1], at[1] + s*p[0] + c*p[1]}
+					}
+					_, err := BuildRoofLayers(turned, roofSpec(gables...), []float64{0.2})
+					if got := (*RoofError)(nil); !errors.As(err, &got) || *got != *want {
+						t.Errorf("stub %g, gables %v at %v, %d°: %v, want %+v", outline[1][0], gables, at, deg, err, *want)
+					}
+				}
+			}
+		}
+	}
+}
+
 // A point a survey's noise off an eaves edge keeps its two planes but draws
 // no line between them, on either side of the edge.
 func TestRoofNearCollinearEavesPoint(t *testing.T) {

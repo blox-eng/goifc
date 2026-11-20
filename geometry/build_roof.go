@@ -54,7 +54,7 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 		}
 	}
 	planArea := polygonArea2D(ring)
-	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, skelPointTol*math.Sqrt(planArea))
+	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, planArea)
 	pitch := spec.Pitch * math.Pi / 180
 	slope, c := math.Tan(pitch), math.Cos(pitch)
 	b := newBudget()
@@ -101,16 +101,13 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 
 // joinCollinear drops each ring point between two sloped edges on one line,
 // as a T-join leaves, so that one plane is one face with no line across it.
-// The joined edge is the lower-numbered of the caller's two. A point stays
-// when it is more than tol metres off the line its neighbours span, or not
-// between them along it, whatever the length of the edges it splits.
-func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, tol float64) ([][2]float64, []int, []float64) {
+// The joined edge is the lower-numbered of the caller's two; area is the
+// plan's, which sets how near the line a point must be (see onLine).
+func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, area float64) ([][2]float64, []int, []float64) {
 	for k := 0; k < len(ring); {
 		n := len(ring)
 		p := (k + n - 1) % n
-		a, b, c := ring[p], ring[k], ring[(k+1)%n]
-		if n > 3 && speed[p] != 0 && speed[k] != 0 && (b[0]-a[0])*(c[0]-b[0])+(b[1]-a[1])*(c[1]-b[1]) > 0 &&
-			math.Abs(cross2D(a, b, c)) <= tol*dist2(a, c) {
+		if n > 3 && speed[p] != 0 && speed[k] != 0 && onLine(ring[p], ring[k], ring[(k+1)%n], area) {
 			edgeOf[p] = min(edgeOf[p], edgeOf[k])
 			ring, edgeOf, speed = slices.Delete(ring, k, k+1), slices.Delete(edgeOf, k, k+1), slices.Delete(speed, k, k+1)
 			continue

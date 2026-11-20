@@ -96,30 +96,26 @@ func checkRoof(outline [][2]float64, spec RoofSpec, layers []float64) (gable []b
 	if drop := total / math.Cos(spec.Pitch*math.Pi/180); drop > maxLocalExtent {
 		return nil, 0, tooLarge("the roof's drop %.6g m is over the %g m maximum", drop, maxLocalExtent)
 	}
+	area := math.Abs(polygonArea2D(outline))
 	for g := range gable {
-		if !gable[g] {
-			continue
-		}
-		for _, nb := range [2]int{(g + n - 1) % n, (g + 1) % n} {
-			if !gable[nb] && collinearEdges(outline, g, nb) {
-				return nil, 0, &RoofError{Reason: ReasonGableCollinear, Edge: g, Other: nb}
-			}
+		p, q := (g+n-1)%n, (g+1)%n
+		switch {
+		case !gable[g]:
+		case !gable[p] && onLine(outline[p], outline[g], outline[q], area):
+			return nil, 0, &RoofError{Reason: ReasonGableCollinear, Edge: g, Other: p}
+		case !gable[q] && onLine(outline[g], outline[q], outline[(q+1)%n], area):
+			return nil, 0, &RoofError{Reason: ReasonGableCollinear, Edge: g, Other: q}
 		}
 	}
 	return gable, total, nil
 }
 
-// collinearEdges reports whether two edges that share a point run the same
-// way along one line.
-func collinearEdges(outline [][2]float64, i, j int) bool {
-	n := len(outline)
-	ai, bi := outline[i], outline[(i+1)%n]
-	aj, bj := outline[j], outline[(j+1)%n]
-	di := [2]float64{bi[0] - ai[0], bi[1] - ai[1]}
-	dj := [2]float64{bj[0] - aj[0], bj[1] - aj[1]}
-	cross := di[0]*dj[1] - di[1]*dj[0]
-	dot := di[0]*dj[0] + di[1]*dj[1]
-	return dot > 0 && math.Abs(cross) <= roofCollinear*math.Hypot(di[0], di[1])*math.Hypot(dj[0], dj[1])
+// onLine reports whether b lies between a and c and on their line, within
+// a nanometre per metre of a plan of the given area: edges a-b and b-c are
+// one line however short either is.
+func onLine(a, b, c [2]float64, area float64) bool {
+	return (b[0]-a[0])*(c[0]-b[0])+(b[1]-a[1])*(c[1]-b[1]) > 0 &&
+		math.Abs(cross2D(a, b, c)) <= skelPointTol*math.Sqrt(area)*dist2(a, c)
 }
 
 // plumbLine returns the outline as a counter-clockwise ring relative to
