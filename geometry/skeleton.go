@@ -570,12 +570,14 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 }
 
 // onPlane reports whether node i is where edge e's front passes at the
-// node's time. A fold between two near-parallel fronts is off by up to
-// skelFoldTol·size/2 (see skelFoldTol); anything further is a wrong roof.
+// node's time, within skelLineTol of the ring's size. A fold between two
+// near-parallel fronts can land further off, up to θ along its ridge (see
+// skelFoldTol), which at a steep pitch is millimetres off the plane: that
+// roof is refused, not built a little wrong.
 func (s *skeleton) onPlane(e, i int) bool {
 	nd, a, ne := s.nodes[i], s.ring[e], s.normal[e]
 	d := ne[0]*(nd.p[0]-a[0]) + ne[1]*(nd.p[1]-a[1])
-	return math.Abs(nd.t-d) <= skelFoldTol*s.size
+	return math.Abs(nd.t-d) <= skelLineTol*s.size
 }
 
 // tiles reports whether faces of this total plan area tile the ring. A

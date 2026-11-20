@@ -509,7 +509,7 @@ func TestRoofSkewedLevelLines(t *testing.T) {
 // roofTrue checks that a layer's top is the roof its planes describe: every
 // plane point is a top point of the mesh, as high as its plane says, and the
 // planes' areas add up to SlopeArea. A fold between two near-parallel fronts
-// may sit up to skelFoldTol·size off (see skelFoldTol); size is the
+// may sit up to skelLineTol·size off in plan (see onPlane); size is the
 // outline's.
 func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	t.Helper()
@@ -522,7 +522,7 @@ func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	slope, c := math.Tan(pitch*math.Pi/180), math.Cos(pitch*math.Pi/180)
 	round := 4 * extent * math.Pow(2, -23)
 	planTol := 1e-3 + round
-	zTol := slope*(planTol+skelFoldTol*size) + round
+	zTol := slope*(planTol+skelLineTol*size) + round
 	top := e.Verts[:len(e.Verts)/2]
 	var area float64
 	for k, p := range r.Planes {
@@ -587,4 +587,18 @@ func TestRoofNearParallelLanding(t *testing.T) {
 func TestRoofNeedleNoOverhang(t *testing.T) {
 	r := buildRoof(t, [][2]float64{{0, 0}, {500, -0.01}, {500, 0.01}}, roofSpec())[0]
 	checkRoofQuantities(t, r, roofWant{3, 5, math.NaN(), math.NaN(), math.NaN(), 0, 0, 0})
+}
+
+// Fronts 5e-6 off parallel fold half a millimetre off one of them, nearly
+// 2 mm off its plane at 75°: refused, while the square rectangle builds.
+func TestRoofFoldOffPlaneRefused(t *testing.T) {
+	for _, pitch := range []float64{30, 75} {
+		spec := RoofSpec{Pitch: pitch, Eaves: 3}
+		_, err := BuildRoofLayers([][2]float64{{0, 0}, {100, 0}, {100, 10.0005}, {0, 10}}, spec, []float64{0.2})
+		var re *RoofError
+		if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
+			t.Errorf("pitch %g: %v, want %s", pitch, err, ReasonRoofTooComplex)
+		}
+		buildRoof(t, [][2]float64{{0, 0}, {100, 0}, {100, 10}, {0, 10}}, spec)
+	}
 }
