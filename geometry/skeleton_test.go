@@ -391,3 +391,72 @@ func ringSize(ring [][2]float64) float64 {
 	}
 	return math.Hypot(hi[0]-lo[0], hi[1]-lo[1])
 }
+
+// outOfSquare are roofs a person draws a hair out of square: opposite eaves
+// a few µm to 1 mm off parallel, inside skelFoldTol, so their fronts fold.
+var outOfSquare = []struct {
+	name    string
+	outline [][2]float64
+	gables  []int
+}{
+	{"10×8 hip", [][2]float64{{0, 0}, {10, 0}, {10, 8.0001}, {0, 8}}, nil},
+	{"50×12 hip", [][2]float64{{0, 0}, {50, 0}, {50, 12.0005}, {0, 12}}, nil},
+	{"L hip", [][2]float64{{0, 0}, {18, 0}, {18, 6.00001}, {12, 6}, {12, 10}, {0, 10}}, nil},
+	{"cross-gable L", [][2]float64{{0, 0}, {18, 0}, {18, 6}, {6.00001, 6}, {6, 14}, {0, 14}}, []int{1, 4}},
+	{"100×10 hip", [][2]float64{{0, 0}, {100, 0}, {100, 10.0005}, {0, 10}}, nil},
+	{"knife edge", [][2]float64{{0, 0}, {100, 0}, {100, 10.001}, {0, 10}}, nil},
+}
+
+// roofSkeleton runs a roof's own steps up to its skeleton: the ring is the
+// plumb line, local to the outline's first point.
+func roofSkeleton(outline [][2]float64, spec RoofSpec) ([][2]float64, []skelFace, error) {
+	gable, _, err := checkRoof(outline, spec, []float64{0.2})
+	if err != nil {
+		return nil, nil, err
+	}
+	ring, edgeOf, err := plumbLine(outline, spec.Overhang)
+	if err != nil {
+		return nil, nil, err
+	}
+	speed := make([]float64, len(ring))
+	for m := range ring {
+		if !gable[edgeOf[m]] {
+			speed[m] = 1
+		}
+	}
+	ring, _, speed = joinCollinear(ring, edgeOf, speed, polygonArea2D(ring))
+	faces, _, err := weightedSkeleton(ring, speed, math.Tan(spec.Pitch*math.Pi/180), newBudget())
+	return ring, faces, err
+}
+
+// Fronts that fold meet where their planes do: every face point is on its
+// plane to float64 rounding, at the origin and at grid coordinates.
+func TestSkeletonFoldOnPlanes(t *testing.T) {
+	for _, c := range outOfSquare {
+		for _, overhang := range []float64{0, 0.5} {
+			for _, off := range [][2]float64{{0, 0}, {4.5e6, 5.6e5}} {
+				outline := make([][2]float64, len(c.outline))
+				for i, p := range c.outline {
+					outline[i] = [2]float64{p[0] + off[0], p[1] + off[1]}
+				}
+				spec := RoofSpec{Pitch: 30, Gables: c.gables, Overhang: overhang}
+				ring, faces, err := roofSkeleton(outline, spec)
+				if err != nil {
+					t.Errorf("%s, overhang %g, at %v: %v", c.name, overhang, off, err)
+					continue
+				}
+				n, size := len(ring), ringSize(ring)
+				for _, f := range faces {
+					a, b := ring[f.Edge], ring[(f.Edge+1)%n]
+					l := math.Hypot(b[0]-a[0], b[1]-a[1])
+					for _, p := range f.Poly {
+						d := ((b[0]-a[0])*(p[1]-a[1]) - (b[1]-a[1])*(p[0]-a[0])) / l
+						if e := math.Abs(p[2]/skelS - d); e > 1e-11*size {
+							t.Errorf("%s, overhang %g, at %v: face %d point %v is %.3g off its plane", c.name, overhang, off, f.Edge, p, e)
+						}
+					}
+				}
+			}
+		}
+	}
+}

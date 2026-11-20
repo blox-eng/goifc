@@ -2,6 +2,7 @@ package geometry
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 )
@@ -508,9 +509,8 @@ func TestRoofSkewedLevelLines(t *testing.T) {
 
 // roofTrue checks that a layer's top is the roof its planes describe: every
 // plane point is a top point of the mesh, as high as its plane says, and the
-// planes' areas add up to SlopeArea. A fold between two near-parallel fronts
-// may sit up to skelLineTol·size off in plan (see onPlane); size is the
-// outline's.
+// planes' areas add up to SlopeArea; size is the outline's. A mesh point is
+// float32, and the weld may have moved it up to gridSnap.
 func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	t.Helper()
 	e := r.Element
@@ -521,8 +521,8 @@ func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	}
 	slope, c := math.Tan(pitch*math.Pi/180), math.Cos(pitch*math.Pi/180)
 	round := 4 * extent * math.Pow(2, -23)
-	planTol := 1e-3 + round
-	zTol := slope*(planTol+skelLineTol*size) + round
+	planTol := gridSnap + round
+	zTol := slope*planTol + round
 	top := e.Verts[:len(e.Verts)/2]
 	var area float64
 	for k, p := range r.Planes {
@@ -589,17 +589,83 @@ func TestRoofNeedleNoOverhang(t *testing.T) {
 	checkRoofQuantities(t, r, roofWant{3, 5, math.NaN(), math.NaN(), math.NaN(), 0, 0, 0})
 }
 
-// Fronts 5e-6 off parallel fold half a millimetre off one of them, nearly
-// 2 mm off its plane at 75°: refused, while the square rectangle builds.
-func TestRoofFoldOffPlaneRefused(t *testing.T) {
-	for _, pitch := range []float64{30, 75} {
-		spec := RoofSpec{Pitch: pitch, Eaves: 3}
-		_, err := BuildRoofLayers([][2]float64{{0, 0}, {100, 0}, {100, 10.0005}, {0, 10}}, spec, []float64{0.2})
-		var re *RoofError
-		if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
-			t.Errorf("pitch %g: %v, want %s", pitch, err, ReasonRoofTooComplex)
+// Roofs a hair out of square fold where their planes meet: each builds on
+// its planes at every pitch, overhang or not, and the same at grid
+// coordinates as at the origin.
+func TestRoofOutOfSquare(t *testing.T) {
+	for _, c := range outOfSquare {
+		for _, pitch := range []float64{15, 30, 45, 75} {
+			for _, overhang := range []float64{0, 0.5} {
+				t.Run(fmt.Sprintf("%s/%g°/overhang %g", c.name, pitch, overhang), func(t *testing.T) {
+					spec := RoofSpec{Pitch: pitch, Gables: c.gables, Overhang: overhang, Eaves: 3}
+					var at [2]Roof
+					for k, off := range [][2]float64{{0, 0}, {4.5e6, 5.6e5}} {
+						outline := make([][2]float64, len(c.outline))
+						for i, p := range c.outline {
+							outline[i] = [2]float64{p[0] + off[0], p[1] + off[1]}
+						}
+						for _, r := range buildRoof(t, outline, spec, 0.05, 0.15) {
+							q := r.Quantities
+							meshAgrees(t, r.Element, q.Volume, 2*q.SlopeArea+2*q.PlanArea, 0,
+								q.SlopeArea, q.PlanArea, q.Volume, q.Eaves, q.Ridge, q.Hip, q.Valley, q.Verge, q.Top)
+							at[k] = r
+						}
+					}
+					if !nearQuantities(at[0].Quantities, at[1].Quantities) {
+						t.Errorf("at the origin %+v, at grid coordinates %+v", at[0].Quantities, at[1].Quantities)
+					}
+				})
+			}
 		}
-		buildRoof(t, [][2]float64{{0, 0}, {100, 0}, {100, 10}, {0, 10}}, spec)
+	}
+}
+
+// Square plans with one corner moved 10 µm to 1 mm build, none refused.
+func TestRoofNearSquareSweep(t *testing.T) {
+	bay := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {7, 8}, {6, 9}, {4, 9}, {3, 8}, {0, 8}}
+	cross := [][2]float64{{0, 0}, {16, 0}, {16, 8}, {8, 8}, {8, 16}, {0, 16}}
+	shapes := []struct {
+		name    string
+		outline [][2]float64
+		gables  []int
+		corner  int // the point moved
+		axis    int
+	}{
+		{"10×8 hip", roofR, nil, 2, 1},
+		{"10×8 gable", roofR, []int{1, 3}, 2, 1},
+		{"10×8 clockwise", [][2]float64{{0, 0}, {0, 8}, {10, 8}, {10, 0}}, nil, 2, 1},
+		{"L hip", roofL, nil, 2, 1},
+		{"L gables", roofL, []int{1, 4}, 2, 1},
+		{"cross-gable L", cross, []int{1, 4}, 3, 0},
+		{"cross L hip", cross, nil, 3, 0},
+		{"50×12 hip", [][2]float64{{0, 0}, {50, 0}, {50, 12}, {0, 12}}, nil, 2, 1},
+		{"100×10 hip", [][2]float64{{0, 0}, {100, 0}, {100, 10}, {0, 10}}, nil, 2, 1},
+		{"bay hip", bay, nil, 2, 1},
+		{"bay gables", bay, []int{1, 7}, 2, 1},
+	}
+	for _, c := range shapes {
+		for _, d := range []float64{1e-5, 5e-5, 1e-4, 5e-4, 1e-3} {
+			for _, pitch := range []float64{15, 30, 45, 75} {
+				for _, overhang := range []float64{0, 0.5} {
+					for _, off := range [][2]float64{{0, 0}, {4.5e6, 5.6e5}} {
+						outline := make([][2]float64, len(c.outline))
+						for i, p := range c.outline {
+							outline[i] = [2]float64{p[0] + off[0], p[1] + off[1]}
+						}
+						outline[c.corner][c.axis] += d
+						spec := RoofSpec{Pitch: pitch, Gables: c.gables, Overhang: overhang, Eaves: 3}
+						roofs, err := BuildRoofLayers(outline, spec, []float64{0.05, 0.15})
+						if err != nil {
+							t.Errorf("%s, corner %g off, %g°, overhang %g, at %v: %v", c.name, d, pitch, overhang, off, err)
+							continue
+						}
+						for _, r := range roofs {
+							roofTrue(t, r, ringSize(outline), pitch)
+						}
+					}
+				}
+			}
+		}
 	}
 }
 

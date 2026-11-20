@@ -29,9 +29,10 @@ const (
 
 // skelFoldTol is the sine under which two edges whose fronts meet head on
 // fold into a ridge. Short of a fold, the vertex between them runs at
-// 1/sin(θ/2) and float64 loses its velocity as ε/θ²; the fold is off by θ
-// along the ridge. The two errors balance near θ = ε^⅓ ≈ 6e-6, rounded up to
-// 1e-5: a few µm across a wall of a metre or more.
+// 1/sin(θ/2) and float64 loses its velocity as ε/θ²; a fold instead takes
+// the ridge at once and ends it where the planes meet (see fold), running
+// ahead of other events by at most θ along the ridge. The two balance near
+// θ = ε^⅓ ≈ 6e-6, rounded up to 1e-5.
 const skelFoldTol = 1e-5
 
 type skelNode struct {
@@ -218,7 +219,8 @@ func (s *skeleton) step() error {
 
 // settle repairs the wavefront at now: it merges vertices that meet, closes
 // loops that have shrunk to a line, folds away fronts that meet head on, and
-// splits a loop where a vertex reaches one of its edges.
+// splits a loop where a vertex reaches one of its edges. Each vertex is
+// repaired at its own time (see when), its neighbours where they are then.
 func (s *skeleton) settle(work []int) error {
 	for len(work) > 0 {
 		v := work[len(work)-1]
@@ -227,24 +229,25 @@ func (s *skeleton) settle(work []int) error {
 		if x.dead {
 			continue
 		}
-		pv := s.pos(v)
+		t := s.when(v)
+		pv := s.posAt(v, t)
 		switch {
 		case x.next == v:
-			s.end(v, s.nodeAt(pv))
-		case dist2(pv, s.pos(x.next)) <= s.tolP:
-			work = append(work, s.merge(v, x.next, s.now))
-		case dist2(pv, s.pos(x.prev)) <= s.tolP:
-			work = append(work, s.merge(x.prev, v, s.now))
+			s.end(v, s.nodeAt(pv, t))
+		case dist2(pv, s.posAt(x.next, t)) <= s.tolP:
+			work = append(work, s.merge(v, x.next, t))
+		case dist2(pv, s.posAt(x.prev, t)) <= s.tolP:
+			work = append(work, s.merge(x.prev, v, t))
 		case x.prev == x.next:
 			q := x.next
-			nv, nq := s.nodeAt(pv), s.nodeAt(s.pos(q))
+			nv, nq := s.nodeAt(pv, t), s.nodeAt(s.posAt(q, t), t)
 			s.end(v, nv)
 			s.end(q, nq)
 			s.arcs = append(s.arcs, skelNodeArc{nv, nq, x.in, x.out})
 		case s.antiparallel(x.in, x.out):
-			work = append(work, s.fold(v))
+			work = append(work, s.fold(v, t))
 		default:
-			split, err := s.touch(v)
+			split, err := s.touch(v, t)
 			if err != nil {
 				return err
 			}
@@ -252,6 +255,15 @@ func (s *skeleton) settle(work []int) error {
 		}
 	}
 	return nil
+}
+
+// when is the time vertex v is at: a vertex made in this step starts at its
+// node's time, which a fold sets apart from now; any other is at now.
+func (s *skeleton) when(v int) float64 {
+	if node := s.verts[v].node; node >= s.eventNodes {
+		return s.nodes[node].t
+	}
+	return s.now
 }
 
 // antiparallel reports whether edges a and b run opposite ways along one
@@ -268,14 +280,15 @@ func (s *skeleton) antiparallel(a, b int) bool {
 	return da[0]*db[0]+da[1]*db[1] < 0 && math.Abs(da[0]*db[1]-da[1]*db[0]) <= tol
 }
 
-// nodeAt returns the node at p made at now, making it if there is none.
-func (s *skeleton) nodeAt(p [2]float64) int {
+// nodeAt returns the node at p made in this step, making it at time t if
+// there is none.
+func (s *skeleton) nodeAt(p [2]float64, t float64) int {
 	for i := s.eventNodes; i < len(s.nodes); i++ {
 		if dist2(s.nodes[i].p, p) <= s.tolP {
 			return i
 		}
 	}
-	s.nodes = append(s.nodes, skelNode{p, s.now})
+	s.nodes = append(s.nodes, skelNode{p, t})
 	return len(s.nodes) - 1
 }
 
@@ -288,11 +301,11 @@ func (s *skeleton) end(v, node int) {
 	x.dead = true
 }
 
-// spawn starts a vertex at node between edges in and out, linked between
-// prev and next.
+// spawn starts a vertex at node, at the node's time, between edges in and
+// out, linked between prev and next.
 func (s *skeleton) spawn(node, in, out, prev, next int) int {
 	v := len(s.verts)
-	s.verts = append(s.verts, skelVert{p0: s.nodes[node].p, t0: s.now, in: in, out: out, prev: prev, next: next, node: node})
+	s.verts = append(s.verts, skelVert{p0: s.nodes[node].p, t0: s.nodes[node].t, in: in, out: out, prev: prev, next: next, node: node})
 	if prev < 0 {
 		s.verts[v].prev, s.verts[v].next = v, v
 	} else {
@@ -307,7 +320,7 @@ func (s *skeleton) spawn(node, in, out, prev, next int) int {
 // time tolerance, so they meet where they are at t, not at now.
 func (s *skeleton) merge(u, w int, t float64) int {
 	pu, pw := s.posAt(u, t), s.posAt(w, t)
-	node := s.nodeAt([2]float64{(pu[0] + pw[0]) / 2, (pu[1] + pw[1]) / 2})
+	node := s.nodeAt([2]float64{(pu[0] + pw[0]) / 2, (pu[1] + pw[1]) / 2}, t)
 	xu, xw := s.verts[u], s.verts[w]
 	s.end(u, node)
 	s.end(w, node)
@@ -317,35 +330,78 @@ func (s *skeleton) merge(u, w int, t float64) int {
 	return s.spawn(node, xu.in, xw.out, xu.prev, xw.next)
 }
 
-// fold takes vertex v, whose two edges meet head on along one line, and the
-// overlap of its two segments up to the nearer neighbour: the overlap is a
-// ridge between the two edges, and the neighbour carries on along the other
-// edge.
-func (s *skeleton) fold(v int) int {
+// fold takes vertex v, whose two edges meet head on along one line, at time
+// t, and the overlap of its two segments up to the neighbour v reaches
+// first: the overlap is a ridge between the two edges, and the neighbour
+// carries on along the other edge. The ridge ends where the neighbour's
+// third edge crosses it, which for fronts a hair off parallel is a hair
+// after t: there all three planes meet.
+func (s *skeleton) fold(v int, t float64) int {
 	x := s.verts[v]
-	pv := s.pos(v)
-	node := s.nodeAt(pv)
+	pv := s.posAt(v, t)
+	node := s.nodeAt(pv, t)
 	s.end(v, node)
-	pp, pn := s.pos(x.prev), s.pos(x.next)
-	if dist2(pv, pn) <= dist2(pv, pp) {
-		nb := s.verts[x.next]
-		m := s.nodeAt(pn)
+	prev, next := s.verts[x.prev], s.verts[x.next]
+	pp, tp, okp := s.meet(x.in, x.out, prev.in, t)
+	pn, tn, okn := s.meet(x.in, x.out, next.out, t)
+	if !okp {
+		pp, tp = s.posAt(x.prev, t), t
+	}
+	if !okn {
+		pn, tn = s.posAt(x.next, t), t
+	}
+	if tn < tp-s.tolT || tn <= tp+s.tolT && dist2(pv, pn) <= dist2(pv, pp) {
+		m := s.nodeAt(pn, tn)
 		s.arcs = append(s.arcs, skelNodeArc{node, m, x.in, x.out})
 		s.end(x.next, m)
-		return s.spawn(m, x.in, nb.out, x.prev, nb.next)
+		return s.spawn(m, x.in, next.out, x.prev, next.next)
 	}
-	nb := s.verts[x.prev]
-	m := s.nodeAt(pp)
+	m := s.nodeAt(pp, tp)
 	s.arcs = append(s.arcs, skelNodeArc{m, node, x.out, x.in})
 	s.end(x.prev, m)
-	return s.spawn(m, nb.in, x.out, nb.prev, x.next)
+	return s.spawn(m, prev.in, x.out, prev.prev, x.next)
 }
 
-// touch splits v's loop where v lies on a segment of it that v is not on
-// already, and returns the vertices it made.
-func (s *skeleton) touch(v int) ([]int, error) {
+// meet returns the point and time at which the fronts of edges a, b and c
+// pass one point, when that is a fold's end: a well-posed point a hair after
+// t, no further than fronts within skelFoldTol can run along a ridge.
+func (s *skeleton) meet(a, b, c int, t float64) ([2]float64, float64, bool) {
+	var m [3][3]float64
+	var r [3]float64
+	for i, e := range [3]int{a, b, c} {
+		n := s.normal[e]
+		m[i] = [3]float64{n[0], n[1], -s.speed[e]}
+		r[i] = n[0]*s.ring[e][0] + n[1]*s.ring[e][1]
+	}
+	det := det3(m)
+	if math.Abs(det) <= skelFoldTol {
+		return [2]float64{}, 0, false
+	}
+	var sol [3]float64
+	for k := range sol {
+		mk := m
+		for i := range mk {
+			mk[i][k] = r[i]
+		}
+		sol[k] = det3(mk) / det
+	}
+	if sol[2] < t-s.tolT || sol[2] > t+skelFoldTol*s.size {
+		return [2]float64{}, 0, false
+	}
+	return [2]float64{sol[0], sol[1]}, sol[2], true
+}
+
+func det3(m [3][3]float64) float64 {
+	return m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1]) -
+		m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0]) +
+		m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0])
+}
+
+// touch splits v's loop where v lies at time t on a segment of it that v is
+// not on already, and returns the vertices it made.
+func (s *skeleton) touch(v int, t float64) ([]int, error) {
 	x := s.verts[v]
-	pv := s.pos(v)
+	pv := s.posAt(v, t)
 	best, bestD := -1, s.size*skelLineTol
 	steps := 0
 	for u := x.next; u != x.prev; u = s.verts[u].next {
@@ -354,7 +410,7 @@ func (s *skeleton) touch(v int) ([]int, error) {
 		if u == x.next || w == x.prev {
 			continue
 		}
-		if d := segmentDistance(pv, s.pos(u), s.pos(w)); d <= bestD {
+		if d := segmentDistance(pv, s.posAt(u, t), s.posAt(w, t)); d <= bestD {
 			best, bestD = u, d
 		}
 	}
@@ -368,15 +424,15 @@ func (s *skeleton) touch(v int) ([]int, error) {
 	w := s.verts[u].next
 	// v is on that segment: the split is there, not up to skelLineTol off
 	// it, where the faces beyond would miss the ring.
-	pu, pw := s.pos(u), s.pos(w)
+	pu, pw := s.posAt(u, t), s.posAt(w, t)
 	d := [2]float64{pw[0] - pu[0], pw[1] - pu[1]}
 	if l2 := d[0]*d[0] + d[1]*d[1]; l2 > 0 {
 		k := max(0, min(1, ((pv[0]-pu[0])*d[0]+(pv[1]-pu[1])*d[1])/l2))
 		pv = [2]float64{pu[0] + k*d[0], pu[1] + k*d[1]}
 	}
-	node := s.nodeAt(pv)
+	node := s.nodeAt(pv, t)
 	for _, c := range [2]int{u, w} {
-		if dist2(pv, s.pos(c)) > s.size*skelLineTol {
+		if dist2(pv, s.posAt(c, t)) > s.size*skelLineTol {
 			continue
 		}
 		// v meets vertex c head on: each carries on along the other's edge.
@@ -570,10 +626,7 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 }
 
 // onPlane reports whether node i is where edge e's front passes at the
-// node's time, within skelLineTol of the ring's size. A fold between two
-// near-parallel fronts can land further off, up to θ along its ridge (see
-// skelFoldTol), which at a steep pitch is millimetres off the plane: that
-// roof is refused, not built a little wrong.
+// node's time, within skelLineTol of the ring's size.
 func (s *skeleton) onPlane(e, i int) bool {
 	nd, a, ne := s.nodes[i], s.ring[e], s.normal[e]
 	d := ne[0]*(nd.p[0]-a[0]) + ne[1]*(nd.p[1]-a[1])
