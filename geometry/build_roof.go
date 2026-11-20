@@ -60,6 +60,15 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 	if err != nil {
 		return nil, callerEdges(err, edgeOf)
 	}
+	var rise float64
+	for _, f := range faces {
+		for _, p := range f.Poly {
+			rise = max(rise, p[2])
+		}
+	}
+	if h := rise + total/c; h > maxLocalExtent {
+		return nil, tooLarge("the roof's height %.6g m is over the %g m maximum", h, maxLocalExtent)
+	}
 	slices.SortFunc(faces, func(x, y skelFace) int { return cmp.Compare(edgeOf[x.Edge], edgeOf[y.Edge]) })
 	sh, err := roofShellOf(faces, b)
 	if err != nil {

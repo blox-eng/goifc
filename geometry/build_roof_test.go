@@ -378,3 +378,15 @@ func TestRoofNearHeadOnGable(t *testing.T) {
 		})
 	}
 }
+
+// A roof whose ridge rises past the local extent is too large, as a drop is.
+func TestRoofRiseTooLarge(t *testing.T) {
+	big := [][2]float64{{0, 0}, {700, 0}, {700, 600}, {0, 600}}
+	roofs, err := BuildRoofLayers(big, RoofSpec{Pitch: 75}, []float64{0.2})
+	if !errors.Is(err, ErrTooLarge) || roofs != nil {
+		t.Fatalf("a 1,120 m rise: got %d roofs, err %v; want ErrTooLarge", len(roofs), err)
+	}
+	if _, err := BuildRoofLayers(big, RoofSpec{Pitch: 60}, []float64{0.2}); err != nil {
+		t.Fatalf("a 520 m rise: %v", err)
+	}
+}

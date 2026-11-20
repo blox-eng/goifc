@@ -68,24 +68,24 @@ func checkRoof(outline [][2]float64, spec RoofSpec, layers []float64) (gable []b
 		return nil, 0, err
 	}
 	if p := spec.Pitch; !(p > 0 && p <= maxPitch) {
-		return nil, 0, &RoofError{ReasonPitchOutOfRange, -1, -1}
+		return nil, 0, &RoofError{Reason: ReasonPitchOutOfRange, Edge: -1, Other: -1}
 	}
 	if o := spec.Overhang; !(o >= 0 && o <= maxOverhang) {
-		return nil, 0, &RoofError{ReasonOverhangOutOfRange, -1, -1}
+		return nil, 0, &RoofError{Reason: ReasonOverhangOutOfRange, Edge: -1, Other: -1}
 	}
 	n := len(outline)
 	gable = make([]bool, n)
 	for _, g := range spec.Gables {
 		switch {
 		case g < 0 || g >= n:
-			return nil, 0, &RoofError{ReasonGableOutOfRange, g, -1}
+			return nil, 0, &RoofError{Reason: ReasonGableOutOfRange, Edge: g, Other: -1}
 		case gable[g]:
-			return nil, 0, &RoofError{ReasonGableRepeated, g, -1}
+			return nil, 0, &RoofError{Reason: ReasonGableRepeated, Edge: g, Other: -1}
 		}
 		gable[g] = true
 	}
 	if len(spec.Gables) == n {
-		return nil, 0, &RoofError{ReasonNoSlopedEdge, -1, -1}
+		return nil, 0, &RoofError{Reason: ReasonNoSlopedEdge, Edge: -1, Other: -1}
 	}
 	if err := checkOrigin("eaves", spec.Eaves); err != nil {
 		return nil, 0, err
@@ -102,7 +102,7 @@ func checkRoof(outline [][2]float64, spec RoofSpec, layers []float64) (gable []b
 		}
 		for _, nb := range [2]int{(g + n - 1) % n, (g + 1) % n} {
 			if !gable[nb] && collinearEdges(outline, g, nb) {
-				return nil, 0, &RoofError{ReasonGableCollinear, g, nb}
+				return nil, 0, &RoofError{Reason: ReasonGableCollinear, Edge: g, Other: nb}
 			}
 		}
 	}
@@ -144,7 +144,7 @@ func plumbLine(outline [][2]float64, overhang float64) (ring [][2]float64, edgeO
 		}
 	}
 	refuse := func(i, j int) error {
-		return &RoofError{ReasonOverhangClosesOutline, edgeOf[i], edgeOf[j]}
+		return &RoofError{Reason: ReasonOverhangClosesOutline, Edge: edgeOf[i], Other: edgeOf[j]}
 	}
 	normal := make([][2]float64, n)
 	for i := range ring {
