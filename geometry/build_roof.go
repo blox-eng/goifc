@@ -61,7 +61,7 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 		return nil, callerEdges(err, edgeOf)
 	}
 	slices.SortFunc(faces, func(x, y skelFace) int { return cmp.Compare(edgeOf[x.Edge], edgeOf[y.Edge]) })
-	sh, err := roofShellOf(ring, speed, faces, b)
+	sh, err := roofShellOf(faces, b)
 	if err != nil {
 		return nil, err
 	}
@@ -104,29 +104,51 @@ func callerEdges(err error, edgeOf []int) error {
 }
 
 // roofShell is a roof layer's mesh before its heights: the top's points with
-// their skeleton heights, its triangles, and each plumb-line edge's top points
-// in ring order. The bottom repeats the top's points.
+// their skeleton heights, its triangles, and the top's boundary edges, where
+// the vertical sides stand. The bottom repeats the top's points.
 type roofShell struct {
 	pts [][3]float64
 	cap []uint32 // counter-clockwise from above
-	rim [][]uint32
+	rim [][2]uint32
 }
 
-func roofShellOf(ring [][2]float64, speed []float64, faces []skelFace, b *budget) (roofShell, error) {
+func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 	var sh roofShell
-	index := map[[2]float64]uint32{}
-	for _, f := range faces {
-		plan := make([][2]float64, len(f.Poly))
-		ids := make([]uint32, len(f.Poly))
-		for i, p := range f.Poly {
-			plan[i] = [2]float64{p[0], p[1]}
-			id, ok := index[plan[i]]
-			if !ok {
-				id = uint32(len(sh.pts))
-				index[plan[i]] = id
-				sh.pts = append(sh.pts, p)
+	// Points closer than the mesh grid snap are one point: a skeleton line
+	// can end a hair from a corner, too close for float32 to keep apart.
+	cells := map[[2]int64][]uint32{}
+	weld := func(p [3]float64) uint32 {
+		c := [2]int64{int64(math.Floor(p[0] / gridSnap)), int64(math.Floor(p[1] / gridSnap))}
+		for dx := int64(-1); dx <= 1; dx++ {
+			for dy := int64(-1); dy <= 1; dy++ {
+				for _, id := range cells[[2]int64{c[0] + dx, c[1] + dy}] {
+					if q := sh.pts[id]; math.Hypot(q[0]-p[0], q[1]-p[1]) < gridSnap {
+						return id
+					}
+				}
 			}
-			ids[i] = id
+		}
+		id := uint32(len(sh.pts))
+		cells[c] = append(cells[c], id)
+		sh.pts = append(sh.pts, p)
+		return id
+	}
+	for _, f := range faces {
+		var plan [][2]float64
+		var ids []uint32
+		for _, p := range f.Poly {
+			id := weld(p)
+			if len(ids) > 0 && id == ids[len(ids)-1] {
+				continue
+			}
+			ids = append(ids, id)
+			plan = append(plan, [2]float64{sh.pts[id][0], sh.pts[id][1]})
+		}
+		for len(ids) > 1 && ids[len(ids)-1] == ids[0] {
+			ids, plan = ids[:len(ids)-1], plan[:len(plan)-1]
+		}
+		if len(ids) < 3 {
+			continue // a sliver the weld closed
 		}
 		tris, ok := triangulatePolygon(plan, b)
 		if !ok || len(tris) == 0 {
@@ -147,30 +169,21 @@ func roofShellOf(ring [][2]float64, speed []float64, faces []skelFace, b *budget
 			sh.cap = append(sh.cap, p, q, r)
 		}
 	}
-	// An eaves edge's top is the edge itself, where its face starts. A gable
-	// edge's follows the faces along it: every top point on the edge.
-	n := len(ring)
-	if !b.spend(int64(n * len(sh.pts))) {
-		return roofShell{}, errSkelTooComplex()
-	}
-	tol := skelLineTol * ringSize(ring)
-	sh.rim = make([][]uint32, n)
-	for m := range ring {
-		a, e := ring[m], ring[(m+1)%n]
-		if speed[m] != 0 {
-			sh.rim[m] = []uint32{index[a], index[e]}
-			continue
+	// The sides stand on the top's boundary: every cap edge no other
+	// triangle shares, run as its triangle runs, the solid on its left.
+	half := make(map[[2]uint32]bool, len(sh.cap))
+	for i := 0; i+2 < len(sh.cap); i += 3 {
+		for k := range 3 {
+			half[[2]uint32{sh.cap[i+k], sh.cap[i+(k+1)%3]}] = true
 		}
-		d := [2]float64{e[0] - a[0], e[1] - a[1]}
-		var on []uint32
-		for i, p := range sh.pts {
-			if segmentDistance([2]float64{p[0], p[1]}, a, e) <= tol {
-				on = append(on, uint32(i))
+	}
+	for i := 0; i+2 < len(sh.cap); i += 3 {
+		for k := range 3 {
+			a, e := sh.cap[i+k], sh.cap[i+(k+1)%3]
+			if !half[[2]uint32{e, a}] {
+				sh.rim = append(sh.rim, [2]uint32{a, e})
 			}
 		}
-		along := func(i uint32) float64 { return (sh.pts[i][0]-a[0])*d[0] + (sh.pts[i][1]-a[1])*d[1] }
-		slices.SortFunc(on, func(x, y uint32) int { return cmp.Compare(along(x), along(y)) })
-		sh.rim[m] = on
 	}
 	return sh, nil
 }
@@ -198,17 +211,14 @@ func (sh roofShell) verts(top, bottom float64) []float32 {
 
 func (sh roofShell) tris() []uint32 {
 	n := uint32(len(sh.pts))
-	t := make([]uint32, 0, 2*len(sh.cap)+6*int(n))
+	t := make([]uint32, 0, 2*len(sh.cap)+6*len(sh.rim))
 	for i := 0; i+2 < len(sh.cap); i += 3 {
 		a, b, c := sh.cap[i], sh.cap[i+1], sh.cap[i+2]
 		t = append(t, a, b, c, a+n, c+n, b+n)
 	}
-	// The plumb line runs counter-clockwise, the solid on its left.
 	for _, r := range sh.rim {
-		for i := 0; i+1 < len(r); i++ {
-			a, b := r[i], r[i+1]
-			t = append(t, a+n, b+n, b, a+n, b, a)
-		}
+		a, b := r[0], r[1]
+		t = append(t, a+n, b+n, b, a+n, b, a)
 	}
 	return t
 }
