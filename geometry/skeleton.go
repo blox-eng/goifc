@@ -93,7 +93,10 @@ type skeleton struct {
 	fresh       []int // the vertices made at now
 }
 
-var errSkelTooComplex = &RoofError{ReasonRoofTooComplex, -1, -1}
+// errSkelTooComplex is a fresh error each time: a caller maps its edges.
+func errSkelTooComplex() error {
+	return &RoofError{Reason: ReasonRoofTooComplex, Edge: -1, Other: -1}
+}
 
 // weightedSkeleton builds the weighted straight skeleton of a
 // counter-clockwise ring: edge i moves inward at speed[i], 1 for a sloped
@@ -130,7 +133,7 @@ func weightedSkeleton(ring [][2]float64, speed []float64, slope float64, b *budg
 	}
 	for groups := 0; s.queue.Len() > 0; groups++ {
 		if groups > 4*n*n+64 {
-			return nil, nil, errSkelTooComplex
+			return nil, nil, errSkelTooComplex()
 		}
 		if err := s.step(); err != nil {
 			return nil, nil, err
@@ -138,7 +141,7 @@ func weightedSkeleton(ring [][2]float64, speed []float64, slope float64, b *budg
 	}
 	for i := range s.verts {
 		if !s.verts[i].dead {
-			return nil, nil, errSkelTooComplex
+			return nil, nil, errSkelTooComplex()
 		}
 	}
 	return s.result(slope)
@@ -146,7 +149,7 @@ func weightedSkeleton(ring [][2]float64, speed []float64, slope float64, b *budg
 
 func (s *skeleton) charge(n int) error {
 	if !s.b.spend(int64(n)) {
-		return errSkelTooComplex
+		return errSkelTooComplex()
 	}
 	return nil
 }
@@ -391,25 +394,25 @@ func (s *skeleton) velocity(v int) error {
 	switch {
 	case sa == sb:
 		if 1+dot < 1e-12 {
-			return errSkelTooComplex
+			return errSkelTooComplex()
 		}
 		f := sa / (1 + dot)
 		x.vel = [2]float64{(na[0] + nb[0]) * f, (na[1] + nb[1]) * f}
 	case math.Abs(det) <= roofCollinear:
 		// one line, one edge moving and the other not: a cliff between them
 		if sa == 0 {
-			return &RoofError{ReasonRoofStep, a, -1}
+			return &RoofError{Reason: ReasonRoofStep, Edge: a, Other: -1}
 		}
-		return &RoofError{ReasonRoofStep, b, -1}
+		return &RoofError{Reason: ReasonRoofStep, Edge: b, Other: -1}
 	default:
 		x.vel = [2]float64{(sa*nb[1] - sb*na[1]) / det, (na[0]*sb - nb[0]*sa) / det}
 	}
 	const grow = 1e-9
 	switch {
 	case sa == 0 && sb != 0 && x.vel[0]*s.dir[a][0]+x.vel[1]*s.dir[a][1] > grow:
-		return &RoofError{ReasonRoofStep, a, -1}
+		return &RoofError{Reason: ReasonRoofStep, Edge: a, Other: -1}
 	case sb == 0 && sa != 0 && -(x.vel[0]*s.dir[b][0]+x.vel[1]*s.dir[b][1]) > grow:
-		return &RoofError{ReasonRoofStep, b, -1}
+		return &RoofError{Reason: ReasonRoofStep, Edge: b, Other: -1}
 	}
 	return nil
 }
@@ -491,7 +494,7 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		for cur := (e + 1) % n; ; {
 			outs := next[cur]
 			if len(outs) == 0 || len(poly) > len(s.arcs)+2 {
-				return nil, nil, errSkelTooComplex
+				return nil, nil, errSkelTooComplex()
 			}
 			to := outs[0]
 			next[cur] = outs[1:]
@@ -506,7 +509,7 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		faces = append(faces, skelFace{e, poly})
 	}
 	if want := polygonArea2D(s.ring); math.Abs(total-want) > skelAreaTol*want {
-		return nil, nil, errSkelTooComplex
+		return nil, nil, errSkelTooComplex()
 	}
 	arcs := make([]skelArc, 0, len(s.arcs))
 	for _, a := range s.arcs {
