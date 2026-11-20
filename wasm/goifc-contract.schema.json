@@ -31,6 +31,15 @@
             "hole_outside",
             "holes_overlap",
             "hole_self_crossing",
+            "pitch_out_of_range",
+            "gable_out_of_range",
+            "gable_repeated",
+            "no_sloped_edge",
+            "roof_step",
+            "gable_collinear",
+            "overhang_out_of_range",
+            "overhang_closes_outline",
+            "roof_too_complex",
             "invalid_input",
             "invalid_ifc",
             "too_large",
@@ -50,6 +59,12 @@
           "type": "integer"
         },
         "hole": {
+          "type": "integer"
+        },
+        "edge": {
+          "type": "integer"
+        },
+        "other": {
           "type": "integer"
         },
         "message": {
@@ -363,6 +378,67 @@
             ]
           }
         },
+        "roofs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+              },
+              "outline": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/point"
+                }
+              },
+              "pitch": {
+                "type": "number"
+              },
+              "gables": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "overhang": {
+                "type": "number"
+              },
+              "eaves": {
+                "type": "number"
+              },
+              "thickness": {
+                "type": "number"
+              },
+              "layers": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "outline",
+              "pitch",
+              "eaves"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "thickness"
+                ]
+              },
+              {
+                "required": [
+                  "layers"
+                ]
+              }
+            ]
+          }
+        },
         "preview": {
           "type": "boolean"
         }
@@ -542,6 +618,50 @@
         "holePerimeter"
       ]
     },
+    "roofQuantities": {
+      "type": "object",
+      "properties": {
+        "slopeArea": {
+          "type": "number"
+        },
+        "planArea": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "eaves": {
+          "type": "number"
+        },
+        "ridge": {
+          "type": "number"
+        },
+        "hip": {
+          "type": "number"
+        },
+        "valley": {
+          "type": "number"
+        },
+        "verge": {
+          "type": "number"
+        },
+        "top": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "slopeArea",
+        "planArea",
+        "volume",
+        "eaves",
+        "ridge",
+        "hip",
+        "valley",
+        "verge",
+        "top"
+      ]
+    },
     "buildOK": {
       "type": "object",
       "properties": {
@@ -594,6 +714,32 @@
               "id",
               "quantities",
               "top"
+            ]
+          }
+        },
+        "roofs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "quantities": {
+                "$ref": "#/$defs/roofQuantities"
+              },
+              "planes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/face"
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "quantities",
+              "planes"
             ]
           }
         },

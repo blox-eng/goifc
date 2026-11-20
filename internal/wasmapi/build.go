@@ -18,6 +18,7 @@ type buildRequest struct {
 	Walls   []wallItem `json:"walls"`
 	Rooms   []roomItem `json:"rooms"`
 	Slabs   []slabItem `json:"slabs"`
+	Roofs   []roofItem `json:"roofs"`
 	Preview bool       `json:"preview"`
 }
 
@@ -58,6 +59,17 @@ type slabItem struct {
 	Layers    []*float64     `json:"layers"`
 }
 
+type roofItem struct {
+	ID        string       `json:"id"`
+	Outline   [][]*float64 `json:"outline"`
+	Pitch     *float64     `json:"pitch"`
+	Gables    []*int       `json:"gables"`
+	Overhang  float64      `json:"overhang"`
+	Eaves     *float64     `json:"eaves"`
+	Thickness *float64     `json:"thickness"`
+	Layers    []*float64   `json:"layers"`
+}
+
 type openingInput struct {
 	Offset *float64 `json:"offset"`
 	Sill   *float64 `json:"sill"`
@@ -72,6 +84,7 @@ type built struct {
 	OK           bool        `json:"ok"`
 	Walls        []wallOut   `json:"walls"`
 	Slabs        []slabOut   `json:"slabs"`
+	Roofs        []roofOut   `json:"roofs,omitempty"`
 	Preview      *previewOut `json:"preview,omitempty"`
 }
 
@@ -85,6 +98,24 @@ type slabOut struct {
 	ID         string         `json:"id"`
 	Quantities slabQuantities `json:"quantities"`
 	Top        faceOut        `json:"top"`
+}
+
+type roofOut struct {
+	ID         string         `json:"id"`
+	Quantities roofQuantities `json:"quantities"`
+	Planes     []faceOut      `json:"planes"`
+}
+
+type roofQuantities struct {
+	SlopeArea float64 `json:"slopeArea"`
+	PlanArea  float64 `json:"planArea"`
+	Volume    float64 `json:"volume"`
+	Eaves     float64 `json:"eaves"`
+	Ridge     float64 `json:"ridge"`
+	Hip       float64 `json:"hip"`
+	Valley    float64 `json:"valley"`
+	Verge     float64 `json:"verge"`
+	Top       float64 `json:"top"`
 }
 
 type wallQuantities struct {
@@ -133,7 +164,7 @@ type previewOut struct {
 	Error  *Error `json:"error,omitempty"`
 }
 
-// Build builds every wall, room and slab in one JSON request. It returns the
+// Build builds every wall, room, slab and roof in one JSON request. It returns the
 // JSON answer and, when the answer is ok, a GLB with one node per built
 // element, named by its element id. A refused request returns every refusal
 // at once and no GLB. Build never panics on any input.
@@ -146,7 +177,7 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	if err != nil {
 		return failAnswer(version, []Error{{Code: "invalid_input", Message: err.Error()}}), nil
 	}
-	if n := len(req.Walls) + len(req.Rooms) + len(req.Slabs); n > maxItems {
+	if n := len(req.Walls) + len(req.Rooms) + len(req.Slabs) + len(req.Roofs); n > maxItems {
 		return failAnswer(version, []Error{{Code: "too_large", Message: fmt.Sprintf(
 			"%s items, over the %s limit", thousands(n), thousands(maxItems))}}), nil
 	}
@@ -166,6 +197,7 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	var (
 		walls []geometry.Wall
 		slabs []geometry.Slab
+		roofs []geometry.Roof
 		out   = built{GoifcVersion: version, OK: true, Walls: []wallOut{}, Slabs: []slabOut{}}
 	)
 	for _, w := range b.Walls {
@@ -177,10 +209,18 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 		q := s.Slab.Quantities
 		out.Slabs = append(out.Slabs, slabOut{ID: s.ID, Quantities: slabQuantities{Area: q.Area, Perimeter: q.Perimeter, Volume: q.Volume, HolePerimeter: q.HolePerimeter}, Top: face(s.Slab.Top)})
 	}
+	for _, r := range b.Roofs {
+		roofs = append(roofs, r.Roof)
+		out.Roofs = append(out.Roofs, toRoofOut(r))
+	}
 
 	if req.Preview {
 		var svg bytes.Buffer
-		if d, err := geometry.WritePreviewSVG(&svg, walls, slabs); err != nil {
+		drawn := slabs[:len(slabs):len(slabs)]
+		for _, r := range roofs {
+			drawn = append(drawn, geometry.Slab{Element: r.Element})
+		}
+		if d, err := geometry.WritePreviewSVG(&svg, walls, drawn); err != nil {
 			e := Error{Code: codeOf(err), Message: err.Error()}
 			out.Preview = &previewOut{Error: &e}
 		} else {
@@ -194,6 +234,9 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	}
 	for _, s := range slabs {
 		scene.Elements = append(scene.Elements, s.Element)
+	}
+	for _, r := range roofs {
+		scene.Elements = append(scene.Elements, r.Element)
 	}
 	var g bytes.Buffer
 	if err := scene.WriteGLB(&g); err != nil {
@@ -236,6 +279,9 @@ func countElements(req buildRequest) int {
 	for _, it := range req.Slabs {
 		n += each(it.Layers)
 	}
+	for _, it := range req.Roofs {
+		n += each(it.Layers)
+	}
 	return n
 }
 
@@ -272,6 +318,14 @@ func toPlan(req buildRequest) (geometry.Plan, []Error) {
 			continue
 		}
 		p.Slabs = append(p.Slabs, s)
+	}
+	for _, it := range req.Roofs {
+		r, err := toPlanRoof(it)
+		if err != nil {
+			refuse(it.ID, err)
+			continue
+		}
+		p.Roofs = append(p.Roofs, r)
 	}
 	return p, errs
 }
@@ -339,6 +393,29 @@ func toPlanSlab(it slabItem) (geometry.PlanSlab, error) {
 	s.Z = *it.Z
 	s.Thickness, s.Layers, err = thicknessOrLayers(it.Thickness, it.Layers)
 	return s, err
+}
+
+func toPlanRoof(it roofItem) (geometry.PlanRoof, error) {
+	r := geometry.PlanRoof{ID: it.ID, Overhang: it.Overhang}
+	var err error
+	if r.Outline, err = points("outline", it.Outline); err != nil {
+		return r, err
+	}
+	switch {
+	case it.Pitch == nil:
+		return r, errors.New("pitch is missing")
+	case it.Eaves == nil:
+		return r, errors.New("eaves is missing")
+	}
+	r.Pitch, r.Eaves = *it.Pitch, *it.Eaves
+	for i, g := range it.Gables {
+		if g == nil {
+			return r, fmt.Errorf("gables[%d] is null, want an edge number", i)
+		}
+		r.Gables = append(r.Gables, *g)
+	}
+	r.Thickness, r.Layers, err = thicknessOrLayers(it.Thickness, it.Layers)
+	return r, err
 }
 
 func thicknessOrLayers(thickness *float64, layers []*float64) (float64, []float64, error) {
@@ -441,6 +518,18 @@ func face(f geometry.Face) faceOut {
 	}
 	for _, o := range f.Openings {
 		out.Openings = append(out.Openings, openingOut(o))
+	}
+	return out
+}
+
+func toRoofOut(b geometry.BuiltRoof) roofOut {
+	q := b.Roof.Quantities
+	out := roofOut{ID: b.ID, Planes: []faceOut{}, Quantities: roofQuantities{
+		SlopeArea: q.SlopeArea, PlanArea: q.PlanArea, Volume: q.Volume,
+		Eaves: q.Eaves, Ridge: q.Ridge, Hip: q.Hip, Valley: q.Valley, Verge: q.Verge, Top: q.Top,
+	}}
+	for _, p := range b.Roof.Planes {
+		out.Planes = append(out.Planes, face(p))
 	}
 	return out
 }

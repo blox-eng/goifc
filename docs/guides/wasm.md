@@ -3,8 +3,8 @@
 goifc runs in a browser as two WebAssembly files that share one JSON
 contract:
 
-- **`goifc-build.wasm`** builds walls, the walls of a room, and slabs from
-  numbers. One request holds a whole plan; the answer has the quantities,
+- **`goifc-build.wasm`** builds walls, the walls of a room, slabs and pitched roofs
+  from numbers. One request holds a whole plan; the answer has the quantities,
   the faces, a GLB of the meshes and, on request, the SVG preview.
 - **`goifc-read.wasm`** reads an IFC file. The answer has the import tree,
   a GLB and the parts you ask for.
@@ -44,7 +44,7 @@ write new sums. Each of the six files has its own attestation too, so the
 same `gh attestation verify` works on any one of them. Keep the six files
 in one folder, and serve `.wasm` as `Content-Type: application/wasm`.
 
-## Build walls and slabs
+## Build walls, slabs and roofs
 
 ```js
 import { createBuilder } from "/static/goifc/goifc.js";
@@ -79,7 +79,7 @@ const { answer, glb } = await builder.build({
 `glb` is an `ArrayBuffer`: load it with any glTF loader. Each element is a
 node named by its element id.
 
-A request has three lists, `walls`, `rooms` and `slabs`, and `preview`.
+A request has four lists, `walls`, `rooms`, `slabs` and `roofs`, and `preview`.
 Each item's fields are the Go builder's parameters (see
 [Building from numbers](builders.md)), in meters:
 
@@ -91,6 +91,10 @@ Each item's fields are the Go builder's parameters (see
   outline edge; `null` or `[]` for none).
 - **slab:** `id`, `outline`, `holes` (optional: one list of points per hole,
   for a stair or a shaft), `z` (the top), `thickness` or `layers`.
+- **roof:** `id`, `outline`, `pitch` (degrees, over 0 and up to 75), `gables`
+  (optional: the outline edges that are vertical gable ends, counted from 0),
+  `overhang` (optional, metres, 0 to 3, 0 when left out), `eaves` (the height
+  of the underside at the outline line), `thickness` or `layers`.
 - **opening:** `offset`, `sill`, `width`, `height`, and `depth` for a
   niche (0 or left out cuts through).
 - **join:** `end` (`"a"` for `edge[0]`, `"b"` for `edge[1]`) and `wall`, the
@@ -115,6 +119,8 @@ Each built element gets an id from it:
 | room in layers | `r1/0/0`, `r1/0/1`, … (wall, then layer) |
 | slab | `s1` |
 | slab in layers | `s1/0`, `s1/1`, … (top first) |
+| roof | `r1` |
+| roof in layers | `r1/0`, `r1/1`, … (top first) |
 
 ### Walls that meet mid-wall
 
@@ -137,7 +143,8 @@ opposite faces, and `measuredNet` and `otherNet` already exclude it.
 Here T's `measuredJoins` is 0.25 and its `measuredNet` 9.75.
 
 `answer.walls` lists the walls of `walls` and `rooms`, in request order;
-`answer.slabs` lists the slabs.
+`answer.slabs` lists the slabs; `answer.roofs` lists the roofs, and is absent
+when the request has none.
 
 ### Slabs with holes
 
@@ -154,6 +161,31 @@ The slab's `area` and `volume` are net of its holes, `perimeter` is the
 outline's, and `holePerimeter` is the holes' edges together (7.4 here, area
 77). `top.holes` lists the holes in the top face's `u`, `v`; it is absent
 for a slab without holes.
+
+### Pitched roofs
+
+```json
+{ "roofs": [{ "id": "r1", "outline": [[0, 0], [10, 0], [10, 8], [0, 8]],
+    "pitch": 30, "eaves": 3, "thickness": 0.2 }] }
+```
+
+Every edge slopes up and inward at `pitch`, except the `gables`. Each roof
+in `answer.roofs` has `quantities` and `planes`. The quantities are
+`slopeArea`, `planArea`, `volume`, and the lengths `eaves`, `ridge`, `hip`,
+`valley`, `verge` and `top` (here `ridge` is 2 and `planArea` 80). `planes`
+holds one face per sloped plane of the top, in the faces' `u`, `v`, like a
+slab's `top`. A roof in layers gives one entry per layer, each with its own
+`volume`; the areas and lengths are the same in all.
+
+The preview draws a roof like a slab, with its ridge, hip and valley lines.
+
+A roof goifc cannot build is refused with one of these codes, with `item`
+and, where an edge is at fault, `edge` (and `other` for a second edge):
+`pitch_out_of_range`, `gable_out_of_range`, `gable_repeated`,
+`no_sloped_edge`, `roof_step`, `gable_collinear`, `overhang_out_of_range`,
+`overhang_closes_outline`, `roof_too_complex`. For example, on an L outline
+`roof_step` with `edge` 2 means the gable edge 2 leaves a step between two
+planes.
 
 three.js's `GLTFLoader` removes `[ ] . : /` from node names, so `w1/0`
 loads as `w10`. Read the element id from `node.userData.name`: it keeps

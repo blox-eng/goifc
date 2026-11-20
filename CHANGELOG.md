@@ -27,7 +27,9 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
   (`pitch_out_of_range`, `gable_out_of_range`, `gable_repeated`,
   `no_sloped_edge`, `roof_step`, `gable_collinear`, `overhang_out_of_range`,
   `overhang_closes_outline`, `roof_too_complex`). `BuildPlan` builds roofs as
-  `PlanRoof` items. (#161)
+  `PlanRoof` items, and the wasm build request takes a `roofs` list, answers
+  with each roof's quantities and planes, and refuses with the same codes (the
+  error gains `edge` and `other`). (#161)
 
 ## v0.21.0 — 2026-11-19
 

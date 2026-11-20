@@ -36,6 +36,27 @@ test("build answers equal the Go goldens", async () => {
   }
 });
 
+test("build a pitched roof and refuse a stepped one", async () => {
+  const builder = await createBuilder({ base: dist.href });
+  try {
+    const rect = [[0, 0], [10, 0], [10, 8], [0, 8]];
+    const { answer, glb } = await builder.build({ roofs: [{ id: "r1", outline: rect, pitch: 30, eaves: 3, thickness: 0.2 }] });
+    assert.equal(answer.ok, true);
+    assert.ok(Math.abs(answer.roofs[0].quantities.ridge - 2) < 1e-9);
+    assert.equal(answer.roofs[0].planes.length, 4);
+    assert.ok(glb instanceof ArrayBuffer);
+    const ell = [[0, 0], [18, 0], [18, 6], [12, 6], [12, 10], [0, 10]];
+    const refused = await builder.build({ roofs: [{ id: "r2", outline: ell, pitch: 30, gables: [2], eaves: 3, thickness: 0.2 }] });
+    assert.equal(refused.answer.ok, false);
+    assert.equal(refused.answer.errors[0].code, "roof_step");
+    assert.equal(refused.answer.errors[0].item, "r2");
+    assert.equal(refused.answer.errors[0].edge, 2);
+    assert.equal(refused.answer.errors[0].other, undefined);
+  } finally {
+    builder.close();
+  }
+});
+
 test("read answers equal the Go goldens", async () => {
   const reader = await createReader({ base: dist.href });
   try {
