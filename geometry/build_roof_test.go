@@ -144,7 +144,15 @@ func TestRoofGableUnderValley(t *testing.T) {
 func TestRoofMonoNotch(t *testing.T) {
 	notch := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {6, 8}, {6, 5}, {4, 5}, {4, 8}, {0, 8}}
 	r := buildRoof(t, notch, roofSpec(1, 2, 3, 4, 5, 6, 7))[0]
-	checkRoofQuantities(t, r, roofWant{1, 74, 10, 0, 0, 0, math.NaN(), math.NaN()})
+	checkRoofQuantities(t, r, roofWant{1, 74, 10, 0, 0, 0, 22 / roofC, 10})
+}
+
+// A point inside an eaves edge splits it in two on one line: the arc between
+// their faces is no ridge.
+func TestRoofCollinearEavesPoint(t *testing.T) {
+	split := [][2]float64{{0, 0}, {5, 0}, {10, 0}, {10, 8}, {0, 8}}
+	r := buildRoof(t, split, roofSpec())[0]
+	checkRoofQuantities(t, r, roofWant{5, 80, 36, 2, 4 * math.Sqrt(32+16*roofS*roofS), 0, 0, 0})
 }
 
 func TestRoofOverhang(t *testing.T) {
