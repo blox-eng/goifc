@@ -72,7 +72,7 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 		return nil, tooLarge("the roof's height %.6g m is over the %g m maximum", h, maxLocalExtent)
 	}
 	slices.SortFunc(faces, func(x, y skelFace) int { return cmp.Compare(edgeOf[x.Edge], edgeOf[y.Edge]) })
-	sh, err := roofShellOf(faces, b)
+	sh, err := roofShellOf(faces, slices.Max(layers), b)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ type roofShell struct {
 	rim [][2]uint32
 }
 
-func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
+func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) {
 	var sh roofShell
 	// Points closer than the mesh grid snap are one point, and so is a chain
 	// of them: a skeleton line can end a hair from a corner, too close for
@@ -150,6 +150,7 @@ func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 	for _, f := range faces {
 		raw = append(raw, f.Poly...)
 	}
+	rank := weldRanks(faces)
 	root := make([]int, len(raw))
 	for i := range root {
 		root[i] = i
@@ -173,14 +174,17 @@ func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 				for _, j := range near {
 					if q := raw[j]; math.Hypot(q[0]-p[0], q[1]-p[1]) < gridSnap {
 						ri, rj := find(i), find(j)
-						root[max(ri, rj)] = min(ri, rj)
+						if rank[rj] > rank[ri] || rank[rj] == rank[ri] && rj < ri {
+							ri, rj = rj, ri
+						}
+						root[rj] = ri
 					}
 				}
 			}
 		}
 		cells[c] = append(cells[c], i)
 	}
-	index := map[int]uint32{} // a cluster's first point to its mesh point
+	index := map[int]uint32{} // a cluster's kept point to its mesh point
 	next := 0
 	for _, f := range faces {
 		var plan [][2]float64
@@ -257,18 +261,49 @@ func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 			sh.rim = append(sh.rim, [2]uint32{a, e})
 		}
 	}
-	if !sh.keepsArea(faces) {
+	if !sh.keepsArea(faces, thick) {
 		return roofShell{}, errSkelTooComplex()
 	}
 	return sh, nil
 }
 
-// keepsArea reports whether the weld left the cap the faces' plan area,
-// within what rounding each point to float32 moves the boundary: a weld that
-// cuts a long sliver off a face would build a roof short of its quantities.
-func (sh roofShell) keepsArea(faces []skelFace) bool {
+// weldRanks ranks each face point, in the faces' order, for the weld to keep:
+// 2 for a ring corner, 1 for any other point on the top's boundary, where no
+// other face runs the edge back, and 0 inside. Moving an inside point leaves
+// the cap's area as it is; moving a boundary point off its line would cut a
+// sliver as long as the edge off the roof.
+func weldRanks(faces []skelFace) []int {
+	half := map[[2][3]float64]bool{}
+	for _, f := range faces {
+		for i, p := range f.Poly {
+			half[[2][3]float64{p, f.Poly[(i+1)%len(f.Poly)]}] = true
+		}
+	}
+	var rank []int
+	for _, f := range faces {
+		n := len(f.Poly)
+		for i, p := range f.Poly {
+			r := 0
+			switch {
+			case p[2] == 0:
+				r = 2
+			case !half[[2][3]float64{p, f.Poly[(i+n-1)%n]}] || !half[[2][3]float64{f.Poly[(i+1)%n], p}]:
+				r = 1
+			}
+			rank = append(rank, r)
+		}
+	}
+	return rank
+}
+
+// keepsArea reports whether the weld left the cap the faces' plan area. A
+// layer up to thick loses area × thick/cos of volume for each area lost,
+// while rounding each point to float32, by extent·2⁻²⁴ over the top and
+// bottom, may move it by area × extent·2⁻²³/cos. A loss past that would build
+// a roof short of its quantities.
+func (sh roofShell) keepsArea(faces []skelFace, thick float64) bool {
 	plan := func(i uint32) [2]float64 { return [2]float64{sh.pts[i][0], sh.pts[i][1]} }
-	var want, got, rim float64
+	var want, got, extent float64
 	for _, f := range faces {
 		poly := make([][2]float64, len(f.Poly))
 		for i, p := range f.Poly {
@@ -279,16 +314,10 @@ func (sh roofShell) keepsArea(faces []skelFace) bool {
 	for i := 0; i+2 < len(sh.cap); i += 3 {
 		got += cross2D(plan(sh.cap[i]), plan(sh.cap[i+1]), plan(sh.cap[i+2])) / 2
 	}
-	lo, hi := plan(0), plan(0)
-	for i := range sh.pts {
-		p := plan(uint32(i))
-		lo = [2]float64{min(lo[0], p[0]), min(lo[1], p[1])}
-		hi = [2]float64{max(hi[0], p[0]), max(hi[1], p[1])}
+	for _, p := range sh.pts {
+		extent = max(extent, math.Abs(p[0]), math.Abs(p[1]))
 	}
-	for _, r := range sh.rim {
-		rim += dist2(plan(r[0]), plan(r[1]))
-	}
-	return math.Abs(got-want) <= rim*dist2(lo, hi)*0x1p-24
+	return math.Abs(got-want)*thick <= want*extent*0x1p-23
 }
 
 // verts places the top at the skeleton heights raised by top and the bottom

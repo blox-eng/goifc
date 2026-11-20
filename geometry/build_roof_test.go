@@ -669,14 +669,46 @@ func TestRoofNearSquareSweep(t *testing.T) {
 	}
 }
 
-// A 3 cm by 22 m wedge ends in two skeleton points 3e-5 m apart, inside the
-// mesh weld. Welding them cuts a 22 m sliver off the long face, 7e-4 of the
-// plan area and far past float32 rounding: refused, not built short.
-func TestRoofWeldLosingAreaRefused(t *testing.T) {
-	w := 999.0312538146973
-	_, err := BuildRoofLayers([][2]float64{{999, 977}, {w, 999}, {w, w}, {999, w}}, roofSpec(3), []float64{0.05, 0.15})
-	var re *RoofError
-	if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
-		t.Fatalf("%v, want %s", err, ReasonRoofTooComplex)
+// A needle a few millimetres or centimetres wide ends in skeleton points
+// closer than the mesh weld, one of them on the gable: the weld keeps that
+// one, so the mesh holds the volume its quantities give.
+func TestRoofWeldNeedleVolume(t *testing.T) {
+	cases := []struct {
+		name    string
+		outline [][2]float64
+	}{
+		{"5 mm × 10 m", [][2]float64{{0, -10}, {0.005, 1e-6}, {0.005, 0.005}, {0, 0.005}}},
+		{"1.1 mm × 5 m", [][2]float64{{0, -5}, {0.0011, 1e-6}, {0.0011, 0.0011}, {0, 0.0011}}},
+		{"3 cm × 22 m", [][2]float64{{999, 977}, {999.0312538146973, 999}, {999.0312538146973, 999.0312538146973}, {999, 999.0312538146973}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, r := range buildRoof(t, c.outline, RoofSpec{Pitch: 75, Gables: []int{3}, Eaves: 3}, 0.05, 0.15) {
+				q := r.Quantities
+				meshAgrees(t, r.Element, q.Volume, 2*q.SlopeArea+2*q.PlanArea, 0,
+					q.SlopeArea, q.PlanArea, q.Volume, q.Eaves, q.Ridge, q.Hip, q.Valley, q.Verge, q.Top)
+			}
+		})
+	}
+}
+
+// A weld that moves the ridge's end 2 µm off the gable cuts a sliver off the
+// 10 m gable: the mesh would miss its volume, so the shell must not pass.
+func TestRoofShellKeepsArea(t *testing.T) {
+	_, faces, err := roofSkeleton([][2]float64{{0, -10}, {0.005, 1e-6}, {0.005, 0.005}, {0, 0.005}}, RoofSpec{Pitch: 75, Gables: []int{3}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh, err := roofShellOf(faces, 0.15, newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, p := range sh.pts {
+		if math.Abs(p[0]) < 1e-9 && p[1] > 9 && p[1] < 10.001 {
+			sh.pts[i][0] += 2.2e-6
+		}
+	}
+	if sh.keepsArea(faces, 0.15) {
+		t.Fatal("a 1.1e-5 m² sliver cut off: the shell keeps its area")
 	}
 }
