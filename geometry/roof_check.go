@@ -151,11 +151,14 @@ func plumbLine(outline [][2]float64, overhang float64) (ring [][2]float64, edgeO
 	out := make([][2]float64, n)
 	for k := range ring {
 		p, q := (k+n-1)%n, k
-		d := 1 + normal[p][0]*normal[q][0] + normal[p][1]*normal[q][1]
-		if d < 1e-9 {
-			return nil, nil, refuse(p, q)
+		var f float64
+		if overhang > 0 {
+			d := 1 + normal[p][0]*normal[q][0] + normal[p][1]*normal[q][1]
+			if d < 1e-9 {
+				return nil, nil, refuse(p, q)
+			}
+			f = overhang / d
 		}
-		f := overhang / d
 		out[k] = [2]float64{ring[k][0] + f*(normal[p][0]+normal[q][0]), ring[k][1] + f*(normal[p][1]+normal[q][1])}
 		if math.Hypot(out[k][0], out[k][1]) > maxLocalExtent {
 			return nil, nil, tooLarge("a mitred corner is more than %g m from the first point", maxLocalExtent)

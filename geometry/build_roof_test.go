@@ -581,3 +581,10 @@ func TestRoofNearParallelLanding(t *testing.T) {
 		})
 	}
 }
+
+// With no overhang no corner moves, so a needle's sharp tip is no mitre to
+// refuse.
+func TestRoofNeedleNoOverhang(t *testing.T) {
+	r := buildRoof(t, [][2]float64{{0, 0}, {500, -0.01}, {500, 0.01}}, roofSpec())[0]
+	checkRoofQuantities(t, r, roofWant{3, 5, math.NaN(), math.NaN(), math.NaN(), 0, 0, 0})
+}
