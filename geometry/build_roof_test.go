@@ -171,6 +171,28 @@ func TestRoofCollinearEavesPoint(t *testing.T) {
 	checkRoofQuantities(t, buildRoof(t, grid, roofSpec())[0], hip)
 }
 
+// At national-grid coordinates a point on an eaves edge joins at every turn
+// of the outline, however short the stub it leaves and however small the roof.
+func TestRoofCollinearPointOnGrid(t *testing.T) {
+	for _, outline := range [][][2]float64{
+		{{0, 0}, {0.2, 0}, {10, 0}, {10, 8}, {0, 8}},
+		{{0, 0}, {0.05, 0}, {10, 0}, {10, 8}, {0, 8}},
+		{{0, 0}, {0.5, 0}, {1, 0}, {1, 1}, {0, 1}},
+	} {
+		for deg := 0; deg < 360; deg += 7 {
+			s, c := math.Sincos(float64(deg) * math.Pi / 180)
+			grid := make([][2]float64, len(outline))
+			for i, p := range outline {
+				grid[i] = [2]float64{4512345.678 + c*p[0] - s*p[1], 561234.567 + s*p[0] + c*p[1]}
+			}
+			if r := buildRoof(t, grid, roofSpec())[0]; len(r.Planes) != 4 || r.Quantities.Valley != 0 {
+				t.Errorf("stub %g at %d°: %d planes, valley %g; want 4 planes, no valley",
+					outline[1][0], deg, len(r.Planes), r.Quantities.Valley)
+			}
+		}
+	}
+}
+
 // A point a survey's noise off an eaves edge keeps its two planes but draws
 // no line between them, on either side of the edge.
 func TestRoofNearCollinearEavesPoint(t *testing.T) {

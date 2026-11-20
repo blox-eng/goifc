@@ -102,13 +102,15 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 // joinCollinear drops each ring point between two sloped edges on one line,
 // as a T-join leaves, so that one plane is one face with no line across it.
 // The joined edge is the lower-numbered of the caller's two. A point stays
-// when it is more than tol metres off the line its neighbours span.
+// when it is more than tol metres off the line its neighbours span, or not
+// between them along it, whatever the length of the edges it splits.
 func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, tol float64) ([][2]float64, []int, []float64) {
 	for k := 0; k < len(ring); {
 		n := len(ring)
 		p := (k + n - 1) % n
-		if q := ring[(k+1)%n]; n > 3 && speed[p] != 0 && speed[k] != 0 && collinearEdges(ring, p, k) &&
-			math.Abs(cross2D(ring[p], ring[k], q)) <= tol*dist2(ring[p], q) {
+		a, b, c := ring[p], ring[k], ring[(k+1)%n]
+		if n > 3 && speed[p] != 0 && speed[k] != 0 && (b[0]-a[0])*(c[0]-b[0])+(b[1]-a[1])*(c[1]-b[1]) > 0 &&
+			math.Abs(cross2D(a, b, c)) <= tol*dist2(a, c) {
 			edgeOf[p] = min(edgeOf[p], edgeOf[k])
 			ring, edgeOf, speed = slices.Delete(ring, k, k+1), slices.Delete(edgeOf, k, k+1), slices.Delete(speed, k, k+1)
 			continue
