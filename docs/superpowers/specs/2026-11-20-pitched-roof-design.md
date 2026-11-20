@@ -113,7 +113,8 @@ There is no single-thickness `BuildRoof`. One layer is `[]float64{t}`.
   edge). float32 vertices local to `outline[0]`, placed like a slab.
 - **Faces.** One `Face` per sloped plane of the layer's top: `Origin` on
   its eaves edge, `U` along the eaves, `V` up the slope, `Normal` outward
-  (up), `Outline` in (u, v).
+  (up), `Outline` in (u, v). Sloped edges on one line, as a T-join leaves,
+  are one plane and one `Face`, listed under the first of them.
 
 ### Quantities, per layer
 
@@ -132,8 +133,7 @@ There is no single-thickness `BuildRoof`. One layer is `[]float64{t}`.
   - `Verge`: the top's sloping edges along gable ends.
   - `Top`: the top's level edges along gable ends, where one sloped
     plane meets the gable (a mono roof's high edge).
-  - An arc between two planes of collinear edges is not a line; it is not
-    counted.
+  - Sloped edges on one line are one plane, so no line runs between them.
 
 ### Refusals (an error and nothing else)
 

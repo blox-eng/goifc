@@ -174,7 +174,7 @@ in `answer.roofs` has `quantities` and `planes`. The quantities are
 `slopeArea`, `planArea`, `volume`, and the lengths `eaves`, `ridge`, `hip`,
 `valley`, `verge` and `top` (here `ridge` is 2 and `planArea` 80). `planes`
 holds one face per sloped plane of the top, in the faces' `u`, `v`, like a
-slab's `top`. A roof in layers gives one entry per layer, each with its own
+slab's `top`; sloped edges on one line are one plane. A roof in layers gives one entry per layer, each with its own
 `volume`; the areas and lengths are the same in all.
 
 The preview draws a roof's sloped planes like a slab's faces, so the

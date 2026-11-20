@@ -163,9 +163,10 @@ every edge but the low one. goifc never picks a ridge or a low edge.
 Layers are given top first, like slabs, and each layer is a `Roof` with its
 own mesh and volume, measured normal to the slope. Each layer ends in vertical
 sides on the plumb line, the outline offset by the overhang. `Planes` lists one
-sloped plane per outline edge, and the quantities are `SlopeArea`, `PlanArea`,
-`Volume`, and the 3D line lengths `Eaves`, `Ridge`, `Hip`, `Valley`, `Verge`
-and `Top`.
+face per sloped plane of the top, in outline-edge order; sloped edges on one
+line, as a T-join leaves, are one plane, listed under the first of them. The
+quantities are `SlopeArea`, `PlanArea`, `Volume`, and the 3D line lengths
+`Eaves`, `Ridge`, `Hip`, `Valley`, `Verge` and `Top`.
 
 A roof the skeleton cannot build is a `*RoofError` with a `Reason` and the
 outline's edges. A gable that would leave a vertical step inside the roof is
