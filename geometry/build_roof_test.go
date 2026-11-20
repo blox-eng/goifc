@@ -331,3 +331,27 @@ func TestRoofSteepPitch(t *testing.T) {
 	r := buildRoof(t, [][2]float64{{0, 0}, {50, 0}, {50, 10}, {0, 10}}, RoofSpec{Pitch: 75, Eaves: 3})[0]
 	checkRoofQuantities(t, r, roofWant{4, 500, 120, 40, math.NaN(), 0, 0, 0})
 }
+
+// Walls a few µm off straight or off parallel are survey noise, not a roof
+// too complex to build.
+func TestRoofNearParallelNoise(t *testing.T) {
+	cases := []struct {
+		name    string
+		outline [][2]float64
+		gables  []int
+	}{
+		{"hip, fronts meet head on", [][2]float64{{-378, 210}, {-44, -83}, {10, 1}, {10.00001, 8}, {0, 90}, {0, 15.666666666666666}}, nil},
+		{"hip, opposite walls", [][2]float64{{-63, 0}, {-69, -83}, {10, 0.25}, {10.00001, 8}, {0, 8}, {0, 2.6666666666666665}}, nil},
+		{"gables off straight", [][2]float64{{0, 0}, {10, -65}, {10, 4}, {10.00001, 58}, {0, 8}}, []int{1, 2, 4}},
+		{"split beyond a gable's corner", [][2]float64{{-63, 0}, {10, -83}, {10, 1}, {10.00001, 8}, {0, 8}, {0, 2.6666666666666665}}, []int{0, 1, 2}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, r := range buildRoof(t, c.outline, roofSpec(c.gables...), 0.05, 0.15) {
+				q := r.Quantities
+				meshAgrees(t, r.Element, q.Volume, 2*q.SlopeArea+2*q.PlanArea, 0,
+					q.SlopeArea, q.PlanArea, q.Volume, q.Eaves, q.Ridge, q.Hip, q.Valley, q.Verge, q.Top)
+			}
+		})
+	}
+}

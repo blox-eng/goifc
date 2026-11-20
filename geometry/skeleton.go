@@ -24,8 +24,14 @@ const (
 	skelTimeTol  = 1e-9 // events this close in time are one event
 	skelPointTol = 1e-9 // points this close are one point
 	skelLineTol  = 1e-7 // a vertex this close to an edge it is due to reach is on it
-	skelAreaTol  = 1e-9 // the faces must tile the ring this closely
 )
+
+// skelFoldTol is the sine under which two edges whose fronts meet head on
+// fold into a ridge. Short of a fold, the vertex between them runs at
+// 1/sin(θ/2) and float64 loses its velocity as ε/θ²; the fold is off by θ
+// along the ridge. The two errors balance near θ = ε^⅓ ≈ 6e-6, rounded up to
+// 1e-5: a few µm across a wall of a metre or more.
+const skelFoldTol = 1e-5
 
 type skelNode struct {
 	p [2]float64
@@ -235,7 +241,7 @@ func (s *skeleton) settle(work []int) error {
 // line, as two fronts that meet head on do.
 func (s *skeleton) antiparallel(a, b int) bool {
 	da, db := s.dir[a], s.dir[b]
-	return da[0]*db[0]+da[1]*db[1] < 0 && math.Abs(da[0]*db[1]-da[1]*db[0]) <= roofCollinear
+	return da[0]*db[0]+da[1]*db[1] < 0 && math.Abs(da[0]*db[1]-da[1]*db[0]) <= skelFoldTol
 }
 
 // nodeAt returns the node at p made at now, making it if there is none.
@@ -334,6 +340,14 @@ func (s *skeleton) touch(v int) ([]int, error) {
 	}
 	u := best
 	w := s.verts[u].next
+	// v is on that segment: the split is there, not up to skelLineTol off
+	// it, where the faces beyond would miss the ring.
+	pu, pw := s.pos(u), s.pos(w)
+	d := [2]float64{pw[0] - pu[0], pw[1] - pu[1]}
+	if l2 := d[0]*d[0] + d[1]*d[1]; l2 > 0 {
+		k := max(0, min(1, ((pv[0]-pu[0])*d[0]+(pv[1]-pu[1])*d[1])/l2))
+		pv = [2]float64{pu[0] + k*d[0], pu[1] + k*d[1]}
+	}
 	node := s.nodeAt(pv)
 	for _, c := range [2]int{u, w} {
 		if dist2(pv, s.pos(c)) > s.size*skelLineTol {
@@ -472,7 +486,10 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		return [3]float64{nd.p[0], nd.p[1], nd.t * slope}
 	}
 	var faces []skelFace
-	var total float64
+	var total, perimeter float64
+	for e := range n {
+		perimeter += dist2(s.ring[e], s.ring[(e+1)%n])
+	}
 	for e := range n {
 		if s.speed[e] == 0 {
 			continue
@@ -508,7 +525,9 @@ func (s *skeleton) result(slope float64) ([]skelFace, []skelArc, error) {
 		total += polygonArea2D(plan)
 		faces = append(faces, skelFace{e, poly})
 	}
-	if want := polygonArea2D(s.ring); math.Abs(total-want) > skelAreaTol*want {
+	// The faces must tile the ring. Nodes merge within tolP, so the faces'
+	// sides may stray that far from the ring's all along its perimeter.
+	if want := polygonArea2D(s.ring); math.Abs(total-want) > s.tolP*perimeter {
 		return nil, nil, errSkelTooComplex()
 	}
 	arcs := make([]skelArc, 0, len(s.arcs))
