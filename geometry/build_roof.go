@@ -240,15 +240,6 @@ func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 	return sh, nil
 }
 
-func ringSize(ring [][2]float64) float64 {
-	lo, hi := ring[0], ring[0]
-	for _, p := range ring {
-		lo = [2]float64{min(lo[0], p[0]), min(lo[1], p[1])}
-		hi = [2]float64{max(hi[0], p[0]), max(hi[1], p[1])}
-	}
-	return math.Hypot(hi[0]-lo[0], hi[1]-lo[1])
-}
-
 // verts places the top at the skeleton heights raised by top and the bottom
 // raised by bottom, top points first.
 func (sh roofShell) verts(top, bottom float64) []float32 {
@@ -275,6 +266,12 @@ func (sh roofShell) tris() []uint32 {
 	return t
 }
 
+// roofLevel is the rise, per metre of plan and over the slope, under which
+// a line between planes is level: a ridge between eaves edges about 1° off
+// parallel, or a top along a gable about ½° off its eaves, rises that much.
+// Edges any closer are one roof drawn a little out of square.
+const roofLevel = 1e-2
+
 // roofLines measures the plumb line's sloped edges and the skeleton's arcs.
 func roofLines(ring [][2]float64, speed []float64, arcs []skelArc, slope float64) RoofQuantities {
 	var q RoofQuantities
@@ -288,11 +285,10 @@ func roofLines(ring [][2]float64, speed []float64, arcs []skelArc, slope float64
 			q.Eaves += l
 		}
 	}
-	level := skelLineTol * ringSize(ring) * slope
 	for _, a := range arcs {
 		d := [3]float64{a.B[0] - a.A[0], a.B[1] - a.A[1], a.B[2] - a.A[2]}
 		l := math.Sqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2])
-		flat := math.Abs(d[2]) <= level
+		flat := math.Abs(d[2]) <= roofLevel*slope*math.Hypot(d[0], d[1])
 		nl, nr := inward[a.Left], inward[a.Right]
 		switch sl, sr := speed[a.Left] != 0, speed[a.Right] != 0; {
 		case sl && sr:

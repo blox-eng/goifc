@@ -390,3 +390,35 @@ func TestRoofRiseTooLarge(t *testing.T) {
 		t.Fatalf("a 520 m rise: %v", err)
 	}
 }
+
+// A rectangle a millimetre or less out of square keeps its level lines: a
+// ridge or top rises a hair along its length, far short of a hip or verge.
+func TestRoofSkewedLevelLines(t *testing.T) {
+	hip := 4 * math.Sqrt(32+16*roofS*roofS)
+	cases := []struct {
+		name    string
+		outline [][2]float64
+		gables  []int
+		want    RoofQuantities // lines only
+	}{
+		{"hip", [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8.001}}, nil, RoofQuantities{Ridge: 2, Hip: hip}},
+		{"gable", [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8.001}}, []int{1, 3}, RoofQuantities{Ridge: 10, Verge: 4 * 4 / roofC}},
+		{"mono", [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8.00001}}, []int{1, 2, 3}, RoofQuantities{Top: 10, Verge: 2 * 8 / roofC}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			q := buildRoof(t, c.outline, roofSpec(c.gables...))[0].Quantities
+			for _, l := range []struct {
+				name      string
+				got, want float64
+			}{
+				{"Ridge", q.Ridge, c.want.Ridge}, {"Hip", q.Hip, c.want.Hip}, {"Valley", q.Valley, 0},
+				{"Verge", q.Verge, c.want.Verge}, {"Top", q.Top, c.want.Top},
+			} {
+				if !near(l.got, l.want, 2e-3) {
+					t.Errorf("%s = %.9g, want %.9g", l.name, l.got, l.want)
+				}
+			}
+		})
+	}
+}

@@ -346,3 +346,12 @@ func TestSkelTilingCatchesMissingFace(t *testing.T) {
 		}
 	}
 }
+
+func ringSize(ring [][2]float64) float64 {
+	lo, hi := ring[0], ring[0]
+	for _, p := range ring {
+		lo = [2]float64{min(lo[0], p[0]), min(lo[1], p[1])}
+		hi = [2]float64{max(hi[0], p[0]), max(hi[1], p[1])}
+	}
+	return math.Hypot(hi[0]-lo[0], hi[1]-lo[1])
+}
