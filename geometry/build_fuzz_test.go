@@ -416,9 +416,10 @@ func FuzzBuildRoofLayers(f *testing.F) {
 		for _, g := range spec.Gables {
 			gable[g] = true
 		}
+		o := outline[0]
 		for i, p := range outline {
 			n := outline[(i+1)%len(outline)]
-			area += p[0]*n[1] - n[0]*p[1]
+			area += (p[0]-o[0])*(n[1]-o[1]) - (n[0]-o[0])*(p[1]-o[1])
 			if !gable[i] {
 				eaves += math.Hypot(n[0]-p[0], n[1]-p[1])
 			}
