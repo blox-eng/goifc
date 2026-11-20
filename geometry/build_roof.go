@@ -114,35 +114,62 @@ type roofShell struct {
 
 func roofShellOf(faces []skelFace, b *budget) (roofShell, error) {
 	var sh roofShell
-	// Points closer than the mesh grid snap are one point: a skeleton line
-	// can end a hair from a corner, too close for float32 to keep apart.
-	cells := map[[2]int64][]uint32{}
-	weld := func(p [3]float64) uint32 {
+	// Points closer than the mesh grid snap are one point, and so is a chain
+	// of them: a skeleton line can end a hair from a corner, too close for
+	// float32 to keep apart, and a partial weld would pinch a face.
+	var raw [][3]float64
+	for _, f := range faces {
+		raw = append(raw, f.Poly...)
+	}
+	root := make([]int, len(raw))
+	for i := range root {
+		root[i] = i
+	}
+	find := func(i int) int {
+		for root[i] != i {
+			root[i] = root[root[i]]
+			i = root[i]
+		}
+		return i
+	}
+	cells := map[[2]int64][]int{}
+	for i, p := range raw {
 		c := [2]int64{int64(math.Floor(p[0] / gridSnap)), int64(math.Floor(p[1] / gridSnap))}
 		for dx := int64(-1); dx <= 1; dx++ {
 			for dy := int64(-1); dy <= 1; dy++ {
-				for _, id := range cells[[2]int64{c[0] + dx, c[1] + dy}] {
-					if q := sh.pts[id]; math.Hypot(q[0]-p[0], q[1]-p[1]) < gridSnap {
-						return id
+				near := cells[[2]int64{c[0] + dx, c[1] + dy}]
+				if !b.spend(int64(len(near))) {
+					return roofShell{}, errSkelTooComplex()
+				}
+				for _, j := range near {
+					if q := raw[j]; math.Hypot(q[0]-p[0], q[1]-p[1]) < gridSnap {
+						ri, rj := find(i), find(j)
+						root[max(ri, rj)] = min(ri, rj)
 					}
 				}
 			}
 		}
-		id := uint32(len(sh.pts))
-		cells[c] = append(cells[c], id)
-		sh.pts = append(sh.pts, p)
-		return id
+		cells[c] = append(cells[c], i)
 	}
+	index := map[int]uint32{} // a cluster's first point to its mesh point
+	next := 0
 	for _, f := range faces {
 		var plan [][2]float64
 		var ids []uint32
-		for _, p := range f.Poly {
-			id := weld(p)
+		for range f.Poly {
+			r := find(next)
+			next++
+			id, ok := index[r]
+			if !ok {
+				id = uint32(len(sh.pts))
+				index[r] = id
+				sh.pts = append(sh.pts, raw[r])
+			}
 			if len(ids) > 0 && id == ids[len(ids)-1] {
 				continue
 			}
 			ids = append(ids, id)
-			plan = append(plan, [2]float64{sh.pts[id][0], sh.pts[id][1]})
+			plan = append(plan, [2]float64{raw[r][0], raw[r][1]})
 		}
 		for len(ids) > 1 && ids[len(ids)-1] == ids[0] {
 			ids, plan = ids[:len(ids)-1], plan[:len(plan)-1]
