@@ -18,6 +18,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.22.0 — 2026-11-21
+
 ### Added
 
 - **Build pitched roofs in layers.** `BuildRoofLayers` takes an outline, a
