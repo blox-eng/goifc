@@ -80,9 +80,13 @@ func TestStoreyPlansClimbADeepChainOnce(t *testing.T) {
 		nodes = append(nodes, ImportNode{GlobalID: fmt.Sprintf("E%d", i), IFCClass: "IfcElementAssembly", ParentIndex: iptr(i - 1)})
 	}
 	done := make(chan []string, 1)
+	start := time.Now()
 	go func() { done <- enclosingStoreys(nodes) }()
 	select {
 	case storey := <-done:
+		if d := time.Since(start); d > planLimit() {
+			t.Fatalf("the climb took %v, want under %v", d, planLimit())
+		}
 		for i := 1; i <= chain; i++ {
 			if storey[i] != "S" {
 				t.Fatalf("node %d climbs to %q, want S", i, storey[i])
