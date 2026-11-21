@@ -181,3 +181,73 @@ func TestBuildPlanSlabHoles(t *testing.T) {
 		t.Errorf("error %v, want an *ItemError for s1 wrapping a *HoleError for hole 1, outside", err)
 	}
 }
+
+func TestBuildPlanRoof(t *testing.T) {
+	rect := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}}
+	got, err := BuildPlan(Plan{Roofs: []PlanRoof{
+		{ID: "r1", Outline: rect, Pitch: 30, Layers: []float64{0.05, 0.2}},
+		{ID: "r2", Outline: rect, Pitch: 30, Thickness: 0.25},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, r := range got.Roofs {
+		ids = append(ids, r.ID)
+		if r.Roof.Element.GlobalID != r.ID {
+			t.Errorf("%s: GlobalID %q", r.ID, r.Roof.Element.GlobalID)
+		}
+	}
+	if want := []string{"r1/0", "r1/1", "r2"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("roof IDs %v, want %v", ids, want)
+	}
+	whole, err := BuildRoofLayers(rect, RoofSpec{Pitch: 30}, []float64{0.25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	vol := got.Roofs[0].Roof.Quantities.Volume + got.Roofs[1].Roof.Quantities.Volume
+	if math.Abs(vol-whole[0].Quantities.Volume) > 1e-9 || got.Roofs[2].Roof.Quantities != whole[0].Quantities {
+		t.Errorf("volumes %v, %v, want %v", vol, got.Roofs[2].Roof.Quantities.Volume, whole[0].Quantities.Volume)
+	}
+}
+
+func TestBuildPlanRoofRefusal(t *testing.T) {
+	l := [][2]float64{{0, 0}, {18, 0}, {18, 6}, {12, 6}, {12, 10}, {0, 10}}
+	_, err := BuildPlan(Plan{Roofs: []PlanRoof{{ID: "r1", Outline: l, Pitch: 30, Gables: []int{2}, Thickness: 0.2}}})
+	var ie *ItemError
+	var re *RoofError
+	if !errors.As(err, &ie) || ie.Item != "r1" || !errors.As(err, &re) || re.Reason != ReasonRoofStep || re.Edge != 2 {
+		t.Errorf("error %v, want an *ItemError for r1 wrapping a *RoofError for edge 2, roof_step", err)
+	}
+	rect := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}}
+	for name, r := range map[string]PlanRoof{
+		"both":    {ID: "a", Outline: rect, Pitch: 30, Thickness: 0.2, Layers: []float64{0.1}},
+		"neither": {ID: "b", Outline: rect, Pitch: 30},
+	} {
+		if _, err := BuildPlan(Plan{Roofs: []PlanRoof{r}}); !errors.Is(err, errThicknessOrLayers) {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if _, err := BuildPlan(Plan{Slabs: []PlanSlab{{ID: "x", Outline: rect, Thickness: 0.2}}, Roofs: []PlanRoof{{ID: "x", Outline: rect, Pitch: 30, Thickness: 0.2}}}); err == nil || !strings.Contains(err.Error(), `"x"`) {
+		t.Errorf("duplicate ID across slab and roof: %v", err)
+	}
+}
+
+func TestBuildPlanRoofCounts(t *testing.T) {
+	rect := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}}
+	roofs := make([]PlanRoof, maxPlanItems+1)
+	if _, err := BuildPlan(Plan{Roofs: roofs}); err == nil || !strings.Contains(err.Error(), "over the") {
+		t.Errorf("items over the cap: %v", err)
+	}
+	layers := make([]float64, 1_000)
+	if n := planElements(Plan{Roofs: []PlanRoof{{ID: "r", Outline: rect, Layers: layers}}}); n != 1_000 {
+		t.Errorf("roof layers count %d elements, want 1000", n)
+	}
+	many := make([]PlanRoof, 101)
+	for i := range many {
+		many[i].Layers = layers
+	}
+	if _, err := BuildPlan(Plan{Roofs: many}); err == nil || !strings.Contains(err.Error(), "elements") {
+		t.Errorf("elements over the cap: %v", err)
+	}
+}

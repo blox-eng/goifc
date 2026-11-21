@@ -70,8 +70,23 @@ func previewLHouse(t *testing.T) previewFixture {
 	return previewFixture{"l-house", ws, []Slab{mustSlab(t, outline, 0, 0.2)}}
 }
 
+// previewRoofL is a hip roof over an L: a roof draws as a slab, from its element.
+func previewRoofL(t *testing.T) previewFixture {
+	t.Helper()
+	outline := [][2]float64{{0, 0}, {18, 0}, {18, 6}, {12, 6}, {12, 10}, {0, 10}}
+	roofs, err := BuildRoofLayers(outline, RoofSpec{Pitch: 30, Eaves: 3, Overhang: 0.5}, []float64{0.1, 0.2})
+	if err != nil {
+		t.Fatalf("BuildRoofLayers: %v", err)
+	}
+	var slabs []Slab
+	for _, r := range roofs {
+		slabs = append(slabs, Slab{Element: r.Element})
+	}
+	return previewFixture{"roof-l", nil, slabs}
+}
+
 func previewFixtures(t *testing.T) []previewFixture {
-	return []previewFixture{previewRoom(t), previewLayeredWall(t, [2][2]float64{{0, 0}, {4, 0}}), previewLHouse(t)}
+	return []previewFixture{previewRoom(t), previewLayeredWall(t, [2][2]float64{{0, 0}, {4, 0}}), previewLHouse(t), previewRoofL(t)}
 }
 
 func mustPreview(t *testing.T, walls []Wall, slabs []Slab) ([]byte, Detail) {

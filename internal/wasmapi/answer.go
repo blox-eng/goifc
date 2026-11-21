@@ -11,7 +11,7 @@ import (
 // Caps on one request.
 const (
 	maxRequestBytes = 16 << 20 // a build request's JSON
-	maxItems        = 10_000   // walls + rooms + slabs in one build request
+	maxItems        = 10_000   // walls + rooms + slabs + roofs in one build request
 	maxElements     = 100_000  // elements one build request builds, layers and room walls counted
 	maxReadBytes    = 48 << 20 // an IFC file given to Read: about 1.7 GiB of wasm memory, measured
 )
@@ -25,6 +25,8 @@ type Error struct {
 	Opening *int   `json:"opening,omitempty"`
 	Join    *int   `json:"join,omitempty"`
 	Hole    *int   `json:"hole,omitempty"`
+	Edge    *int   `json:"edge,omitempty"`
+	Other   *int   `json:"other,omitempty"`
 	Message string `json:"message"`
 }
 
@@ -109,6 +111,7 @@ func itemError(item string, err error) Error {
 	e := Error{Code: codeOf(err), Item: item, Message: err.Error()}
 	var pe *geometry.PlacementError
 	var he *geometry.HoleError
+	var re *geometry.RoofError
 	switch {
 	case errors.As(err, &pe):
 		e.Code = string(pe.Reason)
@@ -116,6 +119,14 @@ func itemError(item string, err error) Error {
 	case errors.As(err, &he):
 		e.Code = holeCodes[he.Reason]
 		e.Hole = &he.Hole
+	case errors.As(err, &re):
+		e.Code = string(re.Reason)
+		if re.Edge >= 0 {
+			e.Edge = &re.Edge
+		}
+		if re.Other >= 0 {
+			e.Other = &re.Other
+		}
 	}
 	return e
 }
