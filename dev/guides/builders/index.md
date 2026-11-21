@@ -118,6 +118,20 @@ A hole that does not fit is refused, not clipped. Each refusal is a `*HoleError`
 
 "Touches" means closer than 1 mm. A slab takes at most 64 holes and 2,048 points in all. `BuildPlan` takes holes on its slabs, and the wasm build request takes a `holes` field on a slab; its refusals are `hole_outside`, `holes_overlap` and `hole_self_crossing`, with the item and the hole.
 
+## Roofs
+
+```
+rect := [][2]float64{{0, 0}, {10, 0}, {10, 8}, {0, 8}}
+roofs, err := geometry.BuildRoofLayers(rect, geometry.RoofSpec{Pitch: 30, Eaves: 3}, []float64{0.25})
+// roofs[0].Quantities: PlanArea 80 m², SlopeArea 92.4 m², Ridge 2 m, Hip 24.4 m
+```
+
+`BuildRoofLayers` takes a plan outline, either winding, and a `RoofSpec`: the `Pitch` in degrees, the `Eaves` height of the outline, an `Overhang` in metres, and the `Gables`. Every edge slopes up and inward at the pitch, except the gable ends. Gables are stated per edge, by its index in the outline: a hip roof has none, a gable roof has the two end edges, and a mono-pitch roof has every edge but the low one. goifc never picks a ridge or a low edge.
+
+Layers are given top first, like slabs, and each layer is a `Roof` with its own mesh and volume, measured normal to the slope. Each layer ends in vertical sides on the plumb line, the outline offset by the overhang. `Planes` lists one face per sloped plane of the top, in outline-edge order; sloped edges on one line, as a T-join leaves, are one plane, listed under the first of them. The quantities are `SlopeArea`, `PlanArea`, `Volume`, and the 3D line lengths `Eaves`, `Ridge`, `Hip`, `Valley`, `Verge` and `Top`.
+
+A roof the skeleton cannot build is a `*RoofError` with a `Reason` and the outline's edges. A gable that would leave a vertical step inside the roof is `roof_step`, naming the edge. `BuildPlan` takes roofs as `PlanRoof` items, named like slabs (`r1`, or `r1/0` and `r1/1` for layers), with `Thickness` or `Layers`, never both. To draw a roof in `WritePreviewSVG`, pass `geometry.Slab{Element: roof.Element}`.
+
 ## Niches
 
 An opening with a `Depth` is a niche. It is cut from the measured face to that depth, and the opposite face stays whole. A niche needs a sill, and its depth must stay at least 1 mm inside the wall.

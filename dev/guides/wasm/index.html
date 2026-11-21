@@ -708,15 +708,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#build-walls-and-slabs" class="md-nav__link">
+  <a href="#build-walls-slabs-and-roofs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Build walls and slabs
+        Build walls, slabs and roofs
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Build walls and slabs">
+    <nav class="md-nav" aria-label="Build walls, slabs and roofs">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -746,6 +746,17 @@
     <span class="md-ellipsis">
       
         Slabs with holes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pitched-roofs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pitched roofs
       
     </span>
   </a>
@@ -1281,15 +1292,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#build-walls-and-slabs" class="md-nav__link">
+  <a href="#build-walls-slabs-and-roofs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Build walls and slabs
+        Build walls, slabs and roofs
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Build walls and slabs">
+    <nav class="md-nav" aria-label="Build walls, slabs and roofs">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1319,6 +1330,17 @@
     <span class="md-ellipsis">
       
         Slabs with holes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pitched-roofs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pitched roofs
       
     </span>
   </a>
@@ -1403,8 +1425,8 @@
 <p>goifc runs in a browser as two WebAssembly files that share one JSON
 contract:</p>
 <ul>
-<li><strong><code>goifc-build.wasm</code></strong> builds walls, the walls of a room, and slabs from
-  numbers. One request holds a whole plan; the answer has the quantities,
+<li><strong><code>goifc-build.wasm</code></strong> builds walls, the walls of a room, slabs and
+  pitched roofs from numbers. One request holds a whole plan; the answer has the quantities,
   the faces, a GLB of the meshes and, on request, the SVG preview.</li>
 <li><strong><code>goifc-read.wasm</code></strong> reads an IFC file. The answer has the import tree,
   a GLB and the parts you ask for.</li>
@@ -1462,7 +1484,7 @@ against it:</p>
 write new sums. Each of the six files has its own attestation too, so the
 same <code>gh attestation verify</code> works on any one of them. Keep the six files
 in one folder, and serve <code>.wasm</code> as <code>Content-Type: application/wasm</code>.</p>
-<h2 id="build-walls-and-slabs">Build walls and slabs<a class="headerlink" href="#build-walls-and-slabs" title="Permanent link">&para;</a></h2>
+<h2 id="build-walls-slabs-and-roofs">Build walls, slabs and roofs<a class="headerlink" href="#build-walls-slabs-and-roofs" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createBuilder</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"/static/goifc/goifc.js"</span><span class="p">;</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">builder</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">createBuilder</span><span class="p">({</span><span class="w"> </span><span class="nx">base</span><span class="o">:</span><span class="w"> </span><span class="s2">"/static/goifc/"</span><span class="w"> </span><span class="p">});</span>
@@ -1490,7 +1512,7 @@ in one folder, and serve <code>.wasm</code> as <code>Content-Type: application/w
 </code></pre></div>
 <p><code>glb</code> is an <code>ArrayBuffer</code>: load it with any glTF loader. Each element is a
 node named by its element id.</p>
-<p>A request has three lists, <code>walls</code>, <code>rooms</code> and <code>slabs</code>, and <code>preview</code>.
+<p>A request has four lists, <code>walls</code>, <code>rooms</code>, <code>slabs</code> and <code>roofs</code>, and <code>preview</code>.
 Each item's fields are the Go builder's parameters (see
 <a href="../builders/">Building from numbers</a>), in meters:</p>
 <ul>
@@ -1502,6 +1524,10 @@ Each item's fields are the Go builder's parameters (see
   outline edge; <code>null</code> or <code>[]</code> for none).</li>
 <li><strong>slab:</strong> <code>id</code>, <code>outline</code>, <code>holes</code> (optional: one list of points per hole,
   for a stair or a shaft), <code>z</code> (the top), <code>thickness</code> or <code>layers</code>.</li>
+<li><strong>roof:</strong> <code>id</code>, <code>outline</code>, <code>pitch</code> (degrees, over 0 and up to 75), <code>gables</code>
+  (optional: the outline edges that are vertical gable ends, counted from 0),
+  <code>overhang</code> (optional, metres, 0 to 3, 0 when left out), <code>eaves</code> (the height
+  of the underside at the outline line), <code>thickness</code> or <code>layers</code>.</li>
 <li><strong>opening:</strong> <code>offset</code>, <code>sill</code>, <code>width</code>, <code>height</code>, and <code>depth</code> for a
   niche (0 or left out cuts through).</li>
 <li><strong>join:</strong> <code>end</code> (<code>"a"</code> for <code>edge[0]</code>, <code>"b"</code> for <code>edge[1]</code>) and <code>wall</code>, the
@@ -1547,6 +1573,14 @@ Each built element gets an id from it:</p>
 <td>slab in layers</td>
 <td><code>s1/0</code>, <code>s1/1</code>, … (top first)</td>
 </tr>
+<tr>
+<td>roof</td>
+<td><code>r1</code></td>
+</tr>
+<tr>
+<td>roof in layers</td>
+<td><code>r1/0</code>, <code>r1/1</code>, … (top first)</td>
+</tr>
 </tbody>
 </table>
 <h3 id="walls-that-meet-mid-wall">Walls that meet mid-wall<a class="headerlink" href="#walls-that-meet-mid-wall" title="Permanent link">&para;</a></h3>
@@ -1565,7 +1599,8 @@ opposite faces, and <code>measuredNet</code> and <code>otherNet</code> already e
 </code></pre></div>
 <p>Here T's <code>measuredJoins</code> is 0.25 and its <code>measuredNet</code> 9.75.</p>
 <p><code>answer.walls</code> lists the walls of <code>walls</code> and <code>rooms</code>, in request order;
-<code>answer.slabs</code> lists the slabs.</p>
+<code>answer.slabs</code> lists the slabs; <code>answer.roofs</code> lists the roofs, and is absent
+when the request has none.</p>
 <h3 id="slabs-with-holes">Slabs with holes<a class="headerlink" href="#slabs-with-holes" title="Permanent link">&para;</a></h3>
 <p>A hole is a ring of 3 or more points inside the outline, at least 1 mm from
 it and from the other holes. A slab takes up to 64 holes and 2,048 points in
@@ -1577,18 +1612,38 @@ all.</p>
 outline's, and <code>holePerimeter</code> is the holes' edges together (7.4 here, area
 77). <code>top.holes</code> lists the holes in the top face's <code>u</code>, <code>v</code>; it is absent
 for a slab without holes.</p>
+<h3 id="pitched-roofs">Pitched roofs<a class="headerlink" href="#pitched-roofs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"roofs"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"r1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"outline"</span><span class="p">:</span><span class="w"> </span><span class="p">[[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">8</span><span class="p">]],</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="nt">"pitch"</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span><span class="w"> </span><span class="nt">"eaves"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="nt">"thickness"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="w"> </span><span class="p">}]</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>Every edge slopes up and inward at <code>pitch</code>, except the <code>gables</code>. Each roof
+in <code>answer.roofs</code> has <code>quantities</code> and <code>planes</code>. The quantities are
+<code>slopeArea</code>, <code>planArea</code>, <code>volume</code>, and the lengths <code>eaves</code>, <code>ridge</code>, <code>hip</code>,
+<code>valley</code>, <code>verge</code> and <code>top</code> (here <code>ridge</code> is 2 and <code>planArea</code> 80). <code>planes</code>
+holds one face per sloped plane of the top, in the faces' <code>u</code>, <code>v</code>, like a
+slab's <code>top</code>; sloped edges on one line are one plane. A roof in layers gives one entry per layer, each with its own
+<code>volume</code>; the areas and lengths are the same in all.</p>
+<p>The preview draws a roof's sloped planes like a slab's faces, so the
+ridges, hips and valleys show as the edges between planes.</p>
+<p>A roof goifc cannot build is refused with one of these codes, with <code>item</code>
+and, where an edge is at fault, <code>edge</code> (and <code>other</code> for a second edge):
+<code>pitch_out_of_range</code>, <code>gable_out_of_range</code>, <code>gable_repeated</code>,
+<code>no_sloped_edge</code>, <code>roof_step</code>, <code>gable_collinear</code>, <code>overhang_out_of_range</code>,
+<code>overhang_closes_outline</code>, <code>roof_too_complex</code>. For example, on an L outline
+<code>roof_step</code> with <code>edge</code> 2 means the gable edge 2 leaves a step between two
+planes.</p>
 <p>three.js's <code>GLTFLoader</code> removes <code>[ ] . : /</code> from node names, so <code>w1/0</code>
 loads as <code>w10</code>. Read the element id from <code>node.userData.name</code>: it keeps
 the name as the GLB has it.</p>
 <h2 id="read-an-ifc-file">Read an IFC file<a class="headerlink" href="#read-an-ifc-file" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createReader</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"/static/goifc/goifc.js"</span><span class="p">;</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">createReader</span><span class="p">({</span><span class="w"> </span><span class="nx">base</span><span class="o">:</span><span class="w"> </span><span class="s2">"/static/goifc/"</span><span class="w"> </span><span class="p">});</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">answer</span><span class="p">,</span><span class="w"> </span><span class="nx">glb</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">reader</span><span class="p">.</span><span class="nx">read</span><span class="p">(</span><span class="nx">file</span><span class="p">);</span><span class="w"> </span><span class="c1">// a File, Blob, ArrayBuffer or Uint8Array</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">createReader</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"/static/goifc/goifc.js"</span><span class="p">;</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kd">const</span><span class="w"> </span><span class="nx">reader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">createReader</span><span class="p">({</span><span class="w"> </span><span class="nx">base</span><span class="o">:</span><span class="w"> </span><span class="s2">"/static/goifc/"</span><span class="w"> </span><span class="p">});</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kd">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">answer</span><span class="p">,</span><span class="w"> </span><span class="nx">glb</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">reader</span><span class="p">.</span><span class="nx">read</span><span class="p">(</span><span class="nx">file</span><span class="p">);</span><span class="w"> </span><span class="c1">// a File, Blob, ArrayBuffer or Uint8Array</span>
 </code></pre></div>
 <p>By default the answer has <code>nodes</code>, and <code>glb</code> holds the meshes. Ask for
 more with <code>include</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">await</span><span class="w"> </span><span class="nx">reader</span><span class="p">.</span><span class="nx">read</span><span class="p">(</span><span class="nx">file</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">include</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"nodes"</span><span class="p">,</span><span class="w"> </span><span class="s2">"glb"</span><span class="p">,</span><span class="w"> </span><span class="s2">"psets"</span><span class="p">,</span><span class="w"> </span><span class="s2">"storeyPlans"</span><span class="p">,</span><span class="w"> </span><span class="s2">"typeLayers"</span><span class="p">]</span><span class="w"> </span><span class="p">});</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">await</span><span class="w"> </span><span class="nx">reader</span><span class="p">.</span><span class="nx">read</span><span class="p">(</span><span class="nx">file</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">include</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"nodes"</span><span class="p">,</span><span class="w"> </span><span class="s2">"glb"</span><span class="p">,</span><span class="w"> </span><span class="s2">"psets"</span><span class="p">,</span><span class="w"> </span><span class="s2">"storeyPlans"</span><span class="p">,</span><span class="w"> </span><span class="s2">"typeLayers"</span><span class="p">]</span><span class="w"> </span><span class="p">});</span>
 </code></pre></div>
 <table>
 <thead>
@@ -1628,21 +1683,21 @@ not read, for example an element with no geometry.</p>
 A malformed field (a <code>null</code> or missing value, a join with no <code>end</code> or <code>wall</code>,
 a <code>thickness</code> of 0, or both <code>thickness</code> and <code>layers</code>) is reported alone,
 before any geometry runs:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">"goifcVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v0.19.0"</span><span class="p">,</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
-<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">"errors"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"overlaps"</span><span class="p">,</span><span class="w"> </span><span class="nt">"item"</span><span class="p">:</span><span class="w"> </span><span class="s2">"w1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"wall"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"opening"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"wall 0 opening 1: overlaps"</span><span class="w"> </span><span class="p">},</span>
-<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"above_wall"</span><span class="p">,</span><span class="w"> </span><span class="nt">"item"</span><span class="p">:</span><span class="w"> </span><span class="s2">"w1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"wall"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"opening"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"wall 0 opening 2: above_wall"</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="p">]</span>
-<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">"goifcVersion"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v0.19.0"</span><span class="p">,</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">"errors"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"overlaps"</span><span class="p">,</span><span class="w"> </span><span class="nt">"item"</span><span class="p">:</span><span class="w"> </span><span class="s2">"w1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"wall"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"opening"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"wall 0 opening 1: overlaps"</span><span class="w"> </span><span class="p">},</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"above_wall"</span><span class="p">,</span><span class="w"> </span><span class="nt">"item"</span><span class="p">:</span><span class="w"> </span><span class="s2">"w1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"wall"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"opening"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"wall 0 opening 2: above_wall"</span><span class="w"> </span><span class="p">}</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">}</span>
 </code></pre></div>
 <p><code>item</code> is the id you gave. <code>wall</code> is the outline edge (0 for a wall item)
 and <code>opening</code> the index in its openings. A refused join has <code>item</code> (the
 partition) and <code>join</code>, the index in its <code>joins</code>, instead of <code>wall</code> and
 <code>opening</code>; a refused hole has <code>item</code> (the slab) and <code>hole</code>, the index in its
 <code>holes</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"not_on_face"</span><span class="p">,</span><span class="w"> </span><span class="nt">"item"</span><span class="p">:</span><span class="w"> </span><span class="s2">"P"</span><span class="p">,</span><span class="w"> </span><span class="nt">"join"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"P join 0: not_on_face"</span><span class="w"> </span><span class="p">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span><span class="w"> </span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"not_on_face"</span><span class="p">,</span><span class="w"> </span><span class="nt">"item"</span><span class="p">:</span><span class="w"> </span><span class="s2">"P"</span><span class="p">,</span><span class="w"> </span><span class="nt">"join"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"P join 0: not_on_face"</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
 <p>Match on <code>code</code>; <code>message</code> is for a person.</p>
 <table>
