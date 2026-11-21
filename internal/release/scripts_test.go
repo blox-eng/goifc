@@ -458,6 +458,11 @@ func TestOpenPromotePRKeepsAHandPromotion(t *testing.T) {
 	if calls := ghLog(t, log); strings.Contains(calls, "pr merge") {
 		t.Errorf("auto-merge was turned on for a hand promotion:\n%s", calls)
 	}
+	// The workflow's wait loop switches to main next: an edit left behind
+	// stops that switch when main changed the same file.
+	if st := gitOut(t, dir, "status", "--porcelain"); st != "" {
+		t.Errorf("the script left edits in the working tree:\n%s", st)
+	}
 }
 
 // A failed push names the token's likely cause and never prints the token.

@@ -55,6 +55,8 @@ if [[ -n "$remote_sha" ]]; then
   git fetch -q "$push_url" "$remote_sha" 2> >(redact >&2)
   if [[ "$(git log -1 --format=%ae FETCH_HEAD)" != "$bot_email" ]]; then
     echo "$branch holds a promotion made by hand ($remote_sha): leaving it and its pull request alone."
+    # The workflow's wait loop switches to main next: drop this run's edits.
+    git checkout -q -- .
     exit 0
   fi
 fi
