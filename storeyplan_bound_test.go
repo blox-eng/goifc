@@ -69,19 +69,31 @@ func TestStoreyPlansSurviveAParentCycle(t *testing.T) {
 }
 
 // Each element of a long parent chain climbs to the one storey at its top.
-// Climbing the whole chain again for each element costs chain² steps.
+// Climbing the whole chain again for each element costs chain² steps: tens
+// of seconds here, against milliseconds for one climb. The climb is timed on
+// its own, without meshes: cutting a footprint per element is fixed work that
+// a loaded machine slows past the bound (#172).
 func TestStoreyPlansClimbADeepChainOnce(t *testing.T) {
 	const chain = 100_000
 	nodes := []ImportNode{{GlobalID: "S", IFCClass: "IfcBuildingStorey"}}
-	mesh := map[string]geometry.Element{}
 	for i := 1; i <= chain; i++ {
-		gid := fmt.Sprintf("E%d", i)
-		nodes = append(nodes, ImportNode{GlobalID: gid, IFCClass: "IfcElementAssembly", ParentIndex: iptr(i - 1)})
-		mesh[gid] = boxElem(gid, [3]float64{0, 0, 0}, [3]float64{1, 1, 3})
+		nodes = append(nodes, ImportNode{GlobalID: fmt.Sprintf("E%d", i), IFCClass: "IfcElementAssembly", ParentIndex: iptr(i - 1)})
 	}
-	plans, _ := plansWithin(t, nodes, mesh, map[string]float64{"S": 0})
-	if len(plans) != 1 || len(plans[0].Entities) != chain {
-		t.Fatalf("got %d plans, want one holding all %d elements", len(plans), chain)
+	done := make(chan []string, 1)
+	start := time.Now()
+	go func() { done <- enclosingStoreys(nodes) }()
+	select {
+	case storey := <-done:
+		if d := time.Since(start); d > planLimit() {
+			t.Fatalf("the climb took %v, want under %v", d, planLimit())
+		}
+		for i := 1; i <= chain; i++ {
+			if storey[i] != "S" {
+				t.Fatalf("node %d climbs to %q, want S", i, storey[i])
+			}
+		}
+	case <-time.After(planLimit()):
+		t.Fatalf("the climb did not finish in %v", planLimit())
 	}
 }
 
