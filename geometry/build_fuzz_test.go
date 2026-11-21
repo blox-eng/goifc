@@ -375,3 +375,79 @@ func FuzzBuildPlan(f *testing.F) {
 		}
 	})
 }
+
+// FuzzBuildRoofLayers builds a two-layer roof over up to six points; a point
+// that repeats the one before is dropped, so shorter outlines are reachable.
+// Bit i of gables makes edge i a gable end. Seeds are in testdata.
+func FuzzBuildRoofLayers(f *testing.F) {
+	f.Fuzz(func(t *testing.T, x0, y0, x1, y1, x2, y2, x3, y3, x4, y4, x5, y5 float64, gables uint8, pitch, overhang float64) {
+		var outline [][2]float64
+		for _, p := range [][2]float64{{x0, y0}, {x1, y1}, {x2, y2}, {x3, y3}, {x4, y4}, {x5, y5}} {
+			for _, c := range p {
+				if math.IsNaN(c) || math.Abs(c) > 1e3 {
+					t.Skip()
+				}
+			}
+			if len(outline) == 0 || p != outline[len(outline)-1] {
+				outline = append(outline, p)
+			}
+		}
+		spec := RoofSpec{Pitch: pitch, Overhang: overhang, Eaves: 3}
+		for i := range min(len(outline), 6) {
+			if gables&(1<<i) != 0 {
+				spec.Gables = append(spec.Gables, i)
+			}
+		}
+		layers := []float64{0.05, 0.15}
+		roofs, err := BuildRoofLayers(outline, spec, layers)
+		if err != nil {
+			var re *RoofError
+			if !errors.As(err, &re) && !errors.Is(err, ErrTooLarge) && checkOutline(outline) == nil {
+				t.Fatalf("refusal %v is not a roof, size or outline refusal", err)
+			}
+			return
+		}
+		if len(roofs) != len(layers) {
+			t.Fatalf("%d roofs for %d layers", len(roofs), len(layers))
+		}
+		c := math.Cos(pitch * math.Pi / 180)
+		var area, eaves float64
+		gable := make([]bool, len(outline))
+		for _, g := range spec.Gables {
+			gable[g] = true
+		}
+		o := outline[0]
+		for i, p := range outline {
+			n := outline[(i+1)%len(outline)]
+			area += (p[0]-o[0])*(n[1]-o[1]) - (n[0]-o[0])*(p[1]-o[1])
+			if !gable[i] {
+				eaves += math.Hypot(n[0]-p[0], n[1]-p[1])
+			}
+		}
+		area = math.Abs(area) / 2
+		first := roofs[0].Quantities
+		for k, r := range roofs {
+			q := r.Quantities
+			if !nearRel(q.SlopeArea, q.PlanArea/c, 1e-9) || !nearRel(q.Volume, q.PlanArea*layers[k]/c, 1e-9) {
+				t.Fatalf("layer %d: slope area %v, volume %v for plan area %v, cos %v", k, q.SlopeArea, q.Volume, q.PlanArea, c)
+			}
+			if q.PlanArea < area*(1-1e-9) || overhang == 0 && !nearRel(q.PlanArea, area, 1e-9) {
+				t.Fatalf("plan area %v, outline area %v, overhang %v", q.PlanArea, area, overhang)
+			}
+			if overhang == 0 && !nearRel(q.Eaves, eaves, 1e-9) {
+				t.Fatalf("eaves %v, want the sloped edges' %v", q.Eaves, eaves)
+			}
+			a, b := first, q
+			a.Volume, b.Volume = 0, 0
+			if a != b {
+				t.Fatalf("layer %d quantities %+v differ from layer 0's %+v beyond volume", k, q, first)
+			}
+			if len(r.Planes) == 0 {
+				t.Fatal("no sloped planes")
+			}
+			meshAgrees(t, r.Element, q.Volume, 2*q.SlopeArea+2*q.PlanArea, 0,
+				q.SlopeArea, q.PlanArea, q.Volume, q.Eaves, q.Ridge, q.Hip, q.Valley, q.Verge, q.Top)
+			roofTrue(t, r, ringSize(outline), pitch)
+		}
+	})
+}

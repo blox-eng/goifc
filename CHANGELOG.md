@@ -26,6 +26,21 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 - The Release workflow runs only after CI on a push to `main`: a fork's pull
   request from a branch named `main` no longer starts it.
 
+## v0.22.0 — 2026-11-21
+
+### Added
+
+- **Build pitched roofs in layers.** `BuildRoofLayers` takes an outline, a
+  `RoofSpec` (pitch, gable edges, overhang, eaves height) and layer
+  thicknesses, and reports slope area, plan area, volume and the eaves, ridge,
+  hip, valley, verge and top lengths; a roof it cannot build is a `*RoofError`
+  (`pitch_out_of_range`, `gable_out_of_range`, `gable_repeated`,
+  `no_sloped_edge`, `roof_step`, `gable_collinear`, `overhang_out_of_range`,
+  `overhang_closes_outline`, `roof_too_complex`). `BuildPlan` builds roofs as
+  `PlanRoof` items, and the wasm build request takes a `roofs` list, answers
+  with each roof's quantities and planes, and refuses with the same codes (the
+  error gains `edge` and `other`). (#161)
+
 ## v0.21.0 — 2026-11-19
 
 ### Added

@@ -210,6 +210,9 @@ func TestSchema_Goldens(t *testing.T) {
 func TestSchema_RejectsDrift(t *testing.T) {
 	v := loadSchema(t)
 	for _, c := range []struct{ name, def, doc string }{
+		{"unknown roof code", "buildAnswer", `{"goifcVersion":"v","ok":false,"errors":[{"code":"roof_nope","message":"m"}]}`},
+		{"extra roof key", "buildAnswer", `{"goifcVersion":"v","ok":true,"walls":[],"slabs":[],"roofs":[{"id":"r","quantities":{},"planes":[],"Extra":1}]}`},
+		{"roof thickness and layers", "buildRequest", `{"roofs":[{"id":"r","outline":[[0,0],[1,0],[1,1]],"pitch":30,"eaves":0,"thickness":0.2,"layers":[0.2]}]}`},
 		{"extra answer key", "buildAnswer", `{"goifcVersion":"v","ok":true,"walls":[],"slabs":[],"Extra":1}`},
 		{"misspelt request field", "buildRequest", `{"walls":[{"id":"w","edge":[[0,0],[1,0]],"base":0,"height":1,"thikness":0.2,"side":"left"}]}`},
 		{"unknown code", "buildAnswer", `{"goifcVersion":"v","ok":false,"errors":[{"code":"nope","message":"m"}]}`},

@@ -367,3 +367,97 @@ func TestBuild_RefusedHole(t *testing.T) {
 		t.Errorf("error %+v, want hole_outside on s1 hole 1", e)
 	}
 }
+
+func TestBuild_Roof(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/roof.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	if glb == nil {
+		t.Fatalf("answer %s, want a GLB", answer)
+	}
+	var a struct {
+		Roofs []struct {
+			ID         string
+			Quantities struct{ SlopeArea, PlanArea, Ridge float64 }
+			Planes     []json.RawMessage
+		} `json:"roofs"`
+	}
+	if err := json.Unmarshal(answer, &a); err != nil || len(a.Roofs) != 1 {
+		t.Fatalf("answer %s: %v", answer, err)
+	}
+	r := a.Roofs[0]
+	if r.ID != "r1" || math.Abs(r.Quantities.Ridge-2) > 1e-9 || math.Abs(r.Quantities.PlanArea-80) > 1e-9 ||
+		math.Abs(r.Quantities.SlopeArea-80/math.Cos(math.Pi/6)) > 1e-9 || len(r.Planes) != 4 {
+		t.Errorf("roof %+v, want ridge 2, plan area 80, slope area 80/cos 30, four planes", r)
+	}
+	if got := glbNodeNames(t, glb); !slices.Equal(got, []string{"r1"}) {
+		t.Errorf("GLB nodes %v, want [r1]", got)
+	}
+	if strings.Contains(string(answer), `"holes"`) {
+		t.Errorf("answer %s, want roofs with no hole lists", answer)
+	}
+}
+
+func TestBuild_RoofLayersAndPreview(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/roof-layers.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	a := decodeAnswer(t, answer)
+	if !a.OK || a.Preview == nil || a.Preview.Error != nil {
+		t.Fatalf("answer %.300s, want ok with a preview", answer)
+	}
+	if got := glbNodeNames(t, glb); !slices.Equal(got, []string{"r1/0", "r1/1"}) {
+		t.Errorf("GLB nodes %v, want [r1/0 r1/1]", got)
+	}
+}
+
+func TestBuild_RefusedRoof(t *testing.T) {
+	req, err := os.ReadFile("testdata/build/refused-roof.request.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, glb := Build(testVersion, req)
+	a := decodeAnswer(t, answer)
+	if a.OK || glb != nil || len(a.Errors) != 1 {
+		t.Fatalf("answer %s, want one refusal and no GLB", answer)
+	}
+	e := a.Errors[0]
+	if e.Code != "roof_step" || e.Item != "r1" || e.Edge == nil || *e.Edge != 2 || e.Other != nil || e.Wall != nil || e.Hole != nil {
+		t.Errorf("error %+v, want roof_step on r1 edge 2 and no other", e)
+	}
+}
+
+func TestBuild_RoofInvalidInput(t *testing.T) {
+	for _, c := range []struct{ name, req, want string }{
+		{"no pitch", `{"roofs": [{"id": "r1", "outline": [[0, 0], [5, 0], [5, 4]], "eaves": 3, "thickness": 0.2}]}`, "pitch"},
+		{"no eaves", `{"roofs": [{"id": "r1", "outline": [[0, 0], [5, 0], [5, 4]], "pitch": 30, "thickness": 0.2}]}`, "eaves"},
+		{"null gable", `{"roofs": [{"id": "r1", "outline": [[0, 0], [5, 0], [5, 4]], "pitch": 30, "eaves": 3, "gables": [null], "thickness": 0.2}]}`, "gables"},
+		{"both", `{"roofs": [{"id": "r1", "outline": [[0, 0], [5, 0], [5, 4]], "pitch": 30, "eaves": 3, "thickness": 0.2, "layers": [0.2]}]}`, "not both"},
+	} {
+		a := decodeAnswer(t, func() []byte { b, _ := Build(testVersion, []byte(c.req)); return b }())
+		if a.OK || len(a.Errors) != 1 || a.Errors[0].Code != "invalid_input" || a.Errors[0].Item != "r1" || !strings.Contains(a.Errors[0].Message, c.want) {
+			t.Errorf("%s: answer %+v, want invalid_input on r1 naming %q", c.name, a, c.want)
+		}
+	}
+}
+
+func TestBuild_RoofsCountTowardCaps(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString(`{"roofs": [`)
+	for i := range maxItems + 1 {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		fmt.Fprintf(&sb, `{"id": "r%d", "outline": [[0, 0], [1, 0], [1, 1]], "pitch": 30, "eaves": 0, "thickness": 0.2}`, i)
+	}
+	sb.WriteString(`]}`)
+	answer, _ := Build(testVersion, []byte(sb.String()))
+	a := decodeAnswer(t, answer)
+	if a.OK || len(a.Errors) != 1 || a.Errors[0].Code != "too_large" {
+		t.Errorf("answer %.200s, want too_large", answer)
+	}
+}
