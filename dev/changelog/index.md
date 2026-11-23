@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.23.0 — 2026-11-23
+
 ### Added
 
 - **Price skirting per metre.** A wall built from numbers reports each face's length along its base, less the doors and the joined partitions that stand there: `MeasuredFloorLine` and `OtherFloorLine` in Go, `measuredFloorLine` and `otherFloorLine` in the wasm answer and its schema. Each layer reports its own pair. (#174)
