@@ -47,6 +47,7 @@ The arguments, in order:
 | `OtherGross`, `OtherNet` | The opposite face. At a room corner it is longer or shorter than the measured face. |
 | `MeasuredJoins`, `OtherJoins` | The strips that [joined partitions](#walls-that-meet-mid-wall) cover on each face, in m². The net areas already exclude them. |
 | `RevealPerimeter` | The opening edges, in m. A door (`Sill: 0`) has no bottom edge. |
+| `MeasuredFloorLine`, `OtherFloorLine` | Each face along the wall's base, in m, less the doors (`Sill: 0`) and the [joined partitions](#walls-that-meet-mid-wall) that stand on that line. A window takes nothing off. Price skirting per metre from it. |
 | `GrossVolume`, `NetVolume` | In m³. |
 | `NicheBack` | The back panels of the niches, in m². |
 
@@ -221,6 +222,10 @@ volumes add up to the whole wall's.
   add up across layers. For through openings, a layer's reveal area is
   `RevealPerimeter` × its thickness; in the layer where a niche ends, the
   niche's reveal is only as deep as the niche reaches into that layer.
+- **`MeasuredFloorLine` and `OtherFloorLine`** belong to each layer's own
+  faces: at a room corner each layer's opposite face has its own length. A
+  joined partition comes off the face it meets: layer 0's measured face or the
+  last layer's opposite face.
 
 At a corner that is almost straight, a layer's face end can snap by under
 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.
@@ -283,8 +288,10 @@ built, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{throug
 The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m².
 `MeasuredJoins` and `OtherJoins` hold the area taken off the measured and
 opposite faces, and `MeasuredNet` and `OtherNet` already exclude it: here
-`MeasuredNet` is 10 - 0.25 = 9.75 m². `Wall` is a wall item's ID or a room
-wall's `"r1/2"`.
+`MeasuredNet` is 10 - 0.25 = 9.75 m². The partition stands on the floor line,
+so `MeasuredFloorLine` is 4 - 0.1 = 3.9 m. A partition whose base is above the
+wall's base covers area but leaves the floor line whole. `Wall` is a wall
+item's ID or a room wall's `"r1/2"`.
 
 An end within 1 mm of the face snaps onto it. The partition's openings keep
 their place in the world when its start snaps, so a door does not slide.
