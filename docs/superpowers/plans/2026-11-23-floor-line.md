@@ -96,3 +96,4 @@ Read as a builder with only this plan and the repository. Each task names its fu
 ## Changes during build
 
 - Task 2: the test uses the existing join fixtures (`joinT`, 4 m, with `joinFixture` and `otherP`) instead of a new 10 m wall. The values become 3.9 and 4. It also covers the opposite face and both layer cases. Reason: the fixtures already pin the strip at x ∈ [1.9, 2], so the test reads the same numbers as the area tests.
+- Task 3: the plan's file map missed `wasm/goifc-contract.schema.json`. The schema closes `wallQuantities` (`additionalProperties: false`), so `TestSchema_Goldens` refused the new keys. Both keys are added to its properties and to `required`, since the answer always carries them.
