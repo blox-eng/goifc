@@ -20,11 +20,11 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ### Added
 
-- **Price skirting per metre.** Every wall reports each face's length along
-  its base, less the doors and the joined partitions that stand there:
-  `MeasuredFloorLine` and `OtherFloorLine` in Go, `measuredFloorLine` and
-  `otherFloorLine` in the wasm answer and its schema. Each layer reports its
-  own pair. (#174)
+- **Price skirting per metre.** A wall built from numbers reports each face's
+  length along its base, less the doors and the joined partitions that stand
+  there: `MeasuredFloorLine` and `OtherFloorLine` in Go, `measuredFloorLine`
+  and `otherFloorLine` in the wasm answer and its schema. Each layer reports
+  its own pair. (#174)
 
 ### Changed
 
