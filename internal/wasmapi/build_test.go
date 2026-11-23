@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/blox-eng/goifc/geometry"
 )
 
 type testAnswer struct {
@@ -147,6 +149,9 @@ type joinsAnswer struct {
 			MeasuredJoins float64 `json:"measuredJoins"`
 			MeasuredNet   float64 `json:"measuredNet"`
 			OtherJoins    float64 `json:"otherJoins"`
+
+			MeasuredFloorLine float64 `json:"measuredFloorLine"`
+			OtherFloorLine    float64 `json:"otherFloorLine"`
 		} `json:"quantities"`
 	} `json:"walls"`
 }
@@ -171,6 +176,20 @@ func TestBuild_Joins(t *testing.T) {
 		q := w.Quantities
 		if math.Abs(q.MeasuredJoins-0.25) > 1e-9 || math.Abs(q.MeasuredNet-9.75) > 1e-9 || q.OtherJoins != 0 {
 			t.Errorf("T quantities %+v, want measuredJoins 0.25, measuredNet 9.75, otherJoins 0", q)
+		}
+		// The same plan built in Go: the answer's floor lines are its numbers,
+		// the measured face less the 0.1 m partition.
+		b, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{
+			{ID: "T", Edge: [2][2]float64{{0, 0}, {4, 0}}, Height: 2.5, Thickness: 0.2, Side: geometry.SideLeft},
+			{ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}}, Height: 2.5, Thickness: 0.1, Side: geometry.SideLeft,
+				Joins: []geometry.Join{{End: geometry.EndB, Wall: "T"}}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := b.Walls[0].Wall.Quantities
+		if q.MeasuredFloorLine != g.MeasuredFloorLine || q.OtherFloorLine != g.OtherFloorLine || math.Abs(q.MeasuredFloorLine-3.9) > 1e-9 {
+			t.Errorf("T floor lines %v, %v, want Go's %v, %v (3.9 and 4)", q.MeasuredFloorLine, q.OtherFloorLine, g.MeasuredFloorLine, g.OtherFloorLine)
 		}
 		return
 	}

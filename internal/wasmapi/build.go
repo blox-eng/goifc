@@ -131,6 +131,9 @@ type wallQuantities struct {
 	GrossVolume     float64 `json:"grossVolume"`
 	NetVolume       float64 `json:"netVolume"`
 	NicheBack       float64 `json:"nicheBack"`
+
+	MeasuredFloorLine float64 `json:"measuredFloorLine"`
+	OtherFloorLine    float64 `json:"otherFloorLine"`
 }
 
 type slabQuantities struct {
@@ -541,6 +544,8 @@ func toWallQuantities(q geometry.WallQuantities) wallQuantities {
 		OtherGross: q.OtherGross, OtherJoins: q.OtherJoins, OtherNet: q.OtherNet,
 		RevealPerimeter: q.RevealPerimeter,
 		GrossVolume:     q.GrossVolume, NetVolume: q.NetVolume,
-		NicheBack: q.NicheBack,
+		NicheBack:         q.NicheBack,
+		MeasuredFloorLine: q.MeasuredFloorLine,
+		OtherFloorLine:    q.OtherFloorLine,
 	}
 }

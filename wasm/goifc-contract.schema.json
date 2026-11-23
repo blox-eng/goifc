@@ -576,6 +576,12 @@
         },
         "nicheBack": {
           "type": "number"
+        },
+        "measuredFloorLine": {
+          "type": "number"
+        },
+        "otherFloorLine": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -591,7 +597,9 @@
         "revealPerimeter",
         "grossVolume",
         "netVolume",
-        "nicheBack"
+        "nicheBack",
+        "measuredFloorLine",
+        "otherFloorLine"
       ]
     },
     "slabQuantities": {
