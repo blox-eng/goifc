@@ -18,6 +18,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.23.0 — 2026-11-23
+
 ### Added
 
 - **Price skirting per metre.** A wall built from numbers reports each face's
