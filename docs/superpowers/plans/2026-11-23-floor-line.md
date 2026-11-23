@@ -92,3 +92,7 @@ Next: builder:build
 ## Cold read
 
 Read as a builder with only this plan and the repository. Each task names its function and its test with values. The one gap was "which layer gets the strip": Task 2 now says layer 0's measured face, or the last layer's opposite face, as `subtractStrips` does today.
+
+## Changes during build
+
+- Task 2: the test uses the existing join fixtures (`joinT`, 4 m, with `joinFixture` and `otherP`) instead of a new 10 m wall. The values become 3.9 and 4. It also covers the opposite face and both layer cases. Reason: the fixtures already pin the strip at x ∈ [1.9, 2], so the test reads the same numbers as the area tests.

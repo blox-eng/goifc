@@ -680,3 +680,56 @@ func TestStripCapStopsEarly(t *testing.T) {
 		}
 	}
 }
+
+// A partition standing on a face takes its strip's width off that face's
+// floor line, on the layer the strip lands on. One standing higher covers
+// area but not the floor line.
+func TestJoinFloorLine(t *testing.T) {
+	floor := func(t *testing.T, p Plan, id string) (float64, float64) {
+		t.Helper()
+		b, err := BuildPlan(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := builtWall(t, b, id).Quantities
+		return q.MeasuredFloorLine, q.OtherFloorLine
+	}
+	check := func(name string, m, o, wantM, wantO float64) {
+		if !near(m, wantM, 1e-9) || !near(o, wantO, 1e-9) {
+			t.Errorf("%s: floor lines %v, %v, want %v, %v", name, m, o, wantM, wantO)
+		}
+	}
+	m, o := floor(t, joinFixture(), "T")
+	check("measured face", m, o, 3.9, 4)
+	m, o = floor(t, Plan{Walls: []PlanWall{joinT, otherP()}}, "T")
+	check("opposite face", m, o, 4, 3.9)
+
+	layered := joinT
+	layered.Thickness, layered.Layers = 0, []float64{0.1, 0.1}
+	for _, p := range []struct {
+		name        string
+		partition   PlanWall
+		first, last [2]float64
+	}{
+		{"layered, measured face", joinFixture().Walls[1], [2]float64{3.9, 4}, [2]float64{4, 4}},
+		{"layered, opposite face", otherP(), [2]float64{4, 4}, [2]float64{4, 3.9}},
+	} {
+		plan := Plan{Walls: []PlanWall{layered, p.partition}}
+		m, o = floor(t, plan, "T/0")
+		check(p.name+" layer 0", m, o, p.first[0], p.first[1])
+		m, o = floor(t, plan, "T/1")
+		check(p.name+" layer 1", m, o, p.last[0], p.last[1])
+	}
+
+	high := joinFixture()
+	high.Walls[1].Base, high.Walls[1].Height = 1, 1.5
+	b, err := BuildPlan(high)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := builtWall(t, b, "T").Quantities
+	if !near(q.MeasuredJoins, 0.15, 1e-9) {
+		t.Errorf("raised partition: MeasuredJoins %v, want 0.15", q.MeasuredJoins)
+	}
+	check("raised partition", q.MeasuredFloorLine, q.OtherFloorLine, 4, 4)
+}

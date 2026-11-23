@@ -587,7 +587,8 @@ func (x *joinTargets) openings(name string) (item string, wall int, ops []Openin
 }
 
 // subtractStrips takes each strip off the net area of the built face it lies
-// on: layer 0's measured face or the last layer's opposite face. wallAt and
+// on, and off its floor line when the strip reaches the face's base: layer
+// 0's measured face or the last layer's opposite face. wallAt and
 // roomAt are where each wall item's and room's walls start in walls.
 func subtractStrips(p Plan, walls []BuiltWall, wallAt, roomAt []int, strips []strip) {
 	x := newJoinTargets(p, nil)
@@ -602,14 +603,20 @@ func subtractStrips(p Plan, walls []BuiltWall, wallAt, roomAt []int, strips []st
 			first = wallAt[tg.item]
 		}
 		a := s.area()
+		var floor float64
+		if s.bottom <= s.face.base+minDim {
+			floor = s.hi - s.lo
+		}
 		if s.face.measured {
 			q := &walls[first].Wall.Quantities
 			q.MeasuredJoins += a
 			q.MeasuredNet -= a
+			q.MeasuredFloorLine -= floor
 		} else {
 			q := &walls[first+n-1].Wall.Quantities
 			q.OtherJoins += a
 			q.OtherNet -= a
+			q.OtherFloorLine -= floor
 		}
 	}
 }
