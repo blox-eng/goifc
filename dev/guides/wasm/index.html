@@ -1597,7 +1597,10 @@ opposite faces, and <code>measuredNet</code> and <code>otherNet</code> already e
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="p">]</span>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="p">}</span>
 </code></pre></div>
-<p>Here T's <code>measuredJoins</code> is 0.25 and its <code>measuredNet</code> 9.75.</p>
+<p>Here T's <code>measuredJoins</code> is 0.25, its <code>measuredNet</code> 9.75 and its
+<code>measuredFloorLine</code> 3.9. <code>measuredFloorLine</code> and <code>otherFloorLine</code> are each
+face along the wall's base, in m, less the doors (<code>sill: 0</code>) and the
+partitions that stand on that line: the length skirting is priced on.</p>
 <p><code>answer.walls</code> lists the walls of <code>walls</code> and <code>rooms</code>, in request order;
 <code>answer.slabs</code> lists the slabs; <code>answer.roofs</code> lists the roofs, and is absent
 when the request has none.</p>

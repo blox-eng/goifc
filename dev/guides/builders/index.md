@@ -33,15 +33,16 @@ The arguments, in order:
 
 ## The quantities
 
-| Quantity                       | Meaning                                                                                                                       |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `Length`, `Height`             | The measured face.                                                                                                            |
-| `MeasuredGross`, `MeasuredNet` | The measured face, before and after openings, in m².                                                                          |
-| `OtherGross`, `OtherNet`       | The opposite face. At a room corner it is longer or shorter than the measured face.                                           |
-| `MeasuredJoins`, `OtherJoins`  | The strips that [joined partitions](#walls-that-meet-mid-wall) cover on each face, in m². The net areas already exclude them. |
-| `RevealPerimeter`              | The opening edges, in m. A door (`Sill: 0`) has no bottom edge.                                                               |
-| `GrossVolume`, `NetVolume`     | In m³.                                                                                                                        |
-| `NicheBack`                    | The back panels of the niches, in m².                                                                                         |
+| Quantity                              | Meaning                                                                                                                                                                                                         |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Length`, `Height`                    | The measured face.                                                                                                                                                                                              |
+| `MeasuredGross`, `MeasuredNet`        | The measured face, before and after openings, in m².                                                                                                                                                            |
+| `OtherGross`, `OtherNet`              | The opposite face. At a room corner it is longer or shorter than the measured face.                                                                                                                             |
+| `MeasuredJoins`, `OtherJoins`         | The strips that [joined partitions](#walls-that-meet-mid-wall) cover on each face, in m². The net areas already exclude them.                                                                                   |
+| `RevealPerimeter`                     | The opening edges, in m. A door (`Sill: 0`) has no bottom edge.                                                                                                                                                 |
+| `MeasuredFloorLine`, `OtherFloorLine` | Each face along the wall's base, in m, less the doors (`Sill: 0`) and the [joined partitions](#walls-that-meet-mid-wall) that stand on that line. A window takes nothing off. Price skirting per metre from it. |
+| `GrossVolume`, `NetVolume`            | In m³.                                                                                                                                                                                                          |
+| `NicheBack`                           | The back panels of the niches, in m².                                                                                                                                                                           |
 
 These quantities are exact: they come from the numbers, not from the mesh. The mesh agrees with them. Its volume is `NetVolume` within float32 rounding.
 
@@ -158,6 +159,7 @@ Each layer's quantities mean what they mean for a whole wall, for that layer alo
 - **Openings** are checked once, on the whole wall, so a layered wall refuses exactly what the same single wall refuses, plus `layer_sliver` (below). A through opening cuts every layer, and each layer lists it in its own `Measured.Openings`.
 - **Niches** cut the layers they pass through, are a niche in the layer where their back falls, and leave the rest whole. A back exactly on a layer boundary is the next layer's `NicheBack`. A back under 1 mm from a boundary is refused as `layer_sliver`.
 - **`RevealPerimeter`** repeats in every layer an opening cuts; it does not add up across layers. For through openings, a layer's reveal area is `RevealPerimeter` × its thickness; in the layer where a niche ends, the niche's reveal is only as deep as the niche reaches into that layer.
+- **`MeasuredFloorLine` and `OtherFloorLine`** belong to each layer's own faces: at a room corner each layer's opposite face has its own length. A joined partition comes off the face it meets: layer 0's measured face or the last layer's opposite face.
 
 At a corner that is almost straight, a layer's face end can snap by under 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.
 
@@ -202,7 +204,7 @@ partition := geometry.PlanWall{ID: "P", Edge: [2][2]float64{{2, 3}, {2, 0}},
 built, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{through, partition}})
 ```
 
-The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m². `MeasuredJoins` and `OtherJoins` hold the area taken off the measured and opposite faces, and `MeasuredNet` and `OtherNet` already exclude it: here `MeasuredNet` is 10 - 0.25 = 9.75 m². `Wall` is a wall item's ID or a room wall's `"r1/2"`.
+The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m². `MeasuredJoins` and `OtherJoins` hold the area taken off the measured and opposite faces, and `MeasuredNet` and `OtherNet` already exclude it: here `MeasuredNet` is 10 - 0.25 = 9.75 m². The partition stands on the floor line, so `MeasuredFloorLine` is 4 - 0.1 = 3.9 m. A partition whose base is above the wall's base covers area but leaves the floor line whole. `Wall` is a wall item's ID or a room wall's `"r1/2"`.
 
 An end within 1 mm of the face snaps onto it. The partition's openings keep their place in the world when its start snaps, so a door does not slide.
 

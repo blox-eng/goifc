@@ -106,7 +106,7 @@ A partition's end that meets another wall's face (a T) is declared in the partit
 }
 ```
 
-Here T's `measuredJoins` is 0.25 and its `measuredNet` 9.75.
+Here T's `measuredJoins` is 0.25, its `measuredNet` 9.75 and its `measuredFloorLine` 3.9. `measuredFloorLine` and `otherFloorLine` are each face along the wall's base, in m, less the doors (`sill: 0`) and the partitions that stand on that line: the length skirting is priced on.
 
 `answer.walls` lists the walls of `walls` and `rooms`, in request order; `answer.slabs` lists the slabs; `answer.roofs` lists the roofs, and is absent when the request has none.
 

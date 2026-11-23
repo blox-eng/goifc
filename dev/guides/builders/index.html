@@ -1527,6 +1527,10 @@ which the test suite runs.</p>
 <td>The opening edges, in m. A door (<code>Sill: 0</code>) has no bottom edge.</td>
 </tr>
 <tr>
+<td><code>MeasuredFloorLine</code>, <code>OtherFloorLine</code></td>
+<td>Each face along the wall's base, in m, less the doors (<code>Sill: 0</code>) and the <a href="#walls-that-meet-mid-wall">joined partitions</a> that stand on that line. A window takes nothing off. Price skirting per metre from it.</td>
+</tr>
+<tr>
 <td><code>GrossVolume</code>, <code>NetVolume</code></td>
 <td>In m³.</td>
 </tr>
@@ -1706,6 +1710,10 @@ volumes add up to the whole wall's.</p>
   add up across layers. For through openings, a layer's reveal area is
   <code>RevealPerimeter</code> × its thickness; in the layer where a niche ends, the
   niche's reveal is only as deep as the niche reaches into that layer.</li>
+<li><strong><code>MeasuredFloorLine</code> and <code>OtherFloorLine</code></strong> belong to each layer's own
+  faces: at a room corner each layer's opposite face has its own length. A
+  joined partition comes off the face it meets: layer 0's measured face or the
+  last layer's opposite face.</li>
 </ul>
 <p>At a corner that is almost straight, a layer's face end can snap by under
 0.1 mm, like the whole wall's mitre does, so its mesh and numbers agree.</p>
@@ -1758,8 +1766,10 @@ that face's net area:</p>
 <p>The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m².
 <code>MeasuredJoins</code> and <code>OtherJoins</code> hold the area taken off the measured and
 opposite faces, and <code>MeasuredNet</code> and <code>OtherNet</code> already exclude it: here
-<code>MeasuredNet</code> is 10 - 0.25 = 9.75 m². <code>Wall</code> is a wall item's ID or a room
-wall's <code>"r1/2"</code>.</p>
+<code>MeasuredNet</code> is 10 - 0.25 = 9.75 m². The partition stands on the floor line,
+so <code>MeasuredFloorLine</code> is 4 - 0.1 = 3.9 m. A partition whose base is above the
+wall's base covers area but leaves the floor line whole. <code>Wall</code> is a wall
+item's ID or a room wall's <code>"r1/2"</code>.</p>
 <p>An end within 1 mm of the face snaps onto it. The partition's openings keep
 their place in the world when its start snaps, so a door does not slide.</p>
 <p>A join that cannot be built is refused with a <code>*JoinError</code> whose <code>Reason</code> is
