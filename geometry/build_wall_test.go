@@ -190,3 +190,25 @@ func TestSideText(t *testing.T) {
 		t.Error("Side(0): want an error")
 	}
 }
+
+// A door takes its width off both faces' floor lines; a window takes nothing.
+func TestWallFloorLine(t *testing.T) {
+	edge := [2][2]float64{{0, 0}, {4, 0}}
+	for _, tc := range []struct {
+		name string
+		ops  []Opening
+		want float64
+	}{
+		{"door and window", []Opening{{Offset: 0.5, Width: 0.9, Height: 2.1}, {Offset: 2, Sill: 0.9, Width: 1.2, Height: 1.2}}, 3.1},
+		{"solid", nil, 4},
+	} {
+		w, err := BuildWall(edge, 0, 2.7, 0.2, SideLeft, tc.ops)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		q := w.Quantities
+		if !near(q.MeasuredFloorLine, tc.want, 1e-12) || !near(q.OtherFloorLine, tc.want, 1e-12) {
+			t.Errorf("%s: floor lines %v, %v, want %v on both", tc.name, q.MeasuredFloorLine, q.OtherFloorLine, tc.want)
+		}
+	}
+}

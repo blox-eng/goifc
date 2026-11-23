@@ -96,6 +96,9 @@ type WallQuantities struct {
 	GrossVolume, NetVolume     float64 // m³
 	NicheBack                  float64 // m², the back panels of the niches
 	MeasuredJoins, OtherJoins  float64 // m², the strips partitions cover
+	// m, each face along the wall's base, less the doors and the partitions
+	// standing on that line
+	MeasuredFloorLine, OtherFloorLine float64
 }
 
 // Wall is what BuildWall and BuildRoomWalls return.
@@ -201,7 +204,7 @@ func overlapsEarlier(earlier []Opening, o Opening) bool {
 // area is the mean face length times the thickness.
 func wallQuantities(span wallSpan, height, thickness float64, ops []Opening) WallQuantities {
 	other := span.otherEnd - span.otherStart
-	var holes, through, cutVol, niches, reveal float64
+	var holes, through, cutVol, niches, reveal, doors float64
 	for _, o := range ops {
 		a := o.Width * o.Height
 		holes += a
@@ -214,6 +217,7 @@ func wallQuantities(span wallSpan, height, thickness float64, ops []Opening) Wal
 		reveal += 2*o.Width + 2*o.Height
 		if o.Sill == 0 {
 			reveal -= o.Width
+			doors += o.Width
 		}
 	}
 	gv := (span.length + other) / 2 * thickness * height
@@ -228,6 +232,9 @@ func wallQuantities(span wallSpan, height, thickness float64, ops []Opening) Wal
 		GrossVolume:     gv,
 		NetVolume:       gv - cutVol,
 		NicheBack:       niches,
+
+		MeasuredFloorLine: span.length - doors,
+		OtherFloorLine:    other - doors,
 	}
 }
 

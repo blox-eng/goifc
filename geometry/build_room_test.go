@@ -177,3 +177,31 @@ func TestBuildRoomWallsJoinsRefusalsFlat(t *testing.T) {
 		PlacementError{Wall: 0, Opening: 0, Reason: ReasonTooWide},
 		PlacementError{Wall: 2, Opening: 0, Reason: ReasonAboveWall})
 }
+
+// A mitred corner gives each face its own floor line: on the #91 room,
+// measured on the interior, the opposite face runs 2 × thickness longer.
+func TestRoomWallFloorLine(t *testing.T) {
+	ops := [][]Opening{{door}, nil, nil, nil}
+	ws, err := BuildRoomWalls(room2418, 0, 2.60, 0.10, SideLeft, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][2]float64{{1.60, 1.80}, {1.80, 2.00}, {2.40, 2.60}, {1.80, 2.00}}
+	for i, w := range ws {
+		q := w.Quantities
+		if !near(q.MeasuredFloorLine, want[i][0], 1e-9) || !near(q.OtherFloorLine, want[i][1], 1e-9) {
+			t.Errorf("wall %d: floor lines %v, %v, want %v", i, q.MeasuredFloorLine, q.OtherFloorLine, want[i])
+		}
+	}
+	// Each layer of a layered room mitres on its own span.
+	layered, err := BuildRoomWallLayers(room2418, 0, 2.60, []float64{0.05, 0.05}, SideLeft, ops)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, wantK := range [][2]float64{{1.60, 1.70}, {1.70, 1.80}} {
+		q := layered[0][k].Quantities
+		if !near(q.MeasuredFloorLine, wantK[0], 1e-9) || !near(q.OtherFloorLine, wantK[1], 1e-9) {
+			t.Errorf("wall 0 layer %d: floor lines %v, %v, want %v", k, q.MeasuredFloorLine, q.OtherFloorLine, wantK)
+		}
+	}
+}

@@ -367,6 +367,10 @@ func FuzzBuildPlan(f *testing.F) {
 		}
 		for _, w := range b.Walls {
 			wq := w.Wall.Quantities
+			if tol := 1e-9 * wq.Length; wq.MeasuredFloorLine < -tol || wq.MeasuredFloorLine > wq.Length+tol ||
+				wq.OtherFloorLine < -tol || wq.OtherFloorLine > wq.OtherGross/wq.Height+tol {
+				t.Fatalf("wall %s: floor lines %v, %v outside [0, %v], [0, %v]", w.ID, wq.MeasuredFloorLine, wq.OtherFloorLine, wq.Length, wq.OtherGross/wq.Height)
+			}
 			for _, v := range []float64{wq.Length, wq.MeasuredGross, wq.MeasuredNet, wq.OtherGross, wq.OtherNet, wq.MeasuredJoins, wq.OtherJoins, wq.GrossVolume, wq.NetVolume} {
 				if math.IsNaN(v) || math.IsInf(v, 0) {
 					t.Fatalf("wall %s has a non-finite quantity: %+v", w.ID, wq)

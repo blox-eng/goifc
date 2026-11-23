@@ -412,3 +412,16 @@ func TestBuildWallLayers_OneReasonPerOpening(t *testing.T) {
 		t.Errorf("refusals %v, want only opening 0: too_wide", refusals)
 	}
 }
+
+// Every layer of a straight wall reports the same floor lines, less the door.
+func TestBuildWallLayers_FloorLinePerLayer(t *testing.T) {
+	ws, err := BuildWallLayers([2][2]float64{{0, 0}, {4, 0}}, 0, 2.7, []float64{0.1, 0.2}, SideLeft, []Opening{{Offset: 0.5, Width: 0.9, Height: 2.1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, w := range ws {
+		if q := w.Quantities; !near(q.MeasuredFloorLine, 3.1, 1e-12) || !near(q.OtherFloorLine, 3.1, 1e-12) {
+			t.Errorf("layer %d: floor lines %v, %v, want 3.1", k, q.MeasuredFloorLine, q.OtherFloorLine)
+		}
+	}
+}
