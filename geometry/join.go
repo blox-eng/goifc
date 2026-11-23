@@ -604,7 +604,7 @@ func subtractStrips(p Plan, walls []BuiltWall, wallAt, roomAt []int, strips []st
 		}
 		a := s.area()
 		var floor float64
-		if s.bottom <= s.face.base+minDim {
+		if s.bottom-s.face.base < minDim { // touching, as checkOpenings defines it
 			floor = s.hi - s.lo
 		}
 		if s.face.measured {

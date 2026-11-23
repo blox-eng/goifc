@@ -732,4 +732,14 @@ func TestJoinFloorLine(t *testing.T) {
 		t.Errorf("raised partition: MeasuredJoins %v, want 0.15", q.MeasuredJoins)
 	}
 	check("raised partition", q.MeasuredFloorLine, q.OtherFloorLine, 4, 4)
+
+	// Under 1 mm of gap is touching, as everywhere in the builders; 1 mm is not.
+	for _, c := range []struct {
+		base, want float64
+	}{{0.0005, 3.9}, {0.001, 4}} {
+		p := joinFixture()
+		p.Walls[1].Base, p.Walls[1].Height = c.base, 2.5-c.base
+		m, o := floor(t, p, "T")
+		check(fmt.Sprintf("partition base %v", c.base), m, o, c.want, 4)
+	}
 }
