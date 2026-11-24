@@ -18,6 +18,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.24.0 — 2026-11-24
+
 ### Added
 
 - **Price floors and ceilings per room.** A room in a plan reports its floor
