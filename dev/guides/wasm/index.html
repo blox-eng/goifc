@@ -1602,8 +1602,13 @@ opposite faces, and <code>measuredNet</code> and <code>otherNet</code> already e
 face along the wall's base, in m, less the doors (<code>sill: 0</code>) and the
 partitions that stand on that line: the length skirting is priced on.</p>
 <p><code>answer.walls</code> lists the walls of <code>walls</code> and <code>rooms</code>, in request order;
-<code>answer.slabs</code> lists the slabs; <code>answer.roofs</code> lists the roofs, and is absent
-when the request has none.</p>
+<code>answer.rooms</code> lists each room's own <code>quantities</code>, and is absent when the
+request has none; <code>answer.slabs</code> lists the slabs; <code>answer.roofs</code> lists the
+roofs, and is absent when the request has none.</p>
+<p>A room's <code>quantities</code> are <code>area</code> (m², the floor inside the walls),
+<code>perimeter</code> (m, along the walls' room-side faces), <code>netPerimeter</code> (m, less
+doors and joined partitions) and <code>volume</code> (m³, area × height). A partition
+does not come off <code>area</code>.</p>
 <h3 id="slabs-with-holes">Slabs with holes<a class="headerlink" href="#slabs-with-holes" title="Permanent link">&para;</a></h3>
 <p>A hole is a ring of 3 or more points inside the outline, at least 1 mm from
 it and from the other holes. A slab takes up to 64 holes and 2,048 points in

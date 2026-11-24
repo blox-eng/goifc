@@ -524,6 +524,19 @@ built, err := geometry.BuildPlan(geometry.Plan{Walls: []geometry.PlanWall{throug
 
 The 0.1 m partition covers a 0.1 m by 2.5 m strip of the 4 m wall: 0.25 m². `MeasuredJoins` and `OtherJoins` hold the area taken off the measured and opposite faces, and `MeasuredNet` and `OtherNet` already exclude it: here `MeasuredNet` is 10 - 0.25 = 9.75 m². The partition stands on the floor line, so `MeasuredFloorLine` is 4 - 0.1 = 3.9 m. A partition whose base is above the wall's base covers area but leaves the floor line whole. `Wall` is a wall item's ID or a room wall's `"r1/2"`.
 
+### Room quantities
+
+`BuildPlan` also measures each room item's floor, in `Built.Rooms`, in plan order. `RoomQuantities` holds:
+
+| Field          | Meaning                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| `Area`         | m², the floor inside the walls, on the room side.                                           |
+| `Perimeter`    | m, the floor's edge along the walls' room-side faces.                                       |
+| `NetPerimeter` | m, the room-side floor lines: the perimeter less doors (`Sill == 0`) and joined partitions. |
+| `Volume`       | m³, `Area` × the room's `Height`.                                                           |
+
+The room is the inside of the outline. When the walls grow outward, the outline is the floor's edge. When they grow inward, the edge is their opposite face at the full wall depth, all layers included. A partition does not come off `Area`: draw two rooms for two rooms. With the 4 × 3 m room `R` (0.2 m walls, measured inside) and a 0.1 m partition joined across it to `R/0` and `R/2`, `R` reports 12 m², 14 m, and a `NetPerimeter` of 13.8 m.
+
 An end within 1 mm of the face snaps onto it. The partition's openings keep their place in the world when its start snaps, so a door does not slide.
 
 A join that cannot be built is refused with a `*JoinError` whose `Reason` is `unknown_wall`, `not_on_face`, `too_shallow` (the axes meet under 15 or over 165 degrees), `off_wall` or `joins_overlap`. An opening that falls in the strip a join removes is refused with a `*PlacementError` whose reason is `in_join`.
@@ -861,7 +874,9 @@ A partition's end that meets another wall's face (a T) is declared in the partit
 
 Here T's `measuredJoins` is 0.25, its `measuredNet` 9.75 and its `measuredFloorLine` 3.9. `measuredFloorLine` and `otherFloorLine` are each face along the wall's base, in m, less the doors (`sill: 0`) and the partitions that stand on that line: the length skirting is priced on.
 
-`answer.walls` lists the walls of `walls` and `rooms`, in request order; `answer.slabs` lists the slabs; `answer.roofs` lists the roofs, and is absent when the request has none.
+`answer.walls` lists the walls of `walls` and `rooms`, in request order; `answer.rooms` lists each room's own `quantities`, and is absent when the request has none; `answer.slabs` lists the slabs; `answer.roofs` lists the roofs, and is absent when the request has none.
+
+A room's `quantities` are `area` (m², the floor inside the walls), `perimeter` (m, along the walls' room-side faces), `netPerimeter` (m, less doors and joined partitions) and `volume` (m³, area × height). A partition does not come off `area`.
 
 ### Slabs with holes
 
@@ -1171,6 +1186,10 @@ This page is [`CHANGELOG.md`](https://github.com/blox-eng/goifc/blob/main/CHANGE
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
+
+### Added
+
+- **Price floors and ceilings per room.** A room in a plan reports its floor area, its floor perimeter gross and net of doors and joined partitions, and its volume: `Built.Rooms` (`Area`, `Perimeter`, `NetPerimeter`, `Volume`) in Go, `rooms` in the wasm answer and its schema. The area is the floor inside the walls, whichever way they grow. (#175)
 
 ## v0.23.0 — 2026-11-23
 
