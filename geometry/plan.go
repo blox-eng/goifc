@@ -3,6 +3,7 @@ package geometry
 import (
 	"errors"
 	"fmt"
+	"math"
 )
 
 const (
@@ -64,11 +65,27 @@ type PlanRoof struct {
 }
 
 // Built is what BuildPlan returns: wall items, then room walls, in plan
-// order, and the slabs and roofs.
+// order, the rooms in plan order, and the slabs and roofs.
 type Built struct {
 	Walls []BuiltWall
+	Rooms []BuiltRoom
 	Slabs []BuiltSlab
 	Roofs []BuiltRoof
+}
+
+// BuiltRoom is one room item's own quantities, under the item's ID.
+type BuiltRoom struct {
+	ID         string
+	Quantities RoomQuantities
+}
+
+// RoomQuantities measure the floor inside a room's walls, on the room side.
+// The area is gross: a partition standing in the room does not come off it.
+type RoomQuantities struct {
+	Area         float64 // m²
+	Perimeter    float64 // m, along the walls' room-side faces
+	NetPerimeter float64 // m, the room-side floor lines: less doors and partitions
+	Volume       float64 // m³, Area × Height
 }
 
 // BuiltWall is one built wall. Its ID is the item ID (w1), w1/j for layer j,
@@ -175,7 +192,31 @@ func BuildPlan(p Plan) (Built, error) {
 		}
 	}
 	subtractStrips(p, out.Walls, wallAt, roomAt, strips)
+	for i, it := range p.Rooms {
+		out.Rooms = append(out.Rooms, BuiltRoom{ID: it.ID, Quantities: roomQuantities(it, out.Walls[roomAt[i]:])})
+	}
 	return out, nil
+}
+
+// roomQuantities measures a built room; walls starts at its first wall. Run
+// it after subtractStrips, so the floor lines are net of partitions.
+func roomQuantities(it PlanRoom, walls []BuiltWall) RoomQuantities {
+	ring, measured := roomFloor(it, totalThickness(it.Thickness, it.Layers))
+	q := RoomQuantities{Area: math.Abs(signedArea(ring))}
+	for i, a := range ring {
+		b := ring[(i+1)%len(ring)]
+		q.Perimeter += math.Hypot(b[0]-a[0], b[1]-a[1])
+	}
+	n := max(1, len(it.Layers))
+	for w := range it.Outline {
+		if measured {
+			q.NetPerimeter += walls[w*n].Wall.Quantities.MeasuredFloorLine
+		} else {
+			q.NetPerimeter += walls[w*n+n-1].Wall.Quantities.OtherFloorLine
+		}
+	}
+	q.Volume = q.Area * it.Height
+	return q
 }
 
 // planElements counts the elements a plan builds before any is built: a room
