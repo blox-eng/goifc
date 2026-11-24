@@ -18,6 +18,16 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.24.0 — 2026-11-24
+
+### Added
+
+- **Price floors and ceilings per room.** A room in a plan reports its floor
+  area, its floor perimeter gross and net of doors and joined partitions, and
+  its volume: `Built.Rooms` (`Area`, `Perimeter`, `NetPerimeter`, `Volume`) in
+  Go, `rooms` in the wasm answer and its schema.
+  The area is the floor inside the walls, whichever way they grow. (#175)
+
 ## v0.23.0 — 2026-11-23
 
 ### Added

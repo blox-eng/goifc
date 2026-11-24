@@ -480,3 +480,38 @@ func TestBuild_RoofsCountTowardCaps(t *testing.T) {
 		t.Errorf("answer %.200s, want too_large", answer)
 	}
 }
+
+func TestBuild_Rooms(t *testing.T) {
+	req := []byte(`{"rooms": [{"id": "r1", "outline": [[0, 0], [4, 0], [4, 5], [0, 5]], "base": 0, "height": 2.5, "thickness": 0.2, "side": "left",
+		"openings": [[{"offset": 1, "sill": 0, "width": 0.9, "height": 2.1}], [], [], []]}]}`)
+	answer, glb := Build(testVersion, req)
+	if glb == nil {
+		t.Fatalf("answer %s, want a GLB", answer)
+	}
+	var a struct {
+		Rooms []struct {
+			ID         string         `json:"id"`
+			Quantities roomQuantities `json:"quantities"`
+		} `json:"rooms"`
+	}
+	if err := json.Unmarshal(answer, &a); err != nil {
+		t.Fatal(err)
+	}
+	b, err := geometry.BuildPlan(geometry.Plan{Rooms: []geometry.PlanRoom{{
+		ID: "r1", Outline: [][2]float64{{0, 0}, {4, 0}, {4, 5}, {0, 5}}, Height: 2.5, Thickness: 0.2, Side: geometry.SideLeft,
+		Openings: [][]geometry.Opening{{{Offset: 1, Width: 0.9, Height: 2.1}}, nil, nil, nil},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := b.Rooms[0].Quantities
+	want := roomQuantities{Area: g.Area, Perimeter: g.Perimeter, NetPerimeter: g.NetPerimeter, Volume: g.Volume}
+	if len(a.Rooms) != 1 || a.Rooms[0].ID != "r1" || a.Rooms[0].Quantities != want || math.Abs(want.NetPerimeter-17.1) > 1e-9 {
+		t.Errorf("rooms %+v, want r1 with Go's %+v (net perimeter 17.1)", a.Rooms, want)
+	}
+
+	answer, _ = Build(testVersion, []byte(`{"walls": [{"id": "w", "edge": [[0, 0], [4, 0]], "base": 0, "height": 2.5, "thickness": 0.2, "side": "left"}]}`))
+	if strings.Contains(string(answer), `"rooms"`) {
+		t.Errorf("answer %s has rooms, want none without a room", answer)
+	}
+}

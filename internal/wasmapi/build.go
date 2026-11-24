@@ -83,6 +83,7 @@ type built struct {
 	GoifcVersion string      `json:"goifcVersion"`
 	OK           bool        `json:"ok"`
 	Walls        []wallOut   `json:"walls"`
+	Rooms        []roomOut   `json:"rooms,omitempty"`
 	Slabs        []slabOut   `json:"slabs"`
 	Roofs        []roofOut   `json:"roofs,omitempty"`
 	Preview      *previewOut `json:"preview,omitempty"`
@@ -92,6 +93,18 @@ type wallOut struct {
 	ID         string         `json:"id"`
 	Quantities wallQuantities `json:"quantities"`
 	Measured   faceOut        `json:"measured"`
+}
+
+type roomOut struct {
+	ID         string         `json:"id"`
+	Quantities roomQuantities `json:"quantities"`
+}
+
+type roomQuantities struct {
+	Area         float64 `json:"area"`
+	Perimeter    float64 `json:"perimeter"`
+	NetPerimeter float64 `json:"netPerimeter"`
+	Volume       float64 `json:"volume"`
 }
 
 type slabOut struct {
@@ -206,6 +219,10 @@ func Build(version string, request []byte) (answer []byte, glb []byte) {
 	for _, w := range b.Walls {
 		walls = append(walls, w.Wall)
 		out.Walls = append(out.Walls, wallOut{ID: w.ID, Quantities: toWallQuantities(w.Wall.Quantities), Measured: face(w.Wall.Measured)})
+	}
+	for _, r := range b.Rooms {
+		q := r.Quantities
+		out.Rooms = append(out.Rooms, roomOut{ID: r.ID, Quantities: roomQuantities{Area: q.Area, Perimeter: q.Perimeter, NetPerimeter: q.NetPerimeter, Volume: q.Volume}})
 	}
 	for _, s := range b.Slabs {
 		slabs = append(slabs, s.Slab)
