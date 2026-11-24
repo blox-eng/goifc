@@ -146,8 +146,14 @@ face along the wall's base, in m, less the doors (`sill: 0`) and the
 partitions that stand on that line: the length skirting is priced on.
 
 `answer.walls` lists the walls of `walls` and `rooms`, in request order;
-`answer.slabs` lists the slabs; `answer.roofs` lists the roofs, and is absent
-when the request has none.
+`answer.rooms` lists each room's own `quantities`, and is absent when the
+request has none; `answer.slabs` lists the slabs; `answer.roofs` lists the
+roofs, and is absent when the request has none.
+
+A room's `quantities` are `area` (m², the floor inside the walls),
+`perimeter` (m, along the walls' room-side faces), `netPerimeter` (m, less
+doors and joined partitions) and `volume` (m³, area × height). A partition
+does not come off `area`.
 
 ### Slabs with holes
 

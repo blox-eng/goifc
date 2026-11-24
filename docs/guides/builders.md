@@ -293,6 +293,25 @@ so `MeasuredFloorLine` is 4 - 0.1 = 3.9 m. A partition whose base is above the
 wall's base covers area but leaves the floor line whole. `Wall` is a wall
 item's ID or a room wall's `"r1/2"`.
 
+### Room quantities
+
+`BuildPlan` also measures each room item's floor, in `Built.Rooms`, in plan
+order. `RoomQuantities` holds:
+
+| Field | Meaning |
+|---|---|
+| `Area` | m², the floor inside the walls, on the room side. |
+| `Perimeter` | m, the floor's edge along the walls' room-side faces. |
+| `NetPerimeter` | m, the room-side floor lines: the perimeter less doors (`Sill == 0`) and joined partitions. |
+| `Volume` | m³, `Area` × the room's `Height`. |
+
+The room is the inside of the outline. When the walls grow outward, the
+outline is the floor's edge. When they grow inward, the edge is their
+opposite face at the full wall depth, all layers included. A partition does
+not come off `Area`: draw two rooms for two rooms. With the 4 × 3 m room `R`
+(0.2 m walls, measured inside) and a 0.1 m partition joined across it to
+`R/0` and `R/2`, `R` reports 12 m², 14 m, and a `NetPerimeter` of 13.8 m.
+
 An end within 1 mm of the face snaps onto it. The partition's openings keep
 their place in the world when its start snaps, so a door does not slide.
 
