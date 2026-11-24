@@ -602,6 +602,30 @@
         "otherFloorLine"
       ]
     },
+    "roomQuantities": {
+      "type": "object",
+      "properties": {
+        "area": {
+          "type": "number"
+        },
+        "perimeter": {
+          "type": "number"
+        },
+        "netPerimeter": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "area",
+        "perimeter",
+        "netPerimeter",
+        "volume"
+      ]
+    },
     "slabQuantities": {
       "type": "object",
       "properties": {
@@ -699,6 +723,25 @@
               "id",
               "quantities",
               "measured"
+            ]
+          }
+        },
+        "rooms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "quantities": {
+                "$ref": "#/$defs/roomQuantities"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "quantities"
             ]
           }
         },

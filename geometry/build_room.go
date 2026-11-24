@@ -17,6 +17,20 @@ const maxMitre = 10
 // it ends where it crosses the neighbouring walls' opposite lines (a mitre),
 // or square where the neighbour runs straight on.
 func roomSpans(ring [][2]float64, thickness float64, side Side) ([]wallSpan, error) {
+	spans, mitre, err := roomMitres(ring, thickness, side)
+	if err != nil {
+		return nil, err
+	}
+	if edgesCrossOrOverlap([][][2]float64{mitre}) {
+		return nil, errors.New("walls overlap: a part of the outline is narrower than two wall thicknesses")
+	}
+	return spans, nil
+}
+
+// roomMitres gives roomSpans' spans and the opposite-face ring (the mitre
+// point at each outline point), without the O(n²) check that the ring does
+// not cross itself.
+func roomMitres(ring [][2]float64, thickness float64, side Side) ([]wallSpan, [][2]float64, error) {
 	n := len(ring)
 	frames := make([]wallFrame, n)
 	spans := make([]wallSpan, n)
@@ -30,13 +44,13 @@ func roomSpans(ring [][2]float64, thickness float64, side Side) ([]wallSpan, err
 		prev, cur := frames[(i-1+n)%n], frames[i]
 		lam, err := mitreAt(prev, cur, thickness)
 		if err != nil {
-			return nil, fmt.Errorf("corner %d: %w", i, err)
+			return nil, nil, fmt.Errorf("corner %d: %w", i, err)
 		}
 		if math.Abs(lam) < gridSnap {
 			lam = 0
 		}
 		if math.Hypot(thickness, lam) > maxMitre*thickness {
-			return nil, fmt.Errorf("corner %d is too sharp: its mitre reaches more than %d wall thicknesses out", i, maxMitre)
+			return nil, nil, fmt.Errorf("corner %d is too sharp: its mitre reaches more than %d wall thicknesses out", i, maxMitre)
 		}
 		p := (i - 1 + n) % n
 		spans[i].otherStart = lam
@@ -52,13 +66,10 @@ func roomSpans(ring [][2]float64, thickness float64, side Side) ([]wallSpan, err
 	}
 	for i, s := range spans {
 		if s.otherEnd-s.otherStart < minDim {
-			return nil, fmt.Errorf("wall %d: its opposite face has no length; the room is narrower than two walls there", i)
+			return nil, nil, fmt.Errorf("wall %d: its opposite face has no length; the room is narrower than two walls there", i)
 		}
 	}
-	if edgesCrossOrOverlap([][][2]float64{mitre}) {
-		return nil, errors.New("walls overlap: a part of the outline is narrower than two wall thicknesses")
-	}
-	return spans, nil
+	return spans, mitre, nil
 }
 
 // mitreAt returns where the opposite lines of prev and cur cross, as a u on
@@ -111,6 +122,20 @@ func BuildRoomWalls(outline [][2]float64, base, height, thickness float64, side 
 		walls[i] = wallLayers(newWallFrame(a, b, side), wallOrigin(a, base), s, height, []float64{thickness}, roomOpenings(openings, i))[0]
 	}
 	return walls, nil
+}
+
+// roomFloor returns the ring on the room side of a built room's walls, and
+// whether the measured face is on that side. The room is the inside of the
+// outline: the measured face faces it when a counter-clockwise outline has
+// SideLeft or a clockwise one SideRight. Otherwise the walls grow inward and
+// the ring is their opposite face at the full depth.
+func roomFloor(it PlanRoom, total float64) ([][2]float64, bool) {
+	ring := localRing(it.Outline)
+	if (signedArea(ring) > 0) == (it.Side == SideLeft) {
+		return ring, true
+	}
+	_, mitre, _ := roomMitres(ring, total, it.Side) // the room built, so this cannot fail
+	return mitre, false
 }
 
 // roomOpenings returns wall i's openings, or nil when none were given.
