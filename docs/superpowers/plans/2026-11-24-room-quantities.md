@@ -9,7 +9,7 @@ Next: builder:build
 ## Files
 
 - `geometry/plan.go` (change): `RoomQuantities`, `BuiltRoom`, `Built.Rooms`; `BuildPlan` fills them after `subtractStrips`.
-- `geometry/build_room.go` (change): `roomSpans` also returns its mitre ring; a `roomFloor` helper gives the room-side ring.
+- `geometry/build_room.go` (change): `roomMitres` gives the mitre ring; a `roomFloor` helper gives the room-side ring.
 - `geometry/plan_room_test.go` (create): the tests of the room quantities.
 - `internal/wasmapi/build.go` (change): the answer gains `rooms`, with `roomQuantities`.
 - `internal/wasmapi/build_test.go`, `internal/wasmapi/testdata/build/*.answer.json` (change): the answer test and the rewritten goldens.
@@ -30,8 +30,8 @@ Next: builder:build
   - `TestRoomQuantitiesOrder`: two rooms `A` and `B` after a wall item. `Built.Rooms` holds `A` then `B`.
 - **Run:** `go test ./geometry -run 'RoomQuantities' -count=1`. Before: it fails to compile, because `Built.Rooms` is undefined. After: it passes.
 - **Do:**
-  - `roomSpans(ring, thickness, side)` returns `([]wallSpan, [][2]float64, error)`. The second value is the `mitre` ring that it computes today. `checkRoom` drops it.
-  - `roomFloor(it PlanRoom, total float64) ([][2]float64, bool)` returns the room-side ring and whether the measured face is on the room side. The measured face is on the room side when `signedArea(outline) > 0` with `SideLeft`, or `< 0` with `SideRight`. Then the ring is `localRing(outline)`. Otherwise it is the mitre ring of `roomSpans(localRing(outline), total, it.Side)`. `total` is `Thickness`, or the sum of `Layers`. The room is built already, so `roomSpans` cannot fail here.
+  - `roomMitres(ring, thickness, side) ([]wallSpan, [][2]float64, error)` holds `roomSpans`' corner loop and returns the `mitre` ring too. `roomSpans` calls it, then runs the overlap check as today.
+  - `roomFloor(it PlanRoom, total float64) ([][2]float64, bool)` returns the room-side ring and whether the measured face is on the room side. The measured face is on the room side when `signedArea(outline) > 0` with `SideLeft`, or `< 0` with `SideRight`. Then the ring is `localRing(outline)`. Otherwise it is the mitre ring of `roomMitres(localRing(outline), total, it.Side)`. `total` is `Thickness`, or the sum of `Layers`. The room is built already, so `roomMitres` cannot fail here.
   - `type RoomQuantities struct { Area, Perimeter, NetPerimeter, Volume float64 }`. The comment gives the units: m², m, m, m³.
   - `type BuiltRoom struct { ID string; Quantities RoomQuantities }`, and `Built.Rooms []BuiltRoom`.
   - At the end of `BuildPlan`, after `subtractStrips`, append one `BuiltRoom` per room item, in plan order:
@@ -73,7 +73,7 @@ Load `builder:review` on `feat/175-room-quantities` against `origin/main`. Give 
 ## Lens findings
 
 - Engineering: `NetPerimeter` reads the floor lines after `subtractStrips`. A future change that moves the strip subtraction later would silently drop partitions. `TestRoomQuantitiesPartition` pins the order. No other change.
-- Engineering: the room is built already when `roomFloor` calls `roomSpans`, so its error cannot occur. No change, because a second build of the spans costs O(n) on an outline of at most 2,048 points.
+- Engineering: the room is built already when `roomFloor` asks for its ring, so the error cannot occur. This finding first said a second `roomSpans` costs O(n). The review measured it: the overlap check inside is O(n²). See Changes during build.
 - Architecture (wasm contract): the change is additive. `rooms` is optional, like `roofs`, so a request with no room gets an answer that is byte-identical to today's. The downstream viewer is told already (2026-11-24). No change.
 - Design: no screen. Every number carries its unit in the Go comment and the guide. No change.
 
@@ -97,4 +97,4 @@ Read as a builder with only this plan and the repository. Each name it uses exis
 
 ## Changes during build
 
-(none yet)
+- 2026-11-24, review: `roomFloor` called `roomSpans`, which repeats the O(n²) overlap check the build already ran. At the plan cap (48 inward rooms of 2,048 points) that added 3.1 s to a 10.7 s build. `roomSpans`' corner loop moved to `roomMitres`, which `roomFloor` calls; `roomSpans` keeps its old signature.

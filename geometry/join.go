@@ -226,7 +226,7 @@ func (x *joinTargets) faces(name string) (fs [2]face, known, built bool) {
 	spans, ok := x.spans[r]
 	if !ok {
 		// The room built, so its spans exist.
-		spans, _, _ = roomSpans(localRing(it.Outline), t, it.Side)
+		spans, _ = roomSpans(localRing(it.Outline), t, it.Side)
 		x.spans[r] = spans
 	}
 	a, b := it.Outline[w], it.Outline[(w+1)%len(it.Outline)]

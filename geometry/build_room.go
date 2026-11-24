@@ -15,9 +15,22 @@ const maxMitre = 10
 // roomSpans gives each wall of a closed outline its opposite-face span. The
 // opposite face of edge i is its line offset by thickness to the growth side;
 // it ends where it crosses the neighbouring walls' opposite lines (a mitre),
-// or square where the neighbour runs straight on. It also returns the
-// opposite-face ring: the mitre point at each outline point.
-func roomSpans(ring [][2]float64, thickness float64, side Side) ([]wallSpan, [][2]float64, error) {
+// or square where the neighbour runs straight on.
+func roomSpans(ring [][2]float64, thickness float64, side Side) ([]wallSpan, error) {
+	spans, mitre, err := roomMitres(ring, thickness, side)
+	if err != nil {
+		return nil, err
+	}
+	if edgesCrossOrOverlap([][][2]float64{mitre}) {
+		return nil, errors.New("walls overlap: a part of the outline is narrower than two wall thicknesses")
+	}
+	return spans, nil
+}
+
+// roomMitres gives roomSpans' spans and the opposite-face ring (the mitre
+// point at each outline point), without the O(n²) check that the ring does
+// not cross itself.
+func roomMitres(ring [][2]float64, thickness float64, side Side) ([]wallSpan, [][2]float64, error) {
 	n := len(ring)
 	frames := make([]wallFrame, n)
 	spans := make([]wallSpan, n)
@@ -55,9 +68,6 @@ func roomSpans(ring [][2]float64, thickness float64, side Side) ([]wallSpan, [][
 		if s.otherEnd-s.otherStart < minDim {
 			return nil, nil, fmt.Errorf("wall %d: its opposite face has no length; the room is narrower than two walls there", i)
 		}
-	}
-	if edgesCrossOrOverlap([][][2]float64{mitre}) {
-		return nil, nil, errors.New("walls overlap: a part of the outline is narrower than two wall thicknesses")
 	}
 	return spans, mitre, nil
 }
@@ -124,7 +134,7 @@ func roomFloor(it PlanRoom, total float64) ([][2]float64, bool) {
 	if (signedArea(ring) > 0) == (it.Side == SideLeft) {
 		return ring, true
 	}
-	_, mitre, _ := roomSpans(ring, total, it.Side) // the room built, so this cannot fail
+	_, mitre, _ := roomMitres(ring, total, it.Side) // the room built, so this cannot fail
 	return mitre, false
 }
 
@@ -150,7 +160,7 @@ func checkRoom(outline [][2]float64, base, height, thickness float64, side Side,
 	if openings != nil && len(openings) != len(outline) {
 		return nil, fmt.Errorf("got openings for %d walls, the outline has %d", len(openings), len(outline))
 	}
-	spans, _, err := roomSpans(localRing(outline), thickness, side)
+	spans, err := roomSpans(localRing(outline), thickness, side)
 	if err != nil {
 		return nil, err
 	}
