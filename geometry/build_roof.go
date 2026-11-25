@@ -59,6 +59,9 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 	slope, c := math.Tan(pitch), math.Cos(pitch)
 	b := newBudget()
 	faces, arcs, err := weightedSkeleton(ring, speed, slope, b)
+	if err == nil {
+		err = facesCover(ring, faces)
+	}
 	if err != nil {
 		return nil, callerEdges(err, edgeOf)
 	}
@@ -119,6 +122,31 @@ func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64) ([][2]float
 		k++
 	}
 	return ring, edgeOf, speed
+}
+
+// facesCover refuses faces that do not tile the counter-clockwise ring: their
+// plan areas, signed, must add up to the ring's within the skeleton's
+// tolerance, the one the roof tests hold the planes to. A face that misses
+// or overlaps the ring would give planes that disagree with the quantities.
+func facesCover(ring [][2]float64, faces []skelFace) error {
+	lo, hi := ring[0], ring[0]
+	for _, p := range ring {
+		lo = [2]float64{min(lo[0], p[0]), min(lo[1], p[1])}
+		hi = [2]float64{max(hi[0], p[0]), max(hi[1], p[1])}
+	}
+	var area, perimeter float64
+	for _, f := range faces {
+		for i, p := range f.Poly {
+			q := f.Poly[(i+1)%len(f.Poly)]
+			area += (p[0]*q[1] - q[0]*p[1]) / 2
+			perimeter += math.Hypot(q[0]-p[0], q[1]-p[1])
+		}
+	}
+	want := polygonArea2D(ring)
+	if math.Abs(area-want) > 1e-8*want+skelPointTol*math.Hypot(hi[0]-lo[0], hi[1]-lo[1])*perimeter {
+		return errSkelTooComplex()
+	}
+	return nil
 }
 
 // callerEdges maps a skeleton's *RoofError from ring edges to the caller's.

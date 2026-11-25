@@ -729,3 +729,20 @@ func TestRoofShellKeepsArea(t *testing.T) {
 		t.Fatal("a 1.1e-5 m² sliver cut off: the shell keeps its area")
 	}
 }
+
+// A roof whose faces leave part of its outline bare is refused, not
+// returned with planes that miss the roof.
+func TestRoofFacesCover(t *testing.T) {
+	faces, _, err := weightedSkeleton(roofR, []float64{1, 1, 1, 1}, roofS, newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := facesCover(roofR, faces); err != nil {
+		t.Errorf("all faces: %v, want nil", err)
+	}
+	err = facesCover(roofR, faces[:len(faces)-1])
+	var re *RoofError
+	if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
+		t.Errorf("a face short: %v, want %s", err, ReasonRoofTooComplex)
+	}
+}
