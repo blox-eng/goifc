@@ -415,7 +415,7 @@ func FuzzBuildRoofLayers(f *testing.F) {
 			t.Fatalf("%d roofs for %d layers", len(roofs), len(layers))
 		}
 		c := math.Cos(pitch * math.Pi / 180)
-		var area, eaves float64
+		var area, eaves, perim float64
 		gable := make([]bool, len(outline))
 		for _, g := range spec.Gables {
 			gable[g] = true
@@ -427,18 +427,22 @@ func FuzzBuildRoofLayers(f *testing.F) {
 			if !gable[i] {
 				eaves += math.Hypot(n[0]-p[0], n[1]-p[1])
 			}
+			perim += math.Hypot(n[0]-p[0], n[1]-p[1])
 		}
 		area = math.Abs(area) / 2
+		// A point the roof joins as a jog moves the plan by under gridSnap,
+		// and shortens a path by at most twice that.
+		join := gridSnap * perim
 		first := roofs[0].Quantities
 		for k, r := range roofs {
 			q := r.Quantities
 			if !nearRel(q.SlopeArea, q.PlanArea/c, 1e-9) || !nearRel(q.Volume, q.PlanArea*layers[k]/c, 1e-9) {
 				t.Fatalf("layer %d: slope area %v, volume %v for plan area %v, cos %v", k, q.SlopeArea, q.Volume, q.PlanArea, c)
 			}
-			if q.PlanArea < area*(1-1e-9) || overhang == 0 && !nearRel(q.PlanArea, area, 1e-9) {
+			if q.PlanArea < area*(1-1e-9)-join || overhang == 0 && math.Abs(q.PlanArea-area) > 1e-9*area+join {
 				t.Fatalf("plan area %v, outline area %v, overhang %v", q.PlanArea, area, overhang)
 			}
-			if overhang == 0 && !nearRel(q.Eaves, eaves, 1e-9) {
+			if overhang == 0 && math.Abs(q.Eaves-eaves) > 1e-9*eaves+2*gridSnap*float64(len(outline)) {
 				t.Fatalf("eaves %v, want the sloped edges' %v", q.Eaves, eaves)
 			}
 			a, b := first, q

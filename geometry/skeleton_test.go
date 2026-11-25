@@ -424,7 +424,7 @@ func roofSkeleton(outline [][2]float64, spec RoofSpec) ([][2]float64, []skelFace
 			speed[m] = 1
 		}
 	}
-	ring, _, speed = joinCollinear(ring, edgeOf, speed, polygonArea2D(ring))
+	ring, _, speed = joinCollinear(ring, edgeOf, speed)
 	faces, _, err := weightedSkeleton(ring, speed, math.Tan(spec.Pitch*math.Pi/180), newBudget())
 	return ring, faces, err
 }

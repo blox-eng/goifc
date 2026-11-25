@@ -18,6 +18,13 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Roofs over imported outlines.** A roof over an outline with a point less
+  than 0.1 mm off a straight edge, as a CAD import leaves, now has planes that
+  cover it: the point counts as drafting noise, and `PlanArea` is the area of
+  the straightened outline. (#169)
+
 ## v0.24.0 — 2026-11-24
 
 ### Added

@@ -53,8 +53,8 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 			speed[m] = 1
 		}
 	}
+	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed)
 	planArea := polygonArea2D(ring)
-	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, planArea)
 	pitch := spec.Pitch * math.Pi / 180
 	slope, c := math.Tan(pitch), math.Cos(pitch)
 	b := newBudget()
@@ -99,15 +99,19 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 	return roofs, nil
 }
 
-// joinCollinear drops each ring point between two sloped edges on one line,
-// as a T-join leaves, so that one plane is one face with no line across it.
-// The joined edge is the lower-numbered of the caller's two; area is the
-// plan's, which sets how near the line a point must be (see onLine).
-func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, area float64) ([][2]float64, []int, []float64) {
+// joinCollinear drops each ring point between two edges of one kind, two
+// sloped edges or two gables, that lies within gridSnap of the line through
+// its neighbours: a T-join's point, or a CAD import's µm jog. Kept, a jog's
+// near-parallel edges meet in ill-conditioned skeleton events, and the faces
+// miss the outline (#169). Dropped, the plan moves by under gridSnap. The
+// joined edge is the lower-numbered of the caller's two.
+func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64) ([][2]float64, []int, []float64) {
 	for k := 0; k < len(ring); {
 		n := len(ring)
 		p := (k + n - 1) % n
-		if n > 3 && speed[p] != 0 && speed[k] != 0 && onLine(ring[p], ring[k], ring[(k+1)%n], area) {
+		a, b, c := ring[p], ring[k], ring[(k+1)%n]
+		if n > 3 && speed[p] == speed[k] && (b[0]-a[0])*(c[0]-b[0])+(b[1]-a[1])*(c[1]-b[1]) > 0 &&
+			math.Abs(cross2D(a, b, c)) < gridSnap*math.Hypot(c[0]-a[0], c[1]-a[1]) {
 			edgeOf[p] = min(edgeOf[p], edgeOf[k])
 			ring, edgeOf, speed = slices.Delete(ring, k, k+1), slices.Delete(edgeOf, k, k+1), slices.Delete(speed, k, k+1)
 			continue

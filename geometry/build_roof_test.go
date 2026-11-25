@@ -225,16 +225,16 @@ func TestRoofGableCollinearOnGrid(t *testing.T) {
 	}
 }
 
-// A point a survey's noise off an eaves edge keeps its two planes but draws
-// no line between them, on either side of the edge.
+// A point a survey's noise off an eaves edge is drafting noise: it joins,
+// and the roof is the rectangle's, on either side of the edge.
 func TestRoofNearCollinearEavesPoint(t *testing.T) {
 	hip := 4 * math.Sqrt(32+16*roofS*roofS)
 	for _, y := range []float64{1e-7, -1e-7} {
 		r := buildRoof(t, [][2]float64{{0, 0}, {5, y}, {10, 0}, {10, 8}, {0, 8}}, roofSpec())[0]
 		q := r.Quantities
-		if len(r.Planes) != 5 || !near(q.PlanArea, 80, 1e-6) || !near(q.Eaves, 36, 1e-6) ||
+		if len(r.Planes) != 4 || !near(q.PlanArea, 80, 1e-6) || !near(q.Eaves, 36, 1e-6) ||
 			!near(q.Ridge, 2, 1e-6) || !near(q.Hip, hip, 1e-6) || q.Valley != 0 || q.Verge != 0 || q.Top != 0 {
-			t.Errorf("mid point at y %g: %+v (%d planes), want the rectangle's lines (5 planes)", y, q, len(r.Planes))
+			t.Errorf("mid point at y %g: %+v (%d planes), want the rectangle's lines (4 planes)", y, q, len(r.Planes))
 		}
 	}
 }
@@ -552,6 +552,23 @@ func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	}
 	if q := r.Quantities.SlopeArea; math.Abs(area-q) > 1e-8*q+skelPointTol*size*perimeter/c {
 		t.Fatalf("planes cover %v, slope area %v", area, q)
+	}
+}
+
+// An edge with a 10 µm jog in it, as a CAD import leaves, joins: its
+// planes cover the roof (#169).
+func TestRoofJogJoins(t *testing.T) {
+	outline := [][2]float64{{-87, 0}, {10, 0}, {10, 4}, {10.00001, 8}, {0, 8}, {0, 1}}
+	spec := roofSpec(0, 3, 4, 5)
+	spec.Overhang = 0.5
+	r := buildRoof(t, outline, spec)[0]
+	roofTrue(t, r, ringSize(outline), spec.Pitch)
+	var plan float64
+	for _, p := range r.Planes {
+		plan += polygonArea2D(p.Outline) * math.Cos(spec.Pitch*math.Pi/180)
+	}
+	if q := r.Quantities.PlanArea; math.Abs(plan-q) > 1e-9*q {
+		t.Errorf("planes cover %v of plan, PlanArea %v", plan, q)
 	}
 }
 
