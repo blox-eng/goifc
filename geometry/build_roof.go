@@ -175,13 +175,18 @@ type roofShell struct {
 
 func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) {
 	var sh roofShell
-	// Points closer than the mesh grid snap are one point, and so is a chain
-	// of them: a skeleton line can end a hair from a corner, too close for
-	// float32 to keep apart, and a partial weld would pinch a face.
+	// Points closer than roofWeld are one point, and so is a chain of them:
+	// a skeleton line can end a hair from a corner, too close for float32 to
+	// keep apart, and a partial weld would pinch a face.
 	var raw [][3]float64
+	var extent float64
 	for _, f := range faces {
 		raw = append(raw, f.Poly...)
+		for _, p := range f.Poly {
+			extent = max(extent, math.Abs(p[0]), math.Abs(p[1]), math.Abs(p[2]))
+		}
 	}
+	weld := roofWeld(extent)
 	rank := weldRanks(faces)
 	root := make([]int, len(raw))
 	for i := range root {
@@ -196,7 +201,7 @@ func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) 
 	}
 	cells := map[[2]int64][]int{}
 	for i, p := range raw {
-		c := [2]int64{int64(math.Floor(p[0] / gridSnap)), int64(math.Floor(p[1] / gridSnap))}
+		c := [2]int64{int64(math.Floor(p[0] / weld)), int64(math.Floor(p[1] / weld))}
 		for dx := int64(-1); dx <= 1; dx++ {
 			for dy := int64(-1); dy <= 1; dy++ {
 				near := cells[[2]int64{c[0] + dx, c[1] + dy}]
@@ -204,7 +209,7 @@ func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) 
 					return roofShell{}, errSkelTooComplex()
 				}
 				for _, j := range near {
-					if q := raw[j]; math.Hypot(q[0]-p[0], q[1]-p[1]) < gridSnap {
+					if q := raw[j]; math.Hypot(q[0]-p[0], q[1]-p[1]) < weld {
 						ri, rj := find(i), find(j)
 						if rank[rj] > rank[ri] || rank[rj] == rank[ri] && rj < ri {
 							ri, rj = rj, ri
@@ -298,6 +303,11 @@ func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) 
 	}
 	return sh, nil
 }
+
+// roofWeld is the distance under which a roof mesh welds two points at the
+// given extent: 8 float32 steps, never more than gridSnap. A wider weld moves
+// a point off its sloped plane by the weld times tan(pitch) (#170).
+func roofWeld(extent float64) float64 { return min(gridSnap, 0x1p-20*max(1, extent)) }
 
 // weldRanks ranks each face point, in the faces' order, for the weld to keep:
 // 2 for a ring corner, 1 for any other point on the top's boundary, where no

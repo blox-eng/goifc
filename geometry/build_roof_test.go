@@ -510,7 +510,8 @@ func TestRoofSkewedLevelLines(t *testing.T) {
 // roofTrue checks that a layer's top is the roof its planes describe: every
 // plane point is a top point of the mesh, as high as its plane says, and the
 // planes' areas add up to SlopeArea; size is the outline's. A mesh point is
-// float32, and the weld may have moved it up to gridSnap.
+// float32, and the weld may have moved it a few float32 steps (roofWeld; the
+// mesh's extent can be under the raw points', hence twice it).
 func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	t.Helper()
 	e := r.Element
@@ -521,7 +522,7 @@ func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	}
 	slope, c := math.Tan(pitch*math.Pi/180), math.Cos(pitch*math.Pi/180)
 	round := 4 * extent * math.Pow(2, -23)
-	planTol := gridSnap + round
+	planTol := roofWeld(2*extent) + round
 	zTol := slope*planTol + round
 	top := e.Verts[:len(e.Verts)/2]
 	var area float64
@@ -745,4 +746,13 @@ func TestRoofFacesCover(t *testing.T) {
 	if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
 		t.Errorf("a face short: %v, want %s", err, ReasonRoofTooComplex)
 	}
+}
+
+// Skeleton points a few µm apart stay apart in the mesh, so that every mesh
+// point lies on its planes (#170).
+func TestRoofWeldOnPlanes(t *testing.T) {
+	outline := [][2]float64{{0, 0}, {10, 0}, {12, 4}, {10, 8.000316}, {0, 8}, {-2, 4}}
+	spec := roofSpec()
+	spec.Pitch = 75
+	roofTrue(t, buildRoof(t, outline, spec)[0], ringSize(outline), spec.Pitch)
 }
