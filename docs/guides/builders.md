@@ -165,7 +165,10 @@ Layers are given top first, like slabs, and each layer is a `Roof` with its
 own mesh and volume, measured normal to the slope. Each layer ends in vertical
 sides on the plumb line, the outline offset by the overhang. `Planes` lists one
 face per sloped plane of the top, in outline-edge order; sloped edges on one
-line, as a T-join leaves, are one plane, listed under the first of them. The
+line, as a T-join leaves, are one plane, listed under the first of them. A
+point less than 0.1 mm off the line through its neighbours, between two
+sloped edges or two gables, is drafting noise: the roof drops it, and
+`PlanArea` and the planes are those of the straightened outline. The
 quantities are `SlopeArea`, `PlanArea`, `Volume`, and the 3D line lengths
 `Eaves`, `Ridge`, `Hip`, `Valley`, `Verge` and `Top`.
 

@@ -53,12 +53,15 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 			speed[m] = 1
 		}
 	}
+	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed)
 	planArea := polygonArea2D(ring)
-	ring, edgeOf, speed = joinCollinear(ring, edgeOf, speed, planArea)
 	pitch := spec.Pitch * math.Pi / 180
 	slope, c := math.Tan(pitch), math.Cos(pitch)
 	b := newBudget()
 	faces, arcs, err := weightedSkeleton(ring, speed, slope, b)
+	if err == nil {
+		err = facesCover(ring, faces)
+	}
 	if err != nil {
 		return nil, callerEdges(err, edgeOf)
 	}
@@ -99,15 +102,19 @@ func BuildRoofLayers(outline [][2]float64, spec RoofSpec, layers []float64) ([]R
 	return roofs, nil
 }
 
-// joinCollinear drops each ring point between two sloped edges on one line,
-// as a T-join leaves, so that one plane is one face with no line across it.
-// The joined edge is the lower-numbered of the caller's two; area is the
-// plan's, which sets how near the line a point must be (see onLine).
-func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, area float64) ([][2]float64, []int, []float64) {
+// joinCollinear drops each ring point between two edges of one kind, two
+// sloped edges or two gables, that lies within gridSnap of the line through
+// its neighbours: a T-join's point, or a CAD import's µm jog. Kept, a jog's
+// near-parallel edges meet in ill-conditioned skeleton events, and the faces
+// miss the outline (#169). Dropped, the plan moves by under gridSnap. The
+// joined edge is the lower-numbered of the caller's two.
+func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64) ([][2]float64, []int, []float64) {
 	for k := 0; k < len(ring); {
 		n := len(ring)
 		p := (k + n - 1) % n
-		if n > 3 && speed[p] != 0 && speed[k] != 0 && onLine(ring[p], ring[k], ring[(k+1)%n], area) {
+		a, b, c := ring[p], ring[k], ring[(k+1)%n]
+		if n > 3 && speed[p] == speed[k] && (b[0]-a[0])*(c[0]-b[0])+(b[1]-a[1])*(c[1]-b[1]) > 0 &&
+			math.Abs(cross2D(a, b, c)) < gridSnap*math.Hypot(c[0]-a[0], c[1]-a[1]) {
 			edgeOf[p] = min(edgeOf[p], edgeOf[k])
 			ring, edgeOf, speed = slices.Delete(ring, k, k+1), slices.Delete(edgeOf, k, k+1), slices.Delete(speed, k, k+1)
 			continue
@@ -115,6 +122,31 @@ func joinCollinear(ring [][2]float64, edgeOf []int, speed []float64, area float6
 		k++
 	}
 	return ring, edgeOf, speed
+}
+
+// facesCover refuses faces that do not tile the counter-clockwise ring: their
+// plan areas, signed, must add up to the ring's within the skeleton's
+// tolerance, the one the roof tests hold the planes to. A face that misses
+// or overlaps the ring would give planes that disagree with the quantities.
+func facesCover(ring [][2]float64, faces []skelFace) error {
+	lo, hi := ring[0], ring[0]
+	for _, p := range ring {
+		lo = [2]float64{min(lo[0], p[0]), min(lo[1], p[1])}
+		hi = [2]float64{max(hi[0], p[0]), max(hi[1], p[1])}
+	}
+	var area, perimeter float64
+	for _, f := range faces {
+		for i, p := range f.Poly {
+			q := f.Poly[(i+1)%len(f.Poly)]
+			area += (p[0]*q[1] - q[0]*p[1]) / 2
+			perimeter += math.Hypot(q[0]-p[0], q[1]-p[1])
+		}
+	}
+	want := polygonArea2D(ring)
+	if math.Abs(area-want) > 1e-8*want+skelPointTol*math.Hypot(hi[0]-lo[0], hi[1]-lo[1])*perimeter {
+		return errSkelTooComplex()
+	}
+	return nil
 }
 
 // callerEdges maps a skeleton's *RoofError from ring edges to the caller's.
@@ -143,13 +175,18 @@ type roofShell struct {
 
 func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) {
 	var sh roofShell
-	// Points closer than the mesh grid snap are one point, and so is a chain
-	// of them: a skeleton line can end a hair from a corner, too close for
-	// float32 to keep apart, and a partial weld would pinch a face.
+	// Points closer than roofWeld are one point, and so is a chain of them:
+	// a skeleton line can end a hair from a corner, too close for float32 to
+	// keep apart, and a partial weld would pinch a face.
 	var raw [][3]float64
+	var extent float64
 	for _, f := range faces {
 		raw = append(raw, f.Poly...)
+		for _, p := range f.Poly {
+			extent = max(extent, math.Abs(p[0]), math.Abs(p[1]), math.Abs(p[2]))
+		}
 	}
+	weld := roofWeld(extent)
 	rank := weldRanks(faces)
 	root := make([]int, len(raw))
 	for i := range root {
@@ -164,7 +201,7 @@ func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) 
 	}
 	cells := map[[2]int64][]int{}
 	for i, p := range raw {
-		c := [2]int64{int64(math.Floor(p[0] / gridSnap)), int64(math.Floor(p[1] / gridSnap))}
+		c := [2]int64{int64(math.Floor(p[0] / weld)), int64(math.Floor(p[1] / weld))}
 		for dx := int64(-1); dx <= 1; dx++ {
 			for dy := int64(-1); dy <= 1; dy++ {
 				near := cells[[2]int64{c[0] + dx, c[1] + dy}]
@@ -172,7 +209,7 @@ func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) 
 					return roofShell{}, errSkelTooComplex()
 				}
 				for _, j := range near {
-					if q := raw[j]; math.Hypot(q[0]-p[0], q[1]-p[1]) < gridSnap {
+					if q := raw[j]; math.Hypot(q[0]-p[0], q[1]-p[1]) < weld {
 						ri, rj := find(i), find(j)
 						if rank[rj] > rank[ri] || rank[rj] == rank[ri] && rj < ri {
 							ri, rj = rj, ri
@@ -266,6 +303,11 @@ func roofShellOf(faces []skelFace, thick float64, b *budget) (roofShell, error) 
 	}
 	return sh, nil
 }
+
+// roofWeld is the distance under which a roof mesh welds two points at the
+// given extent: 8 float32 steps, never more than gridSnap. A wider weld moves
+// a point off its sloped plane by the weld times tan(pitch) (#170).
+func roofWeld(extent float64) float64 { return min(gridSnap, 0x1p-20*max(1, extent)) }
 
 // weldRanks ranks each face point, in the faces' order, for the weld to keep:
 // 2 for a ring corner, 1 for any other point on the top's boundary, where no

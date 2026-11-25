@@ -225,16 +225,16 @@ func TestRoofGableCollinearOnGrid(t *testing.T) {
 	}
 }
 
-// A point a survey's noise off an eaves edge keeps its two planes but draws
-// no line between them, on either side of the edge.
+// A point a survey's noise off an eaves edge is drafting noise: it joins,
+// and the roof is the rectangle's, on either side of the edge.
 func TestRoofNearCollinearEavesPoint(t *testing.T) {
 	hip := 4 * math.Sqrt(32+16*roofS*roofS)
 	for _, y := range []float64{1e-7, -1e-7} {
 		r := buildRoof(t, [][2]float64{{0, 0}, {5, y}, {10, 0}, {10, 8}, {0, 8}}, roofSpec())[0]
 		q := r.Quantities
-		if len(r.Planes) != 5 || !near(q.PlanArea, 80, 1e-6) || !near(q.Eaves, 36, 1e-6) ||
+		if len(r.Planes) != 4 || !near(q.PlanArea, 80, 1e-6) || !near(q.Eaves, 36, 1e-6) ||
 			!near(q.Ridge, 2, 1e-6) || !near(q.Hip, hip, 1e-6) || q.Valley != 0 || q.Verge != 0 || q.Top != 0 {
-			t.Errorf("mid point at y %g: %+v (%d planes), want the rectangle's lines (5 planes)", y, q, len(r.Planes))
+			t.Errorf("mid point at y %g: %+v (%d planes), want the rectangle's lines (4 planes)", y, q, len(r.Planes))
 		}
 	}
 }
@@ -510,7 +510,8 @@ func TestRoofSkewedLevelLines(t *testing.T) {
 // roofTrue checks that a layer's top is the roof its planes describe: every
 // plane point is a top point of the mesh, as high as its plane says, and the
 // planes' areas add up to SlopeArea; size is the outline's. A mesh point is
-// float32, and the weld may have moved it up to gridSnap.
+// float32, and the weld may have moved it a few float32 steps (roofWeld; the
+// mesh's extent can be under the raw points', hence twice it).
 func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	t.Helper()
 	e := r.Element
@@ -521,7 +522,7 @@ func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	}
 	slope, c := math.Tan(pitch*math.Pi/180), math.Cos(pitch*math.Pi/180)
 	round := 4 * extent * math.Pow(2, -23)
-	planTol := gridSnap + round
+	planTol := roofWeld(2*extent) + round
 	zTol := slope*planTol + round
 	top := e.Verts[:len(e.Verts)/2]
 	var area float64
@@ -552,6 +553,23 @@ func roofTrue(t *testing.T, r Roof, size, pitch float64) {
 	}
 	if q := r.Quantities.SlopeArea; math.Abs(area-q) > 1e-8*q+skelPointTol*size*perimeter/c {
 		t.Fatalf("planes cover %v, slope area %v", area, q)
+	}
+}
+
+// An edge with a 10 µm jog in it, as a CAD import leaves, joins: its
+// planes cover the roof (#169).
+func TestRoofJogJoins(t *testing.T) {
+	outline := [][2]float64{{-87, 0}, {10, 0}, {10, 4}, {10.00001, 8}, {0, 8}, {0, 1}}
+	spec := roofSpec(0, 3, 4, 5)
+	spec.Overhang = 0.5
+	r := buildRoof(t, outline, spec)[0]
+	roofTrue(t, r, ringSize(outline), spec.Pitch)
+	var plan float64
+	for _, p := range r.Planes {
+		plan += polygonArea2D(p.Outline) * math.Cos(spec.Pitch*math.Pi/180)
+	}
+	if q := r.Quantities.PlanArea; math.Abs(plan-q) > 1e-9*q {
+		t.Errorf("planes cover %v of plan, PlanArea %v", plan, q)
 	}
 }
 
@@ -711,4 +729,30 @@ func TestRoofShellKeepsArea(t *testing.T) {
 	if sh.keepsArea(faces, 0.15) {
 		t.Fatal("a 1.1e-5 m² sliver cut off: the shell keeps its area")
 	}
+}
+
+// A roof whose faces leave part of its outline bare is refused, not
+// returned with planes that miss the roof.
+func TestRoofFacesCover(t *testing.T) {
+	faces, _, err := weightedSkeleton(roofR, []float64{1, 1, 1, 1}, roofS, newBudget())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := facesCover(roofR, faces); err != nil {
+		t.Errorf("all faces: %v, want nil", err)
+	}
+	err = facesCover(roofR, faces[:len(faces)-1])
+	var re *RoofError
+	if !errors.As(err, &re) || re.Reason != ReasonRoofTooComplex {
+		t.Errorf("a face short: %v, want %s", err, ReasonRoofTooComplex)
+	}
+}
+
+// Skeleton points a few µm apart stay apart in the mesh, so that every mesh
+// point lies on its planes (#170).
+func TestRoofWeldOnPlanes(t *testing.T) {
+	outline := [][2]float64{{0, 0}, {10, 0}, {12, 4}, {10, 8.000316}, {0, 8}, {-2, 4}}
+	spec := roofSpec()
+	spec.Pitch = 75
+	roofTrue(t, buildRoof(t, outline, spec)[0], ringSize(outline), spec.Pitch)
 }
