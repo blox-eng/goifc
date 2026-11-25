@@ -18,6 +18,8 @@ minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
 
+## v0.24.1 — 2026-11-25
+
 ### Fixed
 
 - **Roofs over imported outlines.** A roof over an outline with a point less
