@@ -130,7 +130,7 @@ The slab's `area` and `volume` are net of its holes, `perimeter` is the outline'
     "pitch": 30, "eaves": 3, "thickness": 0.2 }] }
 ```
 
-Every edge slopes up and inward at `pitch`, except the `gables`. Each roof in `answer.roofs` has `quantities` and `planes`. The quantities are `slopeArea`, `planArea`, `volume`, and the lengths `eaves`, `ridge`, `hip`, `valley`, `verge` and `top` (here `ridge` is 2 and `planArea` 80). `planes` holds one face per sloped plane of the top, in the faces' `u`, `v`, like a slab's `top`; sloped edges on one line are one plane. A roof in layers gives one entry per layer, each with its own `volume`; the areas and lengths are the same in all.
+Every edge slopes up and inward at `pitch`, except the `gables`. Each roof in `answer.roofs` has `quantities` and `planes`. The quantities are `slopeArea`, `planArea`, `volume`, and the lengths `eaves`, `ridge`, `hip`, `valley`, `verge` and `top` (here `ridge` is 2 and `planArea` 80). `planes` holds one face per sloped plane of the top, in the faces' `u`, `v`, like a slab's `top`; sloped edges on one line are one plane, and so are edges with a point less than 0.1 mm off their line, which the roof drops as drafting noise (`planArea` is then the straightened outline's). A roof in layers gives one entry per layer, each with its own `volume`; the areas and lengths are the same in all.
 
 The preview draws a roof's sloped planes like a slab's faces, so the ridges, hips and valleys show as the edges between planes.
 

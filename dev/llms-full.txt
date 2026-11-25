@@ -447,7 +447,7 @@ roofs, err := geometry.BuildRoofLayers(rect, geometry.RoofSpec{Pitch: 30, Eaves:
 
 `BuildRoofLayers` takes a plan outline, either winding, and a `RoofSpec`: the `Pitch` in degrees, the `Eaves` height of the outline, an `Overhang` in metres, and the `Gables`. Every edge slopes up and inward at the pitch, except the gable ends. Gables are stated per edge, by its index in the outline: a hip roof has none, a gable roof has the two end edges, and a mono-pitch roof has every edge but the low one. goifc never picks a ridge or a low edge.
 
-Layers are given top first, like slabs, and each layer is a `Roof` with its own mesh and volume, measured normal to the slope. Each layer ends in vertical sides on the plumb line, the outline offset by the overhang. `Planes` lists one face per sloped plane of the top, in outline-edge order; sloped edges on one line, as a T-join leaves, are one plane, listed under the first of them. The quantities are `SlopeArea`, `PlanArea`, `Volume`, and the 3D line lengths `Eaves`, `Ridge`, `Hip`, `Valley`, `Verge` and `Top`.
+Layers are given top first, like slabs, and each layer is a `Roof` with its own mesh and volume, measured normal to the slope. Each layer ends in vertical sides on the plumb line, the outline offset by the overhang. `Planes` lists one face per sloped plane of the top, in outline-edge order; sloped edges on one line, as a T-join leaves, are one plane, listed under the first of them. A point less than 0.1 mm off the line through its neighbours, between two sloped edges or two gables, is drafting noise: the roof drops it, and `PlanArea` and the planes are those of the straightened outline. The quantities are `SlopeArea`, `PlanArea`, `Volume`, and the 3D line lengths `Eaves`, `Ridge`, `Hip`, `Valley`, `Verge` and `Top`.
 
 A roof the skeleton cannot build is a `*RoofError` with a `Reason` and the outline's edges. A gable that would leave a vertical step inside the roof is `roof_step`, naming the edge. `BuildPlan` takes roofs as `PlanRoof` items, named like slabs (`r1`, or `r1/0` and `r1/1` for layers), with `Thickness` or `Layers`, never both. To draw a roof in `WritePreviewSVG`, pass `geometry.Slab{Element: roof.Element}`.
 
@@ -896,7 +896,7 @@ The slab's `area` and `volume` are net of its holes, `perimeter` is the outline'
     "pitch": 30, "eaves": 3, "thickness": 0.2 }] }
 ```
 
-Every edge slopes up and inward at `pitch`, except the `gables`. Each roof in `answer.roofs` has `quantities` and `planes`. The quantities are `slopeArea`, `planArea`, `volume`, and the lengths `eaves`, `ridge`, `hip`, `valley`, `verge` and `top` (here `ridge` is 2 and `planArea` 80). `planes` holds one face per sloped plane of the top, in the faces' `u`, `v`, like a slab's `top`; sloped edges on one line are one plane. A roof in layers gives one entry per layer, each with its own `volume`; the areas and lengths are the same in all.
+Every edge slopes up and inward at `pitch`, except the `gables`. Each roof in `answer.roofs` has `quantities` and `planes`. The quantities are `slopeArea`, `planArea`, `volume`, and the lengths `eaves`, `ridge`, `hip`, `valley`, `verge` and `top` (here `ridge` is 2 and `planArea` 80). `planes` holds one face per sloped plane of the top, in the faces' `u`, `v`, like a slab's `top`; sloped edges on one line are one plane, and so are edges with a point less than 0.1 mm off their line, which the roof drops as drafting noise (`planArea` is then the straightened outline's). A roof in layers gives one entry per layer, each with its own `volume`; the areas and lengths are the same in all.
 
 The preview draws a roof's sloped planes like a slab's faces, so the ridges, hips and valleys show as the edges between planes.
 
@@ -1186,6 +1186,11 @@ This page is [`CHANGELOG.md`](https://github.com/blox-eng/goifc/blob/main/CHANGE
 Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land on minor versions, as the README states. Releases before v0.2.0 predate this file.
 
 ## Unreleased
+
+### Fixed
+
+- **Roofs over imported outlines.** A roof over an outline with a point less than 0.1 mm off a straight edge, as a CAD import leaves, now has planes that cover it: the point counts as drafting noise, and `PlanArea` is the area of the straightened outline. (#169)
+- **Roof meshes on their planes.** Every point of a roof's mesh now lies on its sloped planes within a few float32 steps; before, the mesh weld could move a point up to 0.37 mm off its plane at 75°. (#170)
 
 ## v0.24.0 — 2026-11-24
 

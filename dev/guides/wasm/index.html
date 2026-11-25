@@ -1629,7 +1629,9 @@ in <code>answer.roofs</code> has <code>quantities</code> and <code>planes</code>
 <code>slopeArea</code>, <code>planArea</code>, <code>volume</code>, and the lengths <code>eaves</code>, <code>ridge</code>, <code>hip</code>,
 <code>valley</code>, <code>verge</code> and <code>top</code> (here <code>ridge</code> is 2 and <code>planArea</code> 80). <code>planes</code>
 holds one face per sloped plane of the top, in the faces' <code>u</code>, <code>v</code>, like a
-slab's <code>top</code>; sloped edges on one line are one plane. A roof in layers gives one entry per layer, each with its own
+slab's <code>top</code>; sloped edges on one line are one plane, and so are edges with a
+point less than 0.1 mm off their line, which the roof drops as drafting noise
+(<code>planArea</code> is then the straightened outline's). A roof in layers gives one entry per layer, each with its own
 <code>volume</code>; the areas and lengths are the same in all.</p>
 <p>The preview draws a roof's sloped planes like a slab's faces, so the
 ridges, hips and valleys show as the edges between planes.</p>

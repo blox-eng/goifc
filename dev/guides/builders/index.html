@@ -1698,7 +1698,10 @@ every edge but the low one. goifc never picks a ridge or a low edge.</p>
 own mesh and volume, measured normal to the slope. Each layer ends in vertical
 sides on the plumb line, the outline offset by the overhang. <code>Planes</code> lists one
 face per sloped plane of the top, in outline-edge order; sloped edges on one
-line, as a T-join leaves, are one plane, listed under the first of them. The
+line, as a T-join leaves, are one plane, listed under the first of them. A
+point less than 0.1 mm off the line through its neighbours, between two
+sloped edges or two gables, is drafting noise: the roof drops it, and
+<code>PlanArea</code> and the planes are those of the straightened outline. The
 quantities are <code>SlopeArea</code>, <code>PlanArea</code>, <code>Volume</code>, and the 3D line lengths
 <code>Eaves</code>, <code>Ridge</code>, <code>Hip</code>, <code>Valley</code>, <code>Verge</code> and <code>Top</code>.</p>
 <p>A roof the skeleton cannot build is a <code>*RoofError</code> with a <code>Reason</code> and the
