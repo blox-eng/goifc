@@ -33,24 +33,24 @@ shows a roof that disagrees with its own quantities.
 
 ## Design
 
-- **Join.** `joinCollinear` drops a ring point between two sloped edges when
-  it lies under `gridSnap` from the line through its neighbours, an absolute
-  distance. A gable next to a sloped edge never joins, as today.
+- **Join.** `joinCollinear` drops a ring point between two edges of one kind
+  (two sloped edges, or two gables) when it lies under `gridSnap` from the
+  line through its neighbours, an absolute distance. A gable next to a sloped
+  edge never joins, as today.
 - **Plan area.** `PlanArea` is the joined ring's area, so the closed forms
   and the planes use one outline.
 - **Cover check.** After the skeleton, the faces' plan areas must add up to
   the ring's area within tolerance. Otherwise the roof is refused as
   `roof_too_complex`.
-- **Weld (#170).** The mesh welds only points that float32 cannot keep
-  apart at the roof's extent, not every pair under `gridSnap`. Each mesh
-  vertex then lies on its planes within float32 rounding. `roofTrue` drops
-  `gridSnap` from its tolerances.
+- **Weld (#170).** The mesh welds only points within a few float32 steps at
+  the roof's extent, never more than `gridSnap`. Each mesh vertex then lies
+  on its planes within that weld. `roofTrue` uses the weld, not `gridSnap`.
 
 ## Done when
 
 - Both #169 seeds build, and their planes cover `SlopeArea`.
 - The #170 hexagon `(0,0) (10,0) (12,4) (10,8.000316) (0,8) (-2,4)`, 75°, no
-  gables, has every mesh vertex on its planes within float32 rounding.
+  gables, has every mesh vertex on its planes within the weld.
 - A ring whose faces do not cover it is refused as `roof_too_complex`.
 - The existing roof tests and the fuzz corpus pass with the tighter
   `roofTrue`.
@@ -64,3 +64,4 @@ skeleton fails to tile, and private helper names.
 
 - 2026-11-25: straighten sub-0.1 mm jogs (option 1). Decided by: owner.
 - 2026-11-25: spec approved. Decided by: owner.
+- 2026-11-25: plan review: two gables join like two sloped edges, and the weld is capped at `gridSnap`; both found by running the plan. Decided by: agent, for the owner to confirm.
