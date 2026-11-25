@@ -8,6 +8,8 @@ Notable changes to goifc. The API is unstable pre-1.0 — breaking changes land 
 
 ## Unreleased
 
+## v0.24.1 — 2026-11-25
+
 ### Fixed
 
 - **Roofs over imported outlines.** A roof over an outline with a point less than 0.1 mm off a straight edge, as a CAD import leaves, now has planes that cover it: the point counts as drafting noise, and `PlanArea` is the area of the straightened outline. (#169)
