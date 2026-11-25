@@ -3,7 +3,7 @@
 Spec: docs/superpowers/specs/2026-11-25-roof-precision-design.md
 Spec approved: 2026-11-25
 Test command: make test
-Plan approved: no
+Plan approved: 2026-11-25 by owner
 Next: builder:build
 
 ## Files

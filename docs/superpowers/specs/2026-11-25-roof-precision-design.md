@@ -64,4 +64,4 @@ skeleton fails to tile, and private helper names.
 
 - 2026-11-25: straighten sub-0.1 mm jogs (option 1). Decided by: owner.
 - 2026-11-25: spec approved. Decided by: owner.
-- 2026-11-25: plan review: two gables join like two sloped edges, and the weld is capped at `gridSnap`; both found by running the plan. Decided by: agent, for the owner to confirm.
+- 2026-11-25: plan review: two gables join like two sloped edges, and the weld is capped at `gridSnap`; both found by running the plan. Decided by: owner.
